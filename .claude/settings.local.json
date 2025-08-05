@@ -4,5 +4,10 @@
     "brave-search",
     "playwright",
     "filesystem"
-  ]
+  ],
+  "permissions": {
+    "allow": [
+      "mcp__supabase__apply_migration"
+    ]
+  }
 }

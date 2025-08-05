@@ -43,6 +43,7 @@ Key dependencies suggest this will be a subscription management app with databas
 
 - pnpm dev server is usually running at port 3000. Please don't start again and again.
 - Remember to update @dev-journal.md after every small milestone.
+- Remember to update @plan.md when a task is completed.
 
 ## Deployment Notes
 
