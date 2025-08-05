@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__supabase__apply_migration",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(pnpm run:*)"
     ]
   },
   "enabledMcpjsonServers": [

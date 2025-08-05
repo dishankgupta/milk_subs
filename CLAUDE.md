@@ -69,10 +69,15 @@ Complete Supabase database with 9 tables:
 - Route and delivery time management
 - Duplicate billing name detection
 
-### 🔄 Phase 2: Subscription Management (In Progress)
-- Subscription CRUD operations (pending)
-- 2-day pattern subscription logic (pending)
-- Pattern preview and cycle calculation (pending)
+### ✅ Phase 2: Subscription Management Complete
+- Complete subscription CRUD operations with validation
+- 2-day pattern subscription logic with visual preview
+- Pattern cycle calculation and date management
+- Subscription search and filtering system
+- Customer-subscription integration on detail pages
+- Duplicate subscription prevention (same customer + product)
+- Subscription status management (active/inactive)
+- Form validation with pattern preview (7-day and 14-day cycles)
 
 ## Key Features Implemented
 
@@ -81,6 +86,14 @@ Complete Supabase database with 9 tables:
 - **Add Customer**: Complete form with validation (`/dashboard/customers/new`)
 - **Customer Details**: Comprehensive profile view (`/dashboard/customers/[id]`)
 - **Edit Customer**: Pre-populated form for updates (`/dashboard/customers/[id]/edit`)
+
+### Subscription Management (`/dashboard/subscriptions`)
+- **Subscription List**: Searchable table with filters (status, type) and customer integration
+- **Add Subscription**: Complete form with pattern preview (`/dashboard/subscriptions/new`)
+- **Subscription Details**: Comprehensive view with pattern visualization (`/dashboard/subscriptions/[id]`)
+- **Edit Subscription**: Pre-populated form for updates (`/dashboard/subscriptions/[id]/edit`)
+- **Pattern Preview**: Visual 2-day cycle preview for next 7-14 days
+- **Customer Integration**: Subscription management from customer detail pages
 
 ### Technical Features
 - Form validation with Zod schemas and React Hook Form
@@ -104,15 +117,20 @@ Complete Supabase database with 9 tables:
 - Remember to update @dev-journal.md after every small milestone
 - Remember to update @plan.md when a task is completed
 - All customer management features are fully functional and tested
+- All subscription management features are fully functional and tested
+- 2-day pattern logic implemented with visual preview and cycle calculation
 
 ## Development Workflow
 
 1. **Server Actions**: Use `/src/lib/actions/` for database operations
+   - `/src/lib/actions/customers.ts` - Customer CRUD operations
+   - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
 2. **Validation**: Zod schemas in `/src/lib/validations.ts`
 3. **Types**: TypeScript interfaces in `/src/lib/types.ts`
-4. **UI Components**: Shadcn/ui components in `/src/components/ui/`
-5. **Forms**: React Hook Form with Zod resolver for validation
-6. **Database**: Supabase with MCP server integration for CLI operations
+4. **Utilities**: Helper functions in `/src/lib/subscription-utils.ts` for pattern calculations
+5. **UI Components**: Shadcn/ui components in `/src/components/ui/`
+6. **Forms**: React Hook Form with Zod resolver for validation
+7. **Database**: Supabase with MCP server integration for CLI operations
 
 ## Testing & Validation
 

@@ -1,9 +1,10 @@
 import { getCustomer } from "@/lib/actions/customers"
+import { getCustomerSubscriptions } from "@/lib/actions/subscriptions"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard } from "lucide-react"
+import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard, Plus, Package, Eye } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -13,7 +14,10 @@ interface CustomerDetailPageProps {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { id } = await params
-  const customer = await getCustomer(id)
+  const [customer, subscriptions] = await Promise.all([
+    getCustomer(id),
+    getCustomerSubscriptions(id)
+  ])
 
   if (!customer) {
     notFound()
@@ -179,15 +183,78 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
         </Card>
       </div>
 
-      {/* Future: Subscription and Order History Cards */}
+      {/* Subscriptions Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Active Subscriptions</CardTitle>
-            <CardDescription>Customer&apos;s current dairy subscriptions</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Subscriptions ({subscriptions.length})
+              </CardTitle>
+              <CardDescription>Customer&apos;s dairy subscriptions</CardDescription>
+            </div>
+            <Button size="sm" asChild>
+              <Link href={`/dashboard/subscriptions/new?customerId=${customer.id}`}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">Subscription management coming soon...</p>
+            {subscriptions.length === 0 ? (
+              <div className="text-center py-6">
+                <Package className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">No subscriptions yet</p>
+                <Button size="sm" variant="outline" className="mt-2" asChild>
+                  <Link href={`/dashboard/subscriptions/new?customerId=${customer.id}`}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add First Subscription
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {subscriptions.map((subscription) => (
+                  <div key={subscription.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{subscription.product?.name}</span>
+                        <Badge variant={subscription.subscription_type === "Daily" ? "default" : "secondary"} className="text-xs">
+                          {subscription.subscription_type}
+                        </Badge>
+                        <Badge variant={subscription.is_active ? "default" : "secondary"} className="text-xs">
+                          {subscription.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {subscription.subscription_type === "Daily" 
+                          ? `${subscription.daily_quantity}L daily`
+                          : `Pattern: Day 1: ${subscription.pattern_day1_quantity}L, Day 2: ${subscription.pattern_day2_quantity}L`
+                        }
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatCurrency(subscription.product?.current_price || 0)}/L
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/subscriptions/${subscription.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                ))}
+                {subscriptions.length > 3 && (
+                  <div className="text-center pt-2">
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/subscriptions?search=${customer.billing_name}`}>
+                        View All Subscriptions
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -197,7 +264,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
             <CardDescription>Latest delivery orders for this customer</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">Order history coming soon...</p>
+            <p className="text-muted-foreground">Order history coming in Phase 3...</p>
           </CardContent>
         </Card>
       </div>

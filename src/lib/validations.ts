@@ -23,7 +23,7 @@ export const subscriptionSchema = z.object({
   pattern_day1_quantity: z.number().positive("Day 1 quantity must be positive").optional(),
   pattern_day2_quantity: z.number().positive("Day 2 quantity must be positive").optional(),
   pattern_start_date: z.date({ message: "Pattern start date is required" }).optional(),
-  is_active: z.boolean().default(true),
+  is_active: z.boolean(),
 }).refine((data) => {
   if (data.subscription_type === "Daily") {
     return data.daily_quantity !== undefined && data.daily_quantity > 0
@@ -42,4 +42,14 @@ export const subscriptionSchema = z.object({
 })
 
 export type CustomerFormData = z.infer<typeof customerSchema>
-export type SubscriptionFormData = z.infer<typeof subscriptionSchema>
+// Create a cleaner subscription form data type
+export type SubscriptionFormData = {
+  customer_id: string
+  product_id: string
+  subscription_type: "Daily" | "Pattern"
+  daily_quantity?: number
+  pattern_day1_quantity?: number
+  pattern_day2_quantity?: number
+  pattern_start_date?: Date
+  is_active: boolean
+}
