@@ -41,6 +41,29 @@ export const subscriptionSchema = z.object({
   path: ["subscription_type"]
 })
 
+export const modificationSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  product_id: z.string().uuid("Please select a valid product"),
+  modification_type: z.enum(["Skip", "Increase", "Decrease"], { message: "Please select modification type" }),
+  start_date: z.date({ message: "Start date is required" }),
+  end_date: z.date({ message: "End date is required" }),
+  quantity_change: z.number().optional(),
+  reason: z.string().max(500, "Reason must be less than 500 characters").optional(),
+}).refine((data) => {
+  return data.end_date >= data.start_date
+}, {
+  message: "End date must be after or equal to start date",
+  path: ["end_date"]
+}).refine((data) => {
+  if (data.modification_type === "Increase" || data.modification_type === "Decrease") {
+    return data.quantity_change !== undefined && data.quantity_change > 0
+  }
+  return true
+}, {
+  message: "Quantity change is required for increase/decrease modifications",
+  path: ["quantity_change"]
+})
+
 export type CustomerFormData = z.infer<typeof customerSchema>
 // Create a cleaner subscription form data type
 export type SubscriptionFormData = {
@@ -53,3 +76,5 @@ export type SubscriptionFormData = {
   pattern_start_date?: Date
   is_active: boolean
 }
+
+export type ModificationFormData = z.infer<typeof modificationSchema>
