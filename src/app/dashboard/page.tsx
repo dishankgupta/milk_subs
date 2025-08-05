@@ -99,7 +99,7 @@ export default async function DashboardPage() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {products?.map((product: any) => (
+              {products?.map((product) => (
                 <div key={product.id} className="flex justify-between items-center">
                   <div>
                     <p className="font-medium text-gray-900">{product.name}</p>
@@ -121,7 +121,7 @@ export default async function DashboardPage() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {routes?.map((route: any) => (
+              {routes?.map((route) => (
                 <div key={route.id} className="border-l-4 border-blue-400 pl-4">
                   <p className="font-medium text-gray-900">{route.name}</p>
                   <p className="text-sm text-gray-500">{route.description}</p>
