@@ -33,22 +33,26 @@ A comprehensive web application to manage dairy subscription services, replacing
 
 #### 1.1 Customer Profile Management
 - **Create/Edit Customer Profiles**
-  - Name, address, phone number
+  - Billing name (primary identifier for invoicing)
+  - Contact person (actual delivery contact)
+  - Address and up to 3 phone numbers (1 primary)
   - Delivery time preference (Morning/Evening)
   - Route assignment (Route 1/Route 2)
   - Payment method and billing cycle
+  - Outstanding payment amount tracking
   - Customer status (Active/Inactive)
 
 #### 1.2 Base Subscription Setup
 - **Standard Daily Subscriptions**
   - Set default daily quantities for CM and BM
-  - Per-liter pricing (fixed for all customers)
+  - Per-liter pricing: ₹75/L for CM, ₹80/L for BM
   - Monthly or prepaid billing options
+  - Indian Rupee (₹) currency formatting
 
 #### 1.3 Alternate Day Patterns
 - **Pattern-Based Subscriptions**
-  - Define repeating cycles (2-day, 3-day, weekly patterns)
-  - Example: Day 1: 1L BM + 1L CM, Day 2: 0.5L BM + 0.5L CM, repeat
+  - Define repeating 2-day cycles only
+  - Example: Day 1: 1L BM, Day 2: 2L BM, repeat on Day 3: 1L BM, Day 4: 2L BM
   - Calculate current day in cycle automatically
 
 ### 2. Subscription Modifications
@@ -61,7 +65,7 @@ A comprehensive web application to manage dairy subscription services, replacing
 - **Quantity Modifications**
   - Temporary increase/decrease for specific periods
   - One-time additions for special occasions
-  - Same-day modifications (order today for tomorrow)
+  - Next-day modifications only (order today for tomorrow)
 
 #### 2.2 Modification Interface
 - Quick customer search functionality
@@ -244,7 +248,8 @@ A comprehensive web application to manage dairy subscription services, replacing
 ### Constraints
 - Solo development using Claude Code
 - Budget-conscious technology choices
-- Limited initial feature set (admin-only access)
+- Phase 1 limited to admin-only access
+- Manual data upload for existing customer records
 
 ### Assumptions
 - Stable internet connectivity for cloud-based solution
