@@ -22,3 +22,35 @@ export function getPatternQuantity(subscription: Subscription, targetDate: Date)
     return subscription.pattern_day2_quantity || 0
   }
 }
+
+// Generate pattern preview for multiple days starting from a date
+export function generatePatternPreview(subscription: Subscription, startDate: Date, days: number = 14) {
+  const preview = []
+  
+  for (let i = 0; i < days; i++) {
+    const currentDate = new Date(startDate)
+    currentDate.setDate(startDate.getDate() + i)
+    
+    const quantity = getPatternQuantity(subscription, currentDate)
+    const patternDay = subscription.pattern_start_date ? 
+      calculatePatternDay(new Date(subscription.pattern_start_date), currentDate) : 1
+    
+    preview.push({
+      date: currentDate.toISOString().split('T')[0],
+      quantity,
+      patternDay,
+      dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' })
+    })
+  }
+  
+  return preview
+}
+
+// Calculate days since pattern started
+export function getDaysSincePatternStart(subscription: Subscription, targetDate: Date): number {
+  if (!subscription.pattern_start_date) return 0
+  
+  const startDate = new Date(subscription.pattern_start_date)
+  const diffTime = targetDate.getTime() - startDate.getTime()
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24))
+}

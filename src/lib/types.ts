@@ -52,6 +52,40 @@ export interface Subscription {
   product?: Product
 }
 
+export interface DailyOrder {
+  id: string
+  customer_id: string
+  product_id: string
+  order_date: string
+  planned_quantity: number
+  unit_price: number
+  total_amount: number
+  route_id: string
+  delivery_time: "Morning" | "Evening"
+  status: "Pending" | "Generated" | "Delivered"
+  created_at: string
+  updated_at: string
+  customer?: Customer
+  product?: Product
+  route?: Route
+}
+
+export interface Modification {
+  id: string
+  customer_id: string
+  product_id: string
+  modification_type: "Skip" | "Increase" | "Decrease"
+  start_date: string
+  end_date: string
+  quantity_change: number | null
+  reason: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  customer?: Customer
+  product?: Product
+}
+
 export interface DashboardStats {
   totalCustomers: number
   activeCustomers: number
