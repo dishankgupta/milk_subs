@@ -1,0 +1,4 @@
+billing_name,contact_person,address,phone_primary,phone_secondary,phone_tertiary,route_name,delivery_time,payment_method,billing_cycle_day,outstanding_amount,status
+"ABC Dairy Store","Ramesh Kumar","123 Main Street, Delhi - 110001",9876543210,9876543211,,"Route 1","Morning","Monthly",1,150.50,"Active"
+"XYZ General Store","Priya Sharma","456 Market Road, Mumbai - 400001",9876543212,,,"Route 2","Evening","Prepaid",15,0,"Active"
+"Sample Customer 3","Amit Singh","789 Park Avenue, Bangalore - 560001",9876543213,9876543214,9876543215,"Route 1","Morning","Monthly",10,75.25,"Inactive"

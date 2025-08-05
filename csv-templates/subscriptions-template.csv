@@ -1,0 +1,5 @@
+customer_billing_name,product_code,subscription_type,daily_quantity,pattern_day1_quantity,pattern_day2_quantity,pattern_start_date,is_active
+"ABC Dairy Store","CM","Daily",2,,,,"true"
+"ABC Dairy Store","BM","Pattern",,1,2,"2025-08-06","true"
+"XYZ General Store","CM","Pattern",,1.5,1,"2025-08-05","true"
+"Sample Customer 3","BM","Daily",1,,,,"false"
