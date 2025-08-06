@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     
     .company-info h1 {
       font-size: 24px;
-      color: #22c55e;
+      color: #333;
       margin-bottom: 2px;
     }
     
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     .summary-item .value {
       font-size: 16px;
       font-weight: bold;
-      color: #22c55e;
+      color: #333;
     }
     
     .orders-table {
@@ -138,8 +138,8 @@ export async function GET(request: NextRequest) {
     }
     
     .orders-table th {
-      background: #22c55e;
-      color: white;
+      background: #FFD580;
+      color: #333;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
     
     .phone {
       font-weight: bold;
-      color: #22c55e;
+      color: #333;
     }
     
     .quantity {
@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
     .amount {
       font-weight: bold;
       text-align: right;
-      color: #22c55e;
+      color: #333;
     }
     
     .product-summary {
@@ -232,20 +232,9 @@ export async function GET(request: NextRequest) {
     
     .product-item .value {
       font-weight: bold;
-      color: #22c55e;
+      color: #333;
     }
     
-    .footer {
-      position: fixed;
-      bottom: 15mm;
-      left: 20mm;
-      right: 20mm;
-      text-align: center;
-      font-size: 9px;
-      color: #666;
-      border-top: 1px solid #e9ecef;
-      padding-top: 5px;
-    }
     
     .no-data {
       text-align: center;
@@ -267,14 +256,12 @@ export async function GET(request: NextRequest) {
       <img src="/PureDairy_Logo-removebg-preview.png" alt="PureDairy" class="logo">
       <div class="company-info">
         <h1>PureDairy</h1>
-        <p>Premium Dairy Products</p>
+        <p>Surety of Purity</p>
       </div>
     </div>
     <div class="report-info">
       <h2>${report.routeName} - ${report.deliveryTime} Delivery</h2>
       <p>Delivery Date: ${format(new Date(date), 'PPPP')}</p>
-      <p>Generated: ${format(new Date(), 'PPP p')}</p>
-      <p>Page 1</p>
     </div>
   </div>
 
@@ -354,10 +341,6 @@ export async function GET(request: NextRequest) {
   </table>
   `}
 
-  <!-- Footer -->
-  <div class="footer">
-    <div>PureDairy - ${report.routeName} ${report.deliveryTime} Delivery List | Generated on ${format(new Date(), 'PPP')}</div>
-  </div>
 
   <script>
     // Auto-trigger print dialog after 1000ms delay

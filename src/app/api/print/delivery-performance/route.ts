@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     
     .company-info h1 {
       font-size: 24px;
-      color: #22c55e;
+      color: #333;
       margin-bottom: 2px;
     }
     
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     .stat-card .value {
       font-size: 16px;
       font-weight: bold;
-      color: #22c55e;
+      color: #333;
     }
     
     .stat-card .percentage {
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
       font-weight: bold;
     }
     
-    .stat-card .percentage.good { color: #22c55e; }
+    .stat-card .percentage.good { color: #333; }
     .stat-card .percentage.warning { color: #ea580c; }
     .stat-card .percentage.danger { color: #dc2626; }
     
@@ -167,8 +167,8 @@ export async function GET(request: NextRequest) {
     }
     
     .performance-table th {
-      background: #22c55e;
-      color: white;
+      background: #FFD580;
+      color: #333;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -187,14 +187,14 @@ export async function GET(request: NextRequest) {
       font-weight: bold;
     }
     
-    .variance-positive { color: #22c55e; }
+    .variance-positive { color: #333; }
     .variance-negative { color: #dc2626; }
     .variance-neutral { color: #666; }
     
     .completion-rate {
       font-weight: bold;
     }
-    .completion-rate.excellent { color: #22c55e; }
+    .completion-rate.excellent { color: #333; }
     .completion-rate.good { color: #65a30d; }
     .completion-rate.warning { color: #ea580c; }
     .completion-rate.poor { color: #dc2626; }
@@ -205,17 +205,6 @@ export async function GET(request: NextRequest) {
       gap: 20px;
     }
     
-    .footer {
-      position: fixed;
-      bottom: 15mm;
-      left: 20mm;
-      right: 20mm;
-      text-align: center;
-      font-size: 9px;
-      color: #666;
-      border-top: 1px solid #e9ecef;
-      padding-top: 5px;
-    }
     
     .no-data {
       text-align: center;
@@ -237,14 +226,12 @@ export async function GET(request: NextRequest) {
       <img src="/PureDairy_Logo-removebg-preview.png" alt="PureDairy" class="logo">
       <div class="company-info">
         <h1>PureDairy</h1>
-        <p>Premium Dairy Products</p>
+        <p>Surety of Purity</p>
       </div>
     </div>
     <div class="report-info">
       <h2>Delivery Performance Report</h2>
       <p>Period: ${format(parseISO(start), 'PPP')} to ${format(parseISO(end), 'PPP')}</p>
-      <p>Generated: ${format(new Date(), 'PPP p')}</p>
-      <p>Page 1</p>
     </div>
   </div>
 
@@ -415,10 +402,6 @@ export async function GET(request: NextRequest) {
   ` : ''}
   `}
 
-  <!-- Footer -->
-  <div class="footer">
-    <div>PureDairy - Delivery Performance Report | Generated on ${format(new Date(), 'PPP')}</div>
-  </div>
 
   <script>
     // Auto-trigger print dialog after 1000ms delay

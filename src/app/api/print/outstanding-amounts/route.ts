@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     
     .company-info h1 {
       font-size: 24px;
-      color: #22c55e;
+      color: #333;
       margin-bottom: 2px;
     }
     
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     
     .stat-card.priority-high .value { color: #dc2626; }
     .stat-card.priority-medium .value { color: #ea580c; }
-    .stat-card.priority-low .value { color: #22c55e; }
+    .stat-card.priority-low .value { color: #333; }
     
     .customers-table {
       width: 100%;
@@ -181,8 +181,8 @@ export async function GET(request: NextRequest) {
     }
     
     .customers-table th {
-      background: #22c55e;
-      color: white;
+      background: #FFD580;
+      color: #333;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
     
     .amount.high { color: #dc2626; }
     .amount.medium { color: #ea580c; }
-    .amount.low { color: #22c55e; }
+    .amount.low { color: #333; }
     
     .priority-badge {
       padding: 2px 6px;
@@ -243,8 +243,8 @@ export async function GET(request: NextRequest) {
     }
     
     .priority-badge.low {
-      background: #22c55e;
-      color: white;
+      background: #FFD580;
+      color: #333;
     }
     
     .section {
@@ -261,17 +261,6 @@ export async function GET(request: NextRequest) {
       padding-bottom: 3px;
     }
     
-    .footer {
-      position: fixed;
-      bottom: 15mm;
-      left: 20mm;
-      right: 20mm;
-      text-align: center;
-      font-size: 9px;
-      color: #666;
-      border-top: 1px solid #e9ecef;
-      padding-top: 5px;
-    }
     
     .no-data {
       text-align: center;
@@ -293,14 +282,12 @@ export async function GET(request: NextRequest) {
       <img src="/PureDairy_Logo-removebg-preview.png" alt="PureDairy" class="logo">
       <div class="company-info">
         <h1>PureDairy</h1>
-        <p>Premium Dairy Products</p>
+        <p>Surety of Purity</p>
       </div>
     </div>
     <div class="report-info">
       <h2>Outstanding Amounts Report</h2>
       <p>Filter: ${priorityName}</p>
-      <p>Generated: ${format(new Date(), 'PPP p')}</p>
-      <p>Page 1</p>
     </div>
   </div>
 
@@ -398,10 +385,6 @@ export async function GET(request: NextRequest) {
   </div>
   `}
 
-  <!-- Footer -->
-  <div class="footer">
-    <div>PureDairy - Outstanding Amounts Report | Generated on ${format(new Date(), 'PPP')}</div>
-  </div>
 
   <script>
     // Auto-trigger print dialog after 1000ms delay
