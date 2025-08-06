@@ -189,8 +189,9 @@ Complete Supabase database with 9 tables:
 - Application currently running at localhost:3001 (port 3000 was in use)
 - Database: 9 tables with proper relationships and RLS policies
 - Authentication: Admin-only access with test credentials in .env.local
-- Remember to update @dev-journal.md after every small milestone
+- Create new development journal entries in /dev-journal/ folder using the format YYYYMMDDHHMM-dev-journal.md after every small milestone
 - Remember to update @plan.md when a task is completed
+- Development journal is organized as individual session files in the /dev-journal/ folder for better organization and smaller file sizes
 - All customer management features are fully functional and tested
 - All subscription management features are fully functional and tested
 - All order generation features are fully functional and tested
