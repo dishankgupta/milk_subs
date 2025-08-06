@@ -5,10 +5,10 @@ import { Customer, Route } from "@/lib/types"
 import { CustomerFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
 
-export async function getCustomers(): Promise<Customer[]> {
+export async function getCustomers(options?: { hasOutstanding?: boolean }): Promise<{ customers: Customer[], total: number }> {
   const supabase = await createClient()
   
-  const { data, error } = await supabase
+  let query = supabase
     .from("customers")
     .select(`
       *,
@@ -16,12 +16,22 @@ export async function getCustomers(): Promise<Customer[]> {
     `)
     .order("billing_name")
 
+  // Filter by outstanding amounts if requested
+  if (options?.hasOutstanding) {
+    query = query.gt("outstanding_amount", 0)
+  }
+
+  const { data, error } = await query
+
   if (error) {
     console.error("Error fetching customers:", error)
     throw new Error("Failed to fetch customers")
   }
 
-  return data || []
+  return { 
+    customers: data || [], 
+    total: data?.length || 0 
+  }
 }
 
 export async function getCustomer(id: string): Promise<Customer | null> {

@@ -78,3 +78,23 @@ export type SubscriptionFormData = {
 }
 
 export type ModificationFormData = z.infer<typeof modificationSchema>
+
+export const paymentSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  amount: z.number().positive("Payment amount must be positive"),
+  payment_date: z.date({ message: "Payment date is required" }),
+  payment_method: z.string().max(50, "Payment method must be less than 50 characters").optional(),
+  period_start: z.date({ message: "Period start date is required" }).optional(),
+  period_end: z.date({ message: "Period end date is required" }).optional(),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional(),
+}).refine((data) => {
+  if (data.period_start && data.period_end) {
+    return data.period_end >= data.period_start
+  }
+  return true
+}, {
+  message: "Period end date must be after or equal to period start date",
+  path: ["period_end"]
+})
+
+export type PaymentFormData = z.infer<typeof paymentSchema>

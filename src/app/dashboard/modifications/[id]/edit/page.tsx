@@ -28,7 +28,7 @@ interface EditModificationPageProps {
 
 export default async function EditModificationPage({ params }: EditModificationPageProps) {
   const { id } = await params
-  const [modificationResult, customers, products] = await Promise.all([
+  const [modificationResult, { customers }, products] = await Promise.all([
     getModificationById(id),
     getCustomers(),
     getProducts()

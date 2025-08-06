@@ -86,6 +86,20 @@ export interface Modification {
   product?: Product
 }
 
+export interface Payment {
+  id: string
+  customer_id: string
+  amount: number
+  payment_date: string
+  payment_method: string | null
+  period_start: string | null
+  period_end: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  customer?: Customer
+}
+
 export interface DashboardStats {
   totalCustomers: number
   activeCustomers: number

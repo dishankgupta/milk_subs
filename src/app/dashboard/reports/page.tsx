@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { FileText, Truck } from 'lucide-react'
+import { FileText, Truck, CreditCard, AlertCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,7 +16,7 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -48,6 +48,44 @@ export default function ReportsPage() {
             <Button asChild>
               <Link href="/dashboard/reports/delivery">
                 View Delivery Reports
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Payment Collection Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">
+              View payment collection summaries and outstanding amounts
+            </p>
+            <Button asChild>
+              <Link href="/dashboard/reports/payments">
+                View Payment Reports
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              Outstanding Amounts Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">
+              Track customers with outstanding payment amounts
+            </p>
+            <Button asChild>
+              <Link href="/dashboard/reports/outstanding">
+                View Outstanding Report
               </Link>
             </Button>
           </CardContent>

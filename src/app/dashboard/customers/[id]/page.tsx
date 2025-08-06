@@ -1,10 +1,11 @@
 import { getCustomer } from "@/lib/actions/customers"
 import { getCustomerSubscriptions } from "@/lib/actions/subscriptions"
+import { getCustomerPayments } from "@/lib/actions/payments"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard, Plus, Package, Eye } from "lucide-react"
+import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard, Plus, Package, Eye, Receipt, DollarSign } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -14,9 +15,10 @@ interface CustomerDetailPageProps {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { id } = await params
-  const [customer, subscriptions] = await Promise.all([
+  const [customer, subscriptions, payments] = await Promise.all([
     getCustomer(id),
-    getCustomerSubscriptions(id)
+    getCustomerSubscriptions(id),
+    getCustomerPayments(id)
   ])
 
   if (!customer) {
@@ -259,12 +261,78 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
-            <CardDescription>Latest delivery orders for this customer</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-4 w-4" />
+                Payment History ({payments.length})
+              </CardTitle>
+              <CardDescription>Recent payments from this customer</CardDescription>
+            </div>
+            <Button size="sm" asChild>
+              <Link href={`/dashboard/payments/new?customerId=${customer.id}`}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Payment
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">Order history coming in Phase 3...</p>
+            {payments.length === 0 ? (
+              <div className="text-center py-6">
+                <Receipt className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">No payments recorded yet</p>
+                <Button size="sm" variant="outline" className="mt-2" asChild>
+                  <Link href={`/dashboard/payments/new?customerId=${customer.id}`}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Record First Payment
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {payments.slice(0, 5).map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <span className="font-medium text-green-600">{formatCurrency(payment.amount)}</span>
+                        {payment.payment_method && (
+                          <Badge variant="secondary" className="text-xs">
+                            {payment.payment_method}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(payment.payment_date).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </div>
+                      {payment.notes && (
+                        <div className="text-xs text-muted-foreground mt-1 truncate max-w-[200px]" title={payment.notes}>
+                          {payment.notes}
+                        </div>
+                      )}
+                    </div>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/payments/${payment.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                ))}
+                {payments.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/payments?search=${customer.billing_name}`}>
+                        View All Payments
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

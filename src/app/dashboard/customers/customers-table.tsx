@@ -38,7 +38,7 @@ export function CustomersTable() {
 
   const loadCustomers = async () => {
     try {
-      const data = await getCustomers()
+      const { customers: data } = await getCustomers()
       setCustomers(data)
       setFilteredCustomers(data)
     } catch (error) {

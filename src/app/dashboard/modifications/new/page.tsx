@@ -21,7 +21,7 @@ async function getProducts(): Promise<Product[]> {
 }
 
 export default async function NewModificationPage() {
-  const [customers, products] = await Promise.all([
+  const [{ customers }, products] = await Promise.all([
     getCustomers(),
     getProducts()
   ])

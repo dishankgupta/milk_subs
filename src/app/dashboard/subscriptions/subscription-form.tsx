@@ -70,7 +70,7 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [customersData, productsData] = await Promise.all([
+        const [{ customers: customersData }, productsData] = await Promise.all([
           getCustomers(),
           getProducts()
         ])
