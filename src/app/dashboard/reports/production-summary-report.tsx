@@ -59,7 +59,9 @@ export function ProductionSummaryReport() {
   }
 
   const handlePrint = () => {
-    window.print()
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
+    const printUrl = `/api/print/production-summary?date=${dateStr}`
+    window.open(printUrl, '_blank')
   }
 
   return (

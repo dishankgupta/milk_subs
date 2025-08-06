@@ -51,7 +51,11 @@ export function PaymentCollectionReport() {
   }
 
   const handlePrint = () => {
-    window.print()
+    // For now, using current month - in future this could be made configurable
+    const startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+    const endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0)
+    const printUrl = `/api/print/payment-collection?start_date=${format(startDate, 'yyyy-MM-dd')}&end_date=${format(endDate, 'yyyy-MM-dd')}`
+    window.open(printUrl, '_blank')
   }
 
   return (

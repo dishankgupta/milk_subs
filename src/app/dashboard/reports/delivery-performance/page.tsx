@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Package, CheckCircle, AlertTriangle, Users, B
 import { getDeliveryPerformanceReport, type DeliveryPerformanceReport } from "@/lib/actions/reports"
 import { formatCurrency } from "@/lib/utils"
 import { PrintHeader } from "@/components/reports/PrintHeader"
+import { PrintButton } from "@/components/reports/PrintButton"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -90,9 +91,12 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
             </div>
             <div className="flex gap-2">
               <Button type="submit">Generate Report</Button>
-              <Button type="button" variant="outline" onClick={() => window.print()}>
+              <PrintButton 
+                printUrl={`/api/print/delivery-performance?start_date=${startDate}&end_date=${endDate}`}
+                variant="outline"
+              >
                 Print Report
-              </Button>
+              </PrintButton>
             </div>
           </form>
         </CardContent>

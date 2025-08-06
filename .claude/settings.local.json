@@ -17,7 +17,8 @@
       "mcp__filesystem__read_text_file",
       "mcp__playwright__browser_evaluate",
       "mcp__filesystem__edit_file",
-      "mcp__playwright__browser_snapshot"
+      "mcp__playwright__browser_snapshot",
+      "Bash(cp:*)"
     ]
   },
   "enabledMcpjsonServers": [

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ExportButtons } from '@/components/reports/ExportButtons'
 import { PrintHeader } from '@/components/reports/PrintHeader'
+import { PrintButton } from '@/components/reports/PrintButton'
 import { getCustomers } from '@/lib/actions/customers'
 import { formatCurrency } from '@/lib/utils'
 
@@ -52,14 +53,14 @@ export default async function OutstandingReportPage() {
             Track customers with pending payment amounts
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => window.print()}
+        <PrintButton 
+          printUrl="/api/print/outstanding-amounts"
+          variant="outline"
           className="no-print"
         >
           <Download className="h-4 w-4 mr-2" />
           Print Report
-        </Button>
+        </PrintButton>
       </div>
 
       {/* Summary Cards */}

@@ -88,7 +88,10 @@ export function DeliveryReportsInterface() {
   }
 
   const handlePrint = () => {
-    window.print()
+    if (!selectedRoute) return
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
+    const printUrl = `/api/print/route-delivery?date=${dateStr}&route=${selectedRoute}&time_slot=${selectedTime}`
+    window.open(printUrl, '_blank')
   }
 
   return (
