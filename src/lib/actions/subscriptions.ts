@@ -266,6 +266,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function searchSubscriptions(query: string): Promise<Subscription[]> {
   const supabase = await createClient()
   
+  // First get all subscriptions with joins
   const { data, error } = await supabase
     .from("base_subscriptions")
     .select(`
@@ -273,7 +274,6 @@ export async function searchSubscriptions(query: string): Promise<Subscription[]
       customer:customers(*),
       product:products(*)
     `)
-    .or(`customer.billing_name.ilike.%${query}%,customer.contact_person.ilike.%${query}%,product.name.ilike.%${query}%`)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -281,6 +281,19 @@ export async function searchSubscriptions(query: string): Promise<Subscription[]
     throw new Error("Failed to search subscriptions")
   }
 
-  return data || []
+  // Filter on the client side for cross-table search
+  const filteredData = (data || []).filter((subscription: any) => {
+    const customer = subscription.customer
+    const product = subscription.product
+    const searchTerm = query.toLowerCase()
+    
+    return (
+      customer?.billing_name?.toLowerCase().includes(searchTerm) ||
+      customer?.contact_person?.toLowerCase().includes(searchTerm) ||
+      product?.name?.toLowerCase().includes(searchTerm)
+    )
+  })
+
+  return filteredData
 }
 

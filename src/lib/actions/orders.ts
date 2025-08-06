@@ -28,7 +28,7 @@ export async function generateDailyOrders(orderDate: string) {
       .from("base_subscriptions")
       .select(`
         *,
-        customer:customers(*),
+        customer:customers(*, route:routes(*)),
         product:products(*)
       `)
       .eq("is_active", true)
@@ -252,7 +252,7 @@ export async function previewDailyOrders(orderDate: string) {
       .from("base_subscriptions")
       .select(`
         *,
-        customer:customers(*),
+        customer:customers(*, route:routes(*)),
         product:products(*)
       `)
       .eq("is_active", true)
