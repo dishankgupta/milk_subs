@@ -8,7 +8,8 @@
       "Bash(pnpm build:*)",
       "Bash(mkdir:*)",
       "mcp__supabase__list_tables",
-      "Bash(pnpm lint:*)"
+      "Bash(pnpm lint:*)",
+      "mcp__supabase__execute_sql"
     ]
   },
   "enabledMcpjsonServers": [

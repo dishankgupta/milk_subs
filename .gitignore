@@ -40,3 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .mcp.json
+
+# csv templates
+csv-templates/customers-data.csv
+csv-templates/subscriptions-data.csv
