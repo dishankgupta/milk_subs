@@ -5,6 +5,7 @@ import { ArrowLeft, AlertCircle, CreditCard, Phone, MapPin, Plus } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ExportButtons } from '@/components/reports/ExportButtons'
 import { getCustomers } from '@/lib/actions/customers'
 import { formatCurrency } from '@/lib/utils'
 
@@ -264,14 +265,7 @@ export default async function OutstandingReportPage() {
           <CardDescription>Download outstanding amounts report for offline use</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
-            <Button onClick={() => alert("Export functionality would be implemented here")}>
-              Export to PDF
-            </Button>
-            <Button variant="outline" onClick={() => alert("Export functionality would be implemented here")}>
-              Export to Excel
-            </Button>
-          </div>
+          <ExportButtons />
         </CardContent>
       </Card>
     </div>
