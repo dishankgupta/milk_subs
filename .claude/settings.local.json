@@ -9,7 +9,15 @@
       "Bash(mkdir:*)",
       "mcp__supabase__list_tables",
       "Bash(pnpm lint:*)",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_wait_for",
+      "mcp__filesystem__read_text_file",
+      "mcp__playwright__browser_evaluate",
+      "mcp__filesystem__edit_file",
+      "mcp__playwright__browser_snapshot"
     ]
   },
   "enabledMcpjsonServers": [

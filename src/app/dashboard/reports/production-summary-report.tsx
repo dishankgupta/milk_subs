@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn, formatCurrency } from '@/lib/utils'
 
 import { getDailyProductionSummary } from '@/lib/actions/reports'
+import { PrintHeader } from '@/components/reports/PrintHeader'
 import type { ProductionSummary } from '@/lib/actions/reports'
 
 export function ProductionSummaryReport() {
@@ -63,7 +64,18 @@ export function ProductionSummaryReport() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Print Header */}
+      <PrintHeader 
+        title="Daily Production Summary"
+        subtitle={format(selectedDate, 'PPPP')}
+        date={new Date().toLocaleString()}
+        additionalInfo={summary ? [
+          `Total Orders: ${summary.totalOrders}`,
+          `Total Value: ${formatCurrency(summary.totalValue)}`
+        ] : undefined}
+      />
+      
+      <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center gap-4">
           <Popover>
             <PopoverTrigger asChild>
@@ -127,12 +139,8 @@ export function ProductionSummaryReport() {
       )}
 
       {summary && !loading && (
-        <div className="space-y-6 print:space-y-4">
-          <div className="print:block hidden">
-            <h1 className="text-2xl font-bold text-center mb-2">Daily Production Summary</h1>
-            <p className="text-center text-gray-600">{format(selectedDate, 'PPPP')}</p>
-            <Separator className="my-4" />
-          </div>
+        <div className="space-y-6 print:space-y-4 print:max-w-none">
+          {/* This old print header is now handled by PrintHeader component above */}
 
           {summary.totalOrders === 0 ? (
             <Card>
@@ -142,53 +150,53 @@ export function ProductionSummaryReport() {
             </Card>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card>
+              <div className="grid gap-4 md:grid-cols-3 print:break-inside-avoid print:mb-4">
+                <Card className="print:break-inside-avoid">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{summary.totalOrders}</div>
+                    <div className="text-2xl font-bold print:text-lg">{summary.totalOrders}</div>
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="print:break-inside-avoid">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Total Value</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(summary.totalValue)}</div>
+                    <div className="text-2xl font-bold print:text-lg">{formatCurrency(summary.totalValue)}</div>
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="print:break-inside-avoid">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Average Order</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
+                    <div className="text-2xl font-bold print:text-lg">
                       {formatCurrency(summary.totalValue / summary.totalOrders)}
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+              <div className="grid gap-6 md:grid-cols-2 print:break-inside-avoid print:mb-4">
+                <Card className="print:break-inside-avoid print:mb-4">
                   <CardHeader>
-                    <CardTitle>Product Breakdown</CardTitle>
+                    <CardTitle className="print:text-lg print:font-bold">Product Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-4 print:space-y-2">
                       {Object.entries(summary.productBreakdown).map(([code, data]) => (
-                        <div key={code} className="flex items-center justify-between">
+                        <div key={code} className="flex items-center justify-between print:break-inside-avoid">
                           <div>
-                            <p className="font-medium">{data.name}</p>
-                            <p className="text-sm text-gray-600">
+                            <p className="font-medium print:text-sm">{data.name}</p>
+                            <p className="text-sm text-gray-600 print:text-xs">
                               {data.orderCount} orders • {data.totalQuantity}L
                             </p>
                           </div>
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="print:border print:border-black print:text-xs">
                             {formatCurrency(data.totalValue)}
                           </Badge>
                         </div>
@@ -197,21 +205,21 @@ export function ProductionSummaryReport() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="print:break-inside-avoid print:mb-4">
                   <CardHeader>
-                    <CardTitle>Route Breakdown</CardTitle>
+                    <CardTitle className="print:text-lg print:font-bold">Route Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-4 print:space-y-2">
                       {Object.entries(summary.routeBreakdown).map(([routeId, data]) => (
-                        <div key={routeId}>
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-medium">{data.name}</p>
-                            <Badge variant="outline">
+                        <div key={routeId} className="print:break-inside-avoid">
+                          <div className="flex items-center justify-between mb-2 print:mb-1">
+                            <p className="font-medium print:text-sm">{data.name}</p>
+                            <Badge variant="outline" className="print:border print:border-black print:text-xs">
                               {formatCurrency(data.totalValue)}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                          <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 print:text-xs print:gap-1">
                             <p>Morning: {data.morningOrders} orders</p>
                             <p>Evening: {data.eveningOrders} orders</p>
                             <p>Total: {data.totalQuantity}L</p>
@@ -224,43 +232,43 @@ export function ProductionSummaryReport() {
                 </Card>
               </div>
 
-              <Card>
+              <Card className="print:break-inside-avoid print:mb-4">
                 <CardHeader>
-                  <CardTitle>Time Slot Summary</CardTitle>
+                  <CardTitle className="print:text-lg print:font-bold">Time Slot Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Morning Delivery</h4>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="grid gap-4 md:grid-cols-2 print:gap-2">
+                    <div className="space-y-2 print:space-y-1 print:break-inside-avoid">
+                      <h4 className="font-medium print:text-sm print:font-bold">Morning Delivery</h4>
+                      <div className="grid grid-cols-3 gap-4 text-sm print:gap-2 print:text-xs">
                         <div>
-                          <p className="text-gray-600">Orders</p>
+                          <p className="text-gray-600 print:text-black">Orders</p>
                           <p className="font-medium">{summary.timeSlotBreakdown.morning.orders}</p>
                         </div>
                         <div>
-                          <p className="text-gray-600">Quantity</p>
+                          <p className="text-gray-600 print:text-black">Quantity</p>
                           <p className="font-medium">{summary.timeSlotBreakdown.morning.quantity}L</p>
                         </div>
                         <div>
-                          <p className="text-gray-600">Value</p>
+                          <p className="text-gray-600 print:text-black">Value</p>
                           <p className="font-medium">{formatCurrency(summary.timeSlotBreakdown.morning.value)}</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Evening Delivery</h4>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="space-y-2 print:space-y-1 print:break-inside-avoid">
+                      <h4 className="font-medium print:text-sm print:font-bold">Evening Delivery</h4>
+                      <div className="grid grid-cols-3 gap-4 text-sm print:gap-2 print:text-xs">
                         <div>
-                          <p className="text-gray-600">Orders</p>
+                          <p className="text-gray-600 print:text-black">Orders</p>
                           <p className="font-medium">{summary.timeSlotBreakdown.evening.orders}</p>
                         </div>
                         <div>
-                          <p className="text-gray-600">Quantity</p>
+                          <p className="text-gray-600 print:text-black">Quantity</p>
                           <p className="font-medium">{summary.timeSlotBreakdown.evening.quantity}L</p>
                         </div>
                         <div>
-                          <p className="text-gray-600">Value</p>
+                          <p className="text-gray-600 print:text-black">Value</p>
                           <p className="font-medium">{formatCurrency(summary.timeSlotBreakdown.evening.value)}</p>
                         </div>
                       </div>

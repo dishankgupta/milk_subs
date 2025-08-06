@@ -15,6 +15,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 
 import { getRouteDeliveryReport } from '@/lib/actions/reports'
 import { createClient } from '@/lib/supabase/client'
+import { PrintHeader } from '@/components/reports/PrintHeader'
 import type { RouteDeliveryReport } from '@/lib/actions/reports'
 import type { Route } from '@/lib/types'
 
@@ -92,7 +93,20 @@ export function DeliveryReportsInterface() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      {/* Print Header */}
+      <PrintHeader 
+        title="Route Delivery Report"
+        subtitle={report ? `${report.routeName} - ${report.deliveryTime} Delivery` : undefined}
+        date={new Date().toLocaleString()}
+        additionalInfo={report && report.orders.length > 0 ? [
+          `Date: ${format(selectedDate, 'PPPP')}`,
+          `Total Orders: ${report.summary.totalOrders}`,
+          `Total Quantity: ${report.summary.totalQuantity}L`,
+          `Total Value: ${formatCurrency(report.summary.totalValue)}`
+        ] : undefined}
+      />
+      
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle>Report Parameters</CardTitle>
         </CardHeader>
@@ -187,7 +201,7 @@ export function DeliveryReportsInterface() {
       </Card>
 
       {loading && (
-        <Card>
+        <Card className="print:hidden">
           <CardContent className="text-center py-8">
             <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
             <p>Loading delivery report...</p>
@@ -196,7 +210,7 @@ export function DeliveryReportsInterface() {
       )}
 
       {error && (
-        <Card>
+        <Card className="print:hidden">
           <CardContent className="text-center py-8">
             <p className="text-red-600">{error}</p>
             <Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2">
@@ -207,15 +221,8 @@ export function DeliveryReportsInterface() {
       )}
 
       {report && !loading && (
-        <div className="space-y-6 print:space-y-4">
-          <div className="print:block hidden">
-            <h1 className="text-2xl font-bold text-center mb-2">Delivery Report</h1>
-            <p className="text-center text-gray-600">
-              {report.routeName} - {report.deliveryTime} Delivery
-            </p>
-            <p className="text-center text-gray-500">{format(selectedDate, 'PPPP')}</p>
-            <Separator className="my-4" />
-          </div>
+        <div className="space-y-6 print:space-y-4 print:max-w-none">
+          {/* This old print header is now handled by PrintHeader component above */}
 
           {report.orders.length === 0 ? (
             <Card>
@@ -227,20 +234,20 @@ export function DeliveryReportsInterface() {
             </Card>
           ) : (
             <>
-              <Card>
+              <Card className="print:break-inside-avoid print:mb-4 print:hidden">
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
+                  <CardTitle className="flex items-center justify-between print:text-lg">
                     <span>
                       {report.routeName} - {report.deliveryTime} Delivery
                     </span>
                     <div className="flex items-center gap-2 text-sm">
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="print:border print:border-black print:text-xs">
                         {report.summary.totalOrders} orders
                       </Badge>
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="print:border print:border-black print:text-xs">
                         {report.summary.totalQuantity}L total
                       </Badge>
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="print:border print:border-black print:text-xs">
                         {formatCurrency(report.summary.totalValue)}
                       </Badge>
                     </div>
@@ -265,39 +272,39 @@ export function DeliveryReportsInterface() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Delivery List</CardTitle>
+              <Card className="print:border-none print:shadow-none">
+                <CardHeader className="print:pb-2">
+                  <CardTitle className="print:text-lg print:font-bold print:mb-2">Delivery List</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-4 print:space-y-2">
                     {report.orders.map((order, index) => (
-                      <div key={index} className="border rounded-lg p-4 print:break-inside-avoid">
-                        <div className="grid gap-3 md:grid-cols-2">
+                      <div key={index} className="border rounded-lg p-4 print:break-inside-avoid print:border print:border-gray-400 print:rounded-none print:p-3">
+                        <div className="grid gap-3 md:grid-cols-2 print:gap-2">
                           <div>
-                            <h4 className="font-medium text-lg">{order.customerName}</h4>
+                            <h4 className="font-medium text-lg print:text-base print:font-bold">{order.customerName}</h4>
                             {order.contactPerson && order.contactPerson !== order.customerName && (
-                              <p className="text-gray-600">Contact: {order.contactPerson}</p>
+                              <p className="text-gray-600 print:text-black print:text-sm">Contact: {order.contactPerson}</p>
                             )}
-                            <p className="text-gray-600">{order.address}</p>
-                            <p className="text-gray-600">📞 {order.phone}</p>
+                            <p className="text-gray-600 print:text-black print:text-sm">{order.address}</p>
+                            <p className="text-gray-600 print:text-black print:text-sm">📞 {order.phone}</p>
                           </div>
-                          <div className="md:text-right">
-                            <p className="font-medium">{order.productName}</p>
-                            <p className="text-lg font-bold">{order.quantity}L</p>
-                            <p className="text-gray-600">{formatCurrency(order.totalAmount)}</p>
+                          <div className="md:text-right print:text-right">
+                            <p className="font-medium print:text-sm">{order.productName}</p>
+                            <p className="text-lg font-bold print:text-base print:font-bold">{order.quantity}L</p>
+                            <p className="text-gray-600 print:text-black print:text-sm">{formatCurrency(order.totalAmount)}</p>
                           </div>
                         </div>
                         
-                        <div className="mt-3 pt-3 border-t border-gray-200 print:hidden">
-                          <div className="grid grid-cols-3 gap-2 text-sm text-gray-500">
+                        <div className="mt-3 pt-3 border-t border-gray-200 print:mt-2 print:pt-2 print:border-t print:border-gray-400">
+                          <div className="grid grid-cols-3 gap-2 text-sm text-gray-500 print:text-xs print:text-black print:gap-1">
                             <div>□ Delivered</div>
                             <div>□ Partial: ___L</div>
                             <div>□ Not Available</div>
                           </div>
-                          <div className="mt-2">
-                            <span className="text-sm text-gray-500">Notes: </span>
-                            <span className="border-b border-dotted border-gray-300 inline-block w-32"></span>
+                          <div className="mt-2 print:mt-1">
+                            <span className="text-sm text-gray-500 print:text-xs print:text-black">Notes: </span>
+                            <span className="border-b border-dotted border-gray-300 inline-block w-32 print:border-b print:border-dotted print:border-gray-400"></span>
                           </div>
                         </div>
                       </div>

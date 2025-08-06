@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, Package, CheckCircle, AlertTriangle, Users, B
 
 import { getDeliveryPerformanceReport, type DeliveryPerformanceReport } from "@/lib/actions/reports"
 import { formatCurrency } from "@/lib/utils"
+import { PrintHeader } from "@/components/reports/PrintHeader"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -46,8 +47,21 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
 
   return (
     <div className="space-y-6">
+      {/* Print Header */}
+      <PrintHeader 
+        title="Delivery Performance Report"
+        subtitle="Delivery Completion Analysis"
+        date={new Date().toLocaleString()}
+        additionalInfo={[
+          `Period: ${format(new Date(startDate), 'MMM dd')} - ${format(new Date(endDate), 'MMM dd')}`,
+          `Completion Rate: ${report.summary.completionRate}%`,
+          `Total Orders: ${report.summary.totalOrders}`,
+          `Quantity Variance: ${report.summary.quantityVariance >= 0 ? '+' : ''}${report.summary.quantityVariance}L`
+        ]}
+      />
+      
       {/* Date Range Filter */}
-      <Card>
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle>Date Range</CardTitle>
           <CardDescription>Select the period for delivery performance analysis</CardDescription>
@@ -74,21 +88,26 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
                 required
               />
             </div>
-            <Button type="submit">Generate Report</Button>
+            <div className="flex gap-2">
+              <Button type="submit">Generate Report</Button>
+              <Button type="button" variant="outline" onClick={() => window.print()}>
+                Print Report
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 print:break-inside-avoid print:mb-4">
+        <Card className="print:break-inside-avoid">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 print:pb-1">
+            <CardTitle className="text-sm font-medium print:text-xs">Completion Rate</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground print:hidden" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{report.summary.completionRate}%</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="print:pt-1">
+            <div className="text-2xl font-bold print:text-lg print:font-bold">{report.summary.completionRate}%</div>
+            <p className="text-xs text-muted-foreground print:text-xs print:text-black">
               {report.summary.deliveredOrders} of {report.summary.totalOrders} orders
             </p>
           </CardContent>
@@ -146,15 +165,15 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:break-inside-avoid print:mb-4">
         {/* Daily Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart className="h-5 w-5" />
+        <Card className="print:break-inside-avoid print:mb-4">
+          <CardHeader className="print:pb-2">
+            <CardTitle className="flex items-center gap-2 print:text-lg print:font-bold">
+              <BarChart className="h-5 w-5 print:hidden" />
               Daily Performance
             </CardTitle>
-            <CardDescription>Day-by-day delivery completion and variance</CardDescription>
+            <CardDescription className="print:text-sm print:text-black">Day-by-day delivery completion and variance</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-96 overflow-y-auto">

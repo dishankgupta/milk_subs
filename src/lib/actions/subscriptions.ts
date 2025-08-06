@@ -282,7 +282,7 @@ export async function searchSubscriptions(query: string): Promise<Subscription[]
   }
 
   // Filter on the client side for cross-table search
-  const filteredData = (data || []).filter((subscription: any) => {
+  const filteredData = (data || []).filter((subscription: Subscription) => {
     const customer = subscription.customer
     const product = subscription.product
     const searchTerm = query.toLowerCase()
