@@ -98,3 +98,13 @@ export const paymentSchema = z.object({
 })
 
 export type PaymentFormData = z.infer<typeof paymentSchema>
+
+export const deliverySchema = z.object({
+  daily_order_id: z.string().uuid("Please select a valid order"),
+  actual_quantity: z.number().min(0, "Actual quantity cannot be negative"),
+  delivery_notes: z.string().max(500, "Delivery notes must be less than 500 characters").optional(),
+  delivery_person: z.string().max(100, "Delivery person name must be less than 100 characters").optional(),
+  delivered_at: z.date({ message: "Delivery time is required" }).optional(),
+})
+
+export type DeliveryFormData = z.infer<typeof deliverySchema>

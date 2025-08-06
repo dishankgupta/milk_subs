@@ -100,6 +100,18 @@ export interface Payment {
   customer?: Customer
 }
 
+export interface Delivery {
+  id: string
+  daily_order_id: string
+  actual_quantity: number | null
+  delivery_notes: string | null
+  delivered_at: string | null
+  delivery_person: string | null
+  created_at: string
+  updated_at: string
+  daily_order?: DailyOrder
+}
+
 export interface DashboardStats {
   totalCustomers: number
   activeCustomers: number

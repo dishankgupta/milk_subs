@@ -308,3 +308,267 @@ export async function getRouteDeliveryReport(
     }
   }
 }
+
+export interface DeliveryPerformanceReport {
+  period: {
+    startDate: string
+    endDate: string
+  }
+  summary: {
+    totalOrders: number
+    deliveredOrders: number
+    completionRate: number
+    totalPlannedQuantity: number
+    totalActualQuantity: number
+    quantityVariance: number
+    totalPlannedValue: number
+    totalActualValue: number
+    valueVariance: number
+  }
+  dailyBreakdown: Array<{
+    date: string
+    orders: number
+    delivered: number
+    completionRate: number
+    plannedQuantity: number
+    actualQuantity: number
+    quantityVariance: number
+  }>
+  customerPerformance: Array<{
+    customerName: string
+    totalOrders: number
+    deliveredOrders: number
+    completionRate: number
+    avgQuantityVariance: number
+    totalValueVariance: number
+  }>
+  productPerformance: Array<{
+    productName: string
+    totalOrders: number
+    deliveredOrders: number
+    avgQuantityVariance: number
+    totalQuantityVariance: number
+  }>
+}
+
+export async function getDeliveryPerformanceReport(
+  startDate: string,
+  endDate: string
+): Promise<{
+  success: boolean
+  data?: DeliveryPerformanceReport
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+    
+    // Get all orders in the date range
+    const { data: orders, error: ordersError } = await supabase
+      .from('daily_orders')
+      .select(`
+        *,
+        customer:customers(billing_name),
+        product:products(name),
+        delivery:deliveries(actual_quantity)
+      `)
+      .gte('order_date', startDate)
+      .lte('order_date', endDate)
+      .order('order_date')
+
+    if (ordersError) {
+      throw ordersError
+    }
+
+    if (!orders || orders.length === 0) {
+      return {
+        success: true,
+        data: {
+          period: { startDate, endDate },
+          summary: {
+            totalOrders: 0,
+            deliveredOrders: 0,
+            completionRate: 0,
+            totalPlannedQuantity: 0,
+            totalActualQuantity: 0,
+            quantityVariance: 0,
+            totalPlannedValue: 0,
+            totalActualValue: 0,
+            valueVariance: 0,
+          },
+          dailyBreakdown: [],
+          customerPerformance: [],
+          productPerformance: [],
+        }
+      }
+    }
+
+    // Calculate summary statistics
+    let totalOrders = 0
+    let deliveredOrders = 0
+    let totalPlannedQuantity = 0
+    let totalActualQuantity = 0
+    let totalPlannedValue = 0
+    let totalActualValue = 0
+
+    const dailyStats: { [date: string]: {
+      orders: number
+      delivered: number
+      plannedQuantity: number
+      actualQuantity: number
+    } } = {}
+    const customerStats: { [customer: string]: {
+      totalOrders: number
+      deliveredOrders: number
+      quantityVariances: number[]
+      valueVariances: number[]
+    } } = {}
+    const productStats: { [product: string]: {
+      totalOrders: number
+      deliveredOrders: number
+      quantityVariances: number[]
+    } } = {}
+
+    for (const order of orders) {
+      totalOrders++
+      totalPlannedQuantity += order.planned_quantity
+      totalPlannedValue += order.total_amount
+
+      const actualQuantity = order.delivery?.[0]?.actual_quantity || 0
+      const isDelivered = order.status === 'Delivered'
+      
+      if (isDelivered) {
+        deliveredOrders++
+        totalActualQuantity += actualQuantity
+        totalActualValue += actualQuantity * order.unit_price
+      }
+
+      const quantityVariance = actualQuantity - order.planned_quantity
+      
+      // Daily breakdown
+      const date = order.order_date
+      if (!dailyStats[date]) {
+        dailyStats[date] = {
+          orders: 0,
+          delivered: 0,
+          plannedQuantity: 0,
+          actualQuantity: 0,
+        }
+      }
+      
+      dailyStats[date].orders++
+      dailyStats[date].plannedQuantity += order.planned_quantity
+      dailyStats[date].actualQuantity += actualQuantity
+      if (isDelivered) dailyStats[date].delivered++
+
+      // Customer performance
+      const customerName = order.customer?.billing_name || 'Unknown'
+      if (!customerStats[customerName]) {
+        customerStats[customerName] = {
+          totalOrders: 0,
+          deliveredOrders: 0,
+          quantityVariances: [],
+          valueVariances: [],
+        }
+      }
+      
+      customerStats[customerName].totalOrders++
+      if (isDelivered) {
+        customerStats[customerName].deliveredOrders++
+        customerStats[customerName].quantityVariances.push(quantityVariance)
+        customerStats[customerName].valueVariances.push(quantityVariance * order.unit_price)
+      }
+
+      // Product performance
+      const productName = order.product?.name || 'Unknown'
+      if (!productStats[productName]) {
+        productStats[productName] = {
+          totalOrders: 0,
+          deliveredOrders: 0,
+          quantityVariances: [],
+        }
+      }
+      
+      productStats[productName].totalOrders++
+      if (isDelivered) {
+        productStats[productName].deliveredOrders++
+        productStats[productName].quantityVariances.push(quantityVariance)
+      }
+    }
+
+    // Process daily breakdown
+    const dailyBreakdown = Object.entries(dailyStats).map(([date, stats]) => ({
+      date,
+      orders: stats.orders,
+      delivered: stats.delivered,
+      completionRate: Math.round((stats.delivered / stats.orders) * 100),
+      plannedQuantity: stats.plannedQuantity,
+      actualQuantity: stats.actualQuantity,
+      quantityVariance: stats.actualQuantity - stats.plannedQuantity,
+    }))
+
+    // Process customer performance
+    const customerPerformance = Object.entries(customerStats).map(([name, stats]) => {
+      const avgQuantityVariance = stats.quantityVariances.length > 0
+        ? stats.quantityVariances.reduce((sum: number, val: number) => sum + val, 0) / stats.quantityVariances.length
+        : 0
+      const totalValueVariance = stats.valueVariances.reduce((sum: number, val: number) => sum + val, 0)
+      
+      return {
+        customerName: name,
+        totalOrders: stats.totalOrders,
+        deliveredOrders: stats.deliveredOrders,
+        completionRate: Math.round((stats.deliveredOrders / stats.totalOrders) * 100),
+        avgQuantityVariance: Math.round(avgQuantityVariance * 100) / 100,
+        totalValueVariance: Math.round(totalValueVariance * 100) / 100,
+      }
+    }).sort((a, b) => b.totalOrders - a.totalOrders)
+
+    // Process product performance
+    const productPerformance = Object.entries(productStats).map(([name, stats]) => {
+      const avgQuantityVariance = stats.quantityVariances.length > 0
+        ? stats.quantityVariances.reduce((sum: number, val: number) => sum + val, 0) / stats.quantityVariances.length
+        : 0
+      const totalQuantityVariance = stats.quantityVariances.reduce((sum: number, val: number) => sum + val, 0)
+      
+      return {
+        productName: name,
+        totalOrders: stats.totalOrders,
+        deliveredOrders: stats.deliveredOrders,
+        avgQuantityVariance: Math.round(avgQuantityVariance * 100) / 100,
+        totalQuantityVariance: Math.round(totalQuantityVariance * 100) / 100,
+      }
+    })
+
+    const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
+    const quantityVariance = totalActualQuantity - totalPlannedQuantity
+    const valueVariance = totalActualValue - totalPlannedValue
+
+    return {
+      success: true,
+      data: {
+        period: { startDate, endDate },
+        summary: {
+          totalOrders,
+          deliveredOrders,
+          completionRate,
+          totalPlannedQuantity: Math.round(totalPlannedQuantity * 100) / 100,
+          totalActualQuantity: Math.round(totalActualQuantity * 100) / 100,
+          quantityVariance: Math.round(quantityVariance * 100) / 100,
+          totalPlannedValue: Math.round(totalPlannedValue * 100) / 100,
+          totalActualValue: Math.round(totalActualValue * 100) / 100,
+          valueVariance: Math.round(valueVariance * 100) / 100,
+        },
+        dailyBreakdown,
+        customerPerformance,
+        productPerformance,
+      }
+    }
+
+  } catch (error) {
+    console.error('Error generating delivery performance report:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate delivery performance report'
+    }
+  }
+}

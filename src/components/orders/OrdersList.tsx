@@ -8,8 +8,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { getDailyOrders } from "@/lib/actions/orders"
 import { DailyOrder } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { Search, MapPin, Clock, Package } from "lucide-react"
+import { Search, MapPin, Clock, Package, Truck } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export function OrdersList() {
   const [orders, setOrders] = useState<DailyOrder[]>([])
@@ -244,12 +246,23 @@ export function OrdersList() {
                       <div className="text-lg font-bold">{formatCurrency(order.total_amount)}</div>
                     </div>
                     
-                    <Badge 
-                      variant={order.status === "Delivered" ? "default" : 
-                               order.status === "Generated" ? "secondary" : "outline"}
-                    >
-                      {order.status}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge 
+                        variant={order.status === "Delivered" ? "default" : 
+                                 order.status === "Generated" ? "secondary" : "outline"}
+                      >
+                        {order.status}
+                      </Badge>
+                      
+                      {order.status === "Generated" && (
+                        <Link href={`/dashboard/deliveries/new?order_id=${order.id}`}>
+                          <Button size="sm">
+                            <Truck className="mr-1 h-3 w-3" />
+                            Confirm Delivery
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

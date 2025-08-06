@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { FileText, Truck, CreditCard, AlertCircle } from 'lucide-react'
+import { FileText, Truck, CreditCard, AlertCircle, BarChart } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -86,6 +86,25 @@ export default function ReportsPage() {
             <Button asChild>
               <Link href="/dashboard/reports/outstanding">
                 View Outstanding Report
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart className="h-5 w-5" />
+              Delivery Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">
+              Analyze delivery completion rates and quantity variance
+            </p>
+            <Button asChild>
+              <Link href="/dashboard/reports/delivery-performance">
+                View Performance Report
               </Link>
             </Button>
           </CardContent>

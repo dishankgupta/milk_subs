@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Calendar, BarChart3 } from "lucide-react"
+import { Plus, Calendar, BarChart3, Truck } from "lucide-react"
 import Link from "next/link"
 import { OrdersList } from "@/components/orders/OrdersList"
 import { OrdersStats } from "@/components/orders/OrdersStats"
@@ -23,7 +23,13 @@ export default function OrdersPage() {
               Generate Orders
             </Button>
           </Link>
-          <Link href="/dashboard/orders/reports">
+          <Link href="/dashboard/deliveries">
+            <Button variant="outline">
+              <Truck className="mr-2 h-4 w-4" />
+              Deliveries
+            </Button>
+          </Link>
+          <Link href="/dashboard/reports">
             <Button variant="outline">
               <BarChart3 className="mr-2 h-4 w-4" />
               Reports

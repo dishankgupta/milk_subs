@@ -6,7 +6,9 @@
       "Bash(pnpm run:*)",
       "Bash(pnpm dlx:*)",
       "Bash(pnpm build:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "mcp__supabase__list_tables",
+      "Bash(pnpm lint:*)"
     ]
   },
   "enabledMcpjsonServers": [
