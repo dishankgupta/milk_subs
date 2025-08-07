@@ -4,7 +4,8 @@ import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
-import { Package, CheckCircle2, Filter } from "lucide-react"
+import { Package, CheckCircle2, Filter, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { useSorting } from "@/hooks/useSorting"
 
 import type { DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
@@ -14,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Input } from "@/components/ui/input"
 
 interface BulkOrderSelectionProps {
   orders: (DailyOrder & {
@@ -32,6 +34,7 @@ type FilterOption = {
 export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [activeFilters, setActiveFilters] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
 
   // Calculate filter options
@@ -55,15 +58,38 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
     return options.sort((a, b) => a.label.localeCompare(b.label))
   }, [orders])
 
-  // Filter orders based on active filters
+  // Filter orders based on active filters and search query
   const filteredOrders = useMemo(() => {
-    if (activeFilters.length === 0) return orders
+    let filtered = orders
     
-    return orders.filter(order => {
-      const orderFilter = `${order.route.name}-${order.delivery_time}`
-      return activeFilters.includes(orderFilter)
-    })
-  }, [orders, activeFilters])
+    // Apply route/time filters
+    if (activeFilters.length > 0) {
+      filtered = filtered.filter(order => {
+        const orderFilter = `${order.route.name}-${order.delivery_time}`
+        return activeFilters.includes(orderFilter)
+      })
+    }
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(order => 
+        order.customer.billing_name.toLowerCase().includes(query) ||
+        order.customer.contact_person.toLowerCase().includes(query) ||
+        order.product.name.toLowerCase().includes(query) ||
+        order.route.name.toLowerCase().includes(query)
+      )
+    }
+    
+    return filtered
+  }, [orders, activeFilters, searchQuery])
+
+  // Apply sorting to filtered orders
+  const { sortedData: sortedOrders, sortConfig, handleSort } = useSorting(
+    filteredOrders,
+    'customer.billing_name',
+    'asc'
+  )
 
   const handleOrderToggle = (orderId: string, checked: boolean) => {
     if (checked) {
@@ -75,7 +101,7 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedOrderIds(filteredOrders.map(order => order.id))
+      setSelectedOrderIds(sortedOrders.map(order => order.id))
     } else {
       setSelectedOrderIds([])
     }
@@ -101,9 +127,9 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
     router.push(`/dashboard/deliveries/bulk?order_ids=${orderIdsParam}`)
   }
 
-  const selectedOrders = filteredOrders.filter(order => selectedOrderIds.includes(order.id))
-  const allFilteredSelected = filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length
-  const someFilteredSelected = selectedOrderIds.length > 0 && selectedOrderIds.length < filteredOrders.length
+  const selectedOrders = sortedOrders.filter(order => selectedOrderIds.includes(order.id))
+  const allFilteredSelected = sortedOrders.length > 0 && selectedOrderIds.length === sortedOrders.length
+  const someFilteredSelected = selectedOrderIds.length > 0 && selectedOrderIds.length < sortedOrders.length
 
   // Calculate totals for selected orders
   const totals = selectedOrders.reduce(
@@ -151,6 +177,91 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
         </CardContent>
       </Card>
 
+      {/* Search and Sort Controls */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by customer, product, or route..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-md"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchQuery("")}
+                  className="text-xs"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Sort by:</span>
+              <Button
+                variant={sortConfig?.key === 'customer.billing_name' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSort('customer.billing_name')}
+                className="text-xs h-7"
+              >
+                Customer
+                {sortConfig?.key === 'customer.billing_name' && (
+                  sortConfig.direction === 'asc' ? 
+                    <ArrowUp className="ml-1 h-3 w-3" /> : 
+                    <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+              <Button
+                variant={sortConfig?.key === 'order_date' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSort('order_date')}
+                className="text-xs h-7"
+              >
+                Order Date
+                {sortConfig?.key === 'order_date' && (
+                  sortConfig.direction === 'asc' ? 
+                    <ArrowUp className="ml-1 h-3 w-3" /> : 
+                    <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+              <Button
+                variant={sortConfig?.key === 'planned_quantity' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSort('planned_quantity')}
+                className="text-xs h-7"
+              >
+                Quantity
+                {sortConfig?.key === 'planned_quantity' && (
+                  sortConfig.direction === 'asc' ? 
+                    <ArrowUp className="ml-1 h-3 w-3" /> : 
+                    <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+              <Button
+                variant={sortConfig?.key === 'route.name' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSort('route.name')}
+                className="text-xs h-7"
+              >
+                Route
+                {sortConfig?.key === 'route.name' && (
+                  sortConfig.direction === 'asc' ? 
+                    <ArrowUp className="ml-1 h-3 w-3" /> : 
+                    <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Selection Controls */}
       <Card>
         <CardContent className="pt-6">
@@ -166,7 +277,7 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
                   }}
                 />
                 <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
-                  Select All ({filteredOrders.length})
+                  Select All ({sortedOrders.length})
                 </label>
               </div>
               
@@ -197,7 +308,7 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
 
       {/* Orders List */}
       <div className="grid gap-4">
-        {filteredOrders.map((order) => (
+        {sortedOrders.map((order) => (
           <Card 
             key={order.id} 
             className={`hover:shadow-md transition-all ${selectedOrderIds.includes(order.id) ? 'ring-2 ring-blue-500 bg-blue-50/50' : ''}`}
@@ -251,13 +362,13 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
         ))}
       </div>
       
-      {filteredOrders.length === 0 && (
+      {sortedOrders.length === 0 && (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-muted-foreground">
               <Package className="mx-auto h-12 w-12 mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Orders Found</h3>
-              <p>No orders match your current filter criteria.</p>
+              <p>No orders match your current search and filter criteria.</p>
             </div>
           </CardContent>
         </Card>

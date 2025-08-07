@@ -1,28 +1,76 @@
-import { Suspense } from "react"
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Plus, Package, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react"
 
 import { getDeliveries, getDeliveryStats } from "@/lib/actions/deliveries"
 import { DeliveriesTable } from "./deliveries-table"
-import { DateFilter } from "@/components/deliveries/date-filter"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 
-interface DeliveriesPageProps {
-  searchParams?: Promise<{
-    search?: string
-    date?: string
-    route?: string
-  }>
+type DeliveryWithOrder = Delivery & { 
+  daily_order: DailyOrder & { 
+    customer: Customer, 
+    product: Product, 
+    route: Route 
+  } 
 }
 
-async function DeliveriesContent({ searchParams }: DeliveriesPageProps) {
-  const resolvedSearchParams = await searchParams
-  const deliveries = await getDeliveries(resolvedSearchParams)
-  const stats = await getDeliveryStats(resolvedSearchParams?.date)
+
+function DeliveriesContent() {
+  const [deliveries, setDeliveries] = useState<DeliveryWithOrder[]>([])
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    deliveredOrders: 0,
+    pendingOrders: 0,
+    totalPlannedQuantity: 0,
+    totalActualQuantity: 0,
+    completionRate: 0,
+    quantityVariance: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [deliveriesData, statsData] = await Promise.all([
+          getDeliveries(),
+          getDeliveryStats()
+        ])
+        setDeliveries(deliveriesData)
+        setStats(statsData)
+      } catch (error) {
+        console.error("Failed to load deliveries data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="pt-6">
+                <div className="h-8 bg-muted rounded w-16 mb-2" />
+                <div className="h-4 bg-muted rounded w-24" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="h-96 bg-muted rounded-lg animate-pulse" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -85,35 +133,8 @@ async function DeliveriesContent({ searchParams }: DeliveriesPageProps) {
         </Card>
       </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex flex-col md:flex-row gap-4 flex-1">
-          <div className="flex-1 md:max-w-sm">
-            <form action="/dashboard/deliveries" method="GET">
-              <Input
-                placeholder="Search deliveries..."
-                name="search"
-                defaultValue={resolvedSearchParams?.search || ""}
-                className="w-full"
-              />
-              {resolvedSearchParams?.date && (
-                <input type="hidden" name="date" value={resolvedSearchParams.date} />
-              )}
-              {resolvedSearchParams?.route && (
-                <input type="hidden" name="route" value={resolvedSearchParams.route} />
-              )}
-            </form>
-          </div>
-          
-          <div className="flex gap-2">
-            <DateFilter 
-              defaultValue={resolvedSearchParams?.date}
-              searchValue={resolvedSearchParams?.search}
-              routeValue={resolvedSearchParams?.route}
-            />
-          </div>
-        </div>
-
+      {/* Action Buttons */}
+      <div className="flex justify-end items-center">
         <div className="flex gap-2">
           <Link href="/dashboard/deliveries/new">
             <Button>
@@ -124,30 +145,13 @@ async function DeliveriesContent({ searchParams }: DeliveriesPageProps) {
         </div>
       </div>
 
-      {/* Results Summary */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Showing {deliveries.length} delivery{deliveries.length !== 1 ? "s" : ""}
-          {resolvedSearchParams?.search && ` matching "${resolvedSearchParams.search}"`}
-          {resolvedSearchParams?.date && ` for ${format(new Date(resolvedSearchParams.date), "PP")}`}
-        </p>
-
-        {(resolvedSearchParams?.search || resolvedSearchParams?.date || resolvedSearchParams?.route) && (
-          <Link href="/dashboard/deliveries">
-            <Button variant="ghost" size="sm">
-              Clear filters
-            </Button>
-          </Link>
-        )}
-      </div>
-
       {/* Deliveries Table */}
-      <DeliveriesTable deliveries={deliveries} />
+      <DeliveriesTable initialDeliveries={deliveries} />
     </div>
   )
 }
 
-export default function DeliveriesPage(props: DeliveriesPageProps) {
+export default function DeliveriesPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-8">
@@ -157,25 +161,7 @@ export default function DeliveriesPage(props: DeliveriesPageProps) {
         </p>
       </div>
 
-      <Suspense
-        fallback={
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="pt-6">
-                    <div className="h-8 bg-muted rounded w-16 mb-2" />
-                    <div className="h-4 bg-muted rounded w-24" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <div className="h-96 bg-muted rounded-lg animate-pulse" />
-          </div>
-        }
-      >
-        <DeliveriesContent searchParams={props.searchParams} />
-      </Suspense>
+      <DeliveriesContent />
     </div>
   )
 }

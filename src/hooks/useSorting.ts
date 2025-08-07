@@ -4,7 +4,8 @@ import { SortConfig, SortDirection } from '@/lib/types'
 export function useSorting<T>(
   data: T[],
   defaultSortKey?: keyof T | string,
-  defaultDirection: SortDirection = 'asc'
+  defaultDirection: SortDirection = 'asc',
+  customValueGetter?: (item: T, key: string) => any
 ) {
   const [sortConfig, setSortConfig] = useState<SortConfig<T> | null>(
     defaultSortKey ? { key: defaultSortKey, direction: defaultDirection } : null
@@ -16,8 +17,15 @@ export function useSorting<T>(
     const sortableData = [...data]
     
     sortableData.sort((a, b) => {
-      const aValue = getNestedValue(a, sortConfig.key as string)
-      const bValue = getNestedValue(b, sortConfig.key as string)
+      let aValue, bValue
+      
+      if (customValueGetter) {
+        aValue = customValueGetter(a, sortConfig.key as string)
+        bValue = customValueGetter(b, sortConfig.key as string)
+      } else {
+        aValue = getNestedValue(a, sortConfig.key as string)
+        bValue = getNestedValue(b, sortConfig.key as string)
+      }
       
       if (aValue === null || aValue === undefined) return 1
       if (bValue === null || bValue === undefined) return -1
@@ -39,7 +47,7 @@ export function useSorting<T>(
     })
 
     return sortableData
-  }, [data, sortConfig])
+  }, [data, sortConfig, customValueGetter])
 
   const handleSort = (key: keyof T | string) => {
     let direction: SortDirection = 'asc'

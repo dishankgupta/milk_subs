@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
-import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
 
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
@@ -13,6 +13,8 @@ import { deleteDelivery } from "@/lib/actions/deliveries"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +25,7 @@ import {
 import { toast } from "sonner"
 
 interface DeliveriesTableProps {
-  deliveries: (Delivery & {
+  initialDeliveries: (Delivery & {
     daily_order: DailyOrder & {
       customer: Customer
       product: Product
@@ -32,15 +34,50 @@ interface DeliveriesTableProps {
   })[]
 }
 
-export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
+export function DeliveriesTable({ initialDeliveries }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [dateFilter, setDateFilter] = useState<string>("all")
+  const [routeFilter, setRouteFilter] = useState<string>("all")
 
-  // Apply sorting to deliveries with default sort by order date descending
+  // Filter deliveries based on search and filters (client-side only)
+  const filteredDeliveries = initialDeliveries.filter(delivery => {
+    const matchesSearch = !searchQuery || 
+      delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.daily_order.customer.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.daily_order.customer.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesDate = dateFilter === "all" || 
+      delivery.daily_order.order_date === dateFilter
+    
+    const matchesRoute = routeFilter === "all" || 
+      delivery.daily_order.route.name === routeFilter
+
+    return matchesSearch && matchesDate && matchesRoute
+  })
+
+  // Apply sorting to filtered deliveries with default sort by order date descending
   const { sortedData: sortedDeliveries, sortConfig, handleSort } = useSorting(
-    deliveries,
+    filteredDeliveries,
     'daily_order.order_date',
-    'desc'
+    'desc',
+    (delivery, key) => {
+      if (key === 'variance') {
+        return (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
+      }
+      return null // Use default behavior for other keys
+    }
   )
+
+  // Handle search functionality (client-side filtering)
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  // Get unique dates and routes for filters
+  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.daily_order.order_date))).sort().reverse()
+  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.daily_order.route.name)))
 
   async function handleDelete(id: string, customerName: string) {
     if (!confirm(`Are you sure you want to delete the delivery for ${customerName}?`)) {
@@ -59,22 +96,50 @@ export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
     }
   }
 
-  if (sortedDeliveries.length === 0) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center text-muted-foreground">
-            <Package className="mx-auto h-12 w-12 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No deliveries found</h3>
-            <p>No delivery records match your current search criteria.</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <div className="space-y-4">
+      {/* Search and Filters */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search deliveries by customer, delivery person, or notes..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Dates</SelectItem>
+                {uniqueDates.map(date => (
+                  <SelectItem key={date} value={date}>
+                    {format(new Date(date), "PP")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={routeFilter} onValueChange={setRouteFilter}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Route" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Routes</SelectItem>
+                {uniqueRoutes.map(route => (
+                  <SelectItem key={route} value={route}>{route}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
       {/* Sort Options */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-600">
@@ -135,10 +200,35 @@ export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
                 <ArrowDown className="ml-1 h-3 w-3" />
             )}
           </Button>
+          <Button
+            variant={sortConfig?.key === 'variance' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('variance')}
+            className="text-xs h-7"
+          >
+            Variance
+            {sortConfig?.key === 'variance' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
         </div>
       </div>
 
-      {sortedDeliveries.map((delivery) => {
+      {/* Results */}
+      {sortedDeliveries.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-muted-foreground">
+              <Package className="mx-auto h-12 w-12 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No deliveries found</h3>
+              <p>No delivery records match your current search criteria.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        sortedDeliveries.map((delivery) => {
         const order = delivery.daily_order
         const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
         const amountVariance = quantityVariance * order.unit_price
@@ -266,7 +356,8 @@ export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
             </CardContent>
           </Card>
         )
-      })}
+      })
+      )}
     </div>
   )
 }

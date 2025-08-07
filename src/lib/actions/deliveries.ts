@@ -5,15 +5,10 @@ import { revalidatePath } from "next/cache"
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 import type { DeliveryFormData, BulkDeliveryFormData } from "@/lib/validations"
 
-export async function getDeliveries(searchParams?: {
-  search?: string
-  date?: string
-  route?: string
-  status?: string
-}) {
+export async function getDeliveries() {
   const supabase = await createClient()
   
-  let query = supabase
+  const { data: deliveries, error } = await supabase
     .from('deliveries')
     .select(`
       *,
@@ -26,26 +21,40 @@ export async function getDeliveries(searchParams?: {
     `)
     .order('created_at', { ascending: false })
 
-  if (searchParams?.search) {
-    query = query.or(
-      `delivery_person.ilike.%${searchParams.search}%,delivery_notes.ilike.%${searchParams.search}%,daily_order.customer.billing_name.ilike.%${searchParams.search}%`,
-      { referencedTable: 'daily_orders.customers' }
-    )
-  }
-
-  if (searchParams?.date) {
-    query = query.eq('daily_order.order_date', searchParams.date)
-  }
-
-  if (searchParams?.route) {
-    query = query.eq('daily_order.route_id', searchParams.route)
-  }
-
-  const { data: deliveries, error } = await query
-
   if (error) {
     console.error('Error fetching deliveries:', error)
     throw new Error('Failed to fetch deliveries')
+  }
+
+  return deliveries as (Delivery & { daily_order: DailyOrder & { 
+    customer: Customer, 
+    product: Product, 
+    route: Route 
+  } })[]
+}
+
+export async function searchDeliveries(searchQuery: string) {
+  const supabase = await createClient()
+  
+  const { data: deliveries, error } = await supabase
+    .from('deliveries')
+    .select(`
+      *,
+      daily_order:daily_orders (
+        *,
+        customer:customers (*),
+        product:products (*),
+        route:routes (*)
+      )
+    `)
+    .or(
+      `delivery_person.ilike.%${searchQuery}%,delivery_notes.ilike.%${searchQuery}%`
+    )
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error searching deliveries:', error)
+    throw new Error('Failed to search deliveries')
   }
 
   return deliveries as (Delivery & { daily_order: DailyOrder & { 
