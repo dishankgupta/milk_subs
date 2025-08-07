@@ -272,7 +272,7 @@ export async function previewDailyOrders(orderDate: string) {
     const targetDate = new Date(orderDate)
     const previewOrders = []
     let totalAmount = 0
-    const byRoute: Record<string, number> = {}
+    const byRoute: Record<string, { quantity: number, amount: number }> = {}
     const byProduct: Record<string, { quantity: number, amount: number }> = {}
 
     // Calculate preview orders
@@ -307,7 +307,12 @@ export async function previewDailyOrders(orderDate: string) {
       totalAmount += orderTotal
 
       // Track by route
-      byRoute[customer.route_id] = (byRoute[customer.route_id] || 0) + 1
+      const routeName = customer.route?.name || `Route ${customer.route_id}`
+      if (!byRoute[routeName]) {
+        byRoute[routeName] = { quantity: 0, amount: 0 }
+      }
+      byRoute[routeName].quantity += modifiedQuantity
+      byRoute[routeName].amount += orderTotal
 
       // Track by product
       if (!byProduct[product.code]) {

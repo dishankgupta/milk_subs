@@ -35,7 +35,7 @@ interface OrderPreview {
 interface PreviewSummary {
   totalOrders: number
   totalAmount: number
-  byRoute: Record<string, number>
+  byRoute: Record<string, { quantity: number, amount: number }>
   byProduct: Record<string, { quantity: number, amount: number }>
 }
 
@@ -242,10 +242,13 @@ export function OrderGenerationForm() {
               <div>
                 <h4 className="font-semibold mb-2">By Route</h4>
                 <div className="space-y-2">
-                  {Object.entries(summary.byRoute).map(([route, count]) => (
+                  {Object.entries(summary.byRoute).map(([route, data]) => (
                     <div key={route} className="flex justify-between">
-                      <span>Route {route}</span>
-                      <Badge variant="secondary">{count} orders</Badge>
+                      <span>{route}</span>
+                      <div className="text-right">
+                        <div className="font-medium">{data.quantity}L</div>
+                        <div className="text-sm text-muted-foreground">{formatCurrency(data.amount)}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
