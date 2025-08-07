@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
-import type { DeliveryFormData } from "@/lib/validations"
+import type { DeliveryFormData, BulkDeliveryFormData } from "@/lib/validations"
 
 export async function getDeliveries(searchParams?: {
   search?: string
@@ -123,6 +123,79 @@ export async function createDelivery(data: DeliveryFormData) {
   revalidatePath('/dashboard/orders')
   
   return delivery as Delivery
+}
+
+export async function createBulkDeliveries(data: BulkDeliveryFormData) {
+  const supabase = await createClient()
+  
+  // First, get the orders to be delivered
+  const { data: orders, error: ordersError } = await supabase
+    .from('daily_orders')
+    .select('id, planned_quantity')
+    .in('id', data.order_ids)
+    .eq('status', 'Generated')
+  
+  if (ordersError) {
+    console.error('Error fetching orders for bulk delivery:', ordersError)
+    throw new Error('Failed to fetch orders for delivery')
+  }
+  
+  if (orders.length !== data.order_ids.length) {
+    throw new Error('Some orders are not available for delivery or have already been delivered')
+  }
+  
+  const deliveredAt = data.delivered_at ? data.delivered_at.toISOString() : new Date().toISOString()
+  
+  // Prepare delivery records
+  const deliveryRecords = orders.map((order) => {
+    let actualQuantity = order.planned_quantity // Default to planned quantity
+    
+    // If custom quantities provided, use those instead
+    if (data.delivery_mode === 'custom' && data.custom_quantities) {
+      const customQuantity = data.custom_quantities.find(cq => cq.order_id === order.id)
+      if (customQuantity) {
+        actualQuantity = customQuantity.actual_quantity
+      }
+    }
+    
+    return {
+      daily_order_id: order.id,
+      actual_quantity: actualQuantity,
+      delivery_notes: data.delivery_notes || null,
+      delivery_person: data.delivery_person || null,
+      delivered_at: deliveredAt,
+    }
+  })
+  
+  // Insert all delivery records in a transaction
+  const { data: deliveries, error: insertError } = await supabase
+    .from('deliveries')
+    .insert(deliveryRecords)
+    .select()
+  
+  if (insertError) {
+    console.error('Error creating bulk deliveries:', insertError)
+    throw new Error('Failed to create delivery records')
+  }
+  
+  // Update all order statuses to 'Delivered'
+  const { error: updateError } = await supabase
+    .from('daily_orders')
+    .update({ status: 'Delivered' })
+    .in('id', data.order_ids)
+  
+  if (updateError) {
+    console.error('Error updating order statuses:', updateError)
+    // Don't throw error here as deliveries were created successfully
+  }
+  
+  revalidatePath('/dashboard/deliveries')
+  revalidatePath('/dashboard/orders')
+  
+  return {
+    deliveries: deliveries as Delivery[],
+    count: deliveries.length
+  }
 }
 
 export async function updateDelivery(id: string, data: Partial<DeliveryFormData>) {

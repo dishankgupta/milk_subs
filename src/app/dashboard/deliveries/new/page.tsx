@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { getUndeliveredOrders } from "@/lib/actions/deliveries"
 import { DeliveryForm } from "../delivery-form"
+import { BulkOrderSelection } from "@/components/deliveries/bulk-order-selection"
 import { OrderDateFilter } from "@/components/deliveries/order-date-filter"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Package, AlertTriangle } from "lucide-react"
@@ -80,9 +81,9 @@ async function NewDeliveryContent({ searchParams }: NewDeliveryPageProps) {
       {/* Date Filter */}
       <Card>
         <CardHeader>
-          <CardTitle>Select Order for Delivery</CardTitle>
+          <CardTitle>Select Orders for Delivery</CardTitle>
           <CardDescription>
-            Choose an order to confirm delivery details
+            Choose orders to confirm delivery details individually or in bulk
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -99,53 +100,8 @@ async function NewDeliveryContent({ searchParams }: NewDeliveryPageProps) {
         </CardContent>
       </Card>
 
-      {/* Orders List */}
-      <div className="grid gap-4">
-        {orders.map((order) => (
-          <Card key={order.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
-                  <div>
-                    <div className="font-medium">{order.customer.billing_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {order.customer.contact_person}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="font-medium">{order.product.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {order.planned_quantity}L @ ₹{order.unit_price}/L
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="font-medium">{order.route.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {order.delivery_time} • {format(new Date(order.order_date), "PP")}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="font-medium">₹{order.total_amount}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Status: Generated
-                    </div>
-                  </div>
-                </div>
-                
-                <Link href={`/dashboard/deliveries/new?order_id=${order.id}`}>
-                  <Button>
-                    <Package className="mr-2 h-4 w-4" />
-                    Confirm Delivery
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Bulk Order Selection */}
+      <BulkOrderSelection orders={orders} />
     </div>
   )
 }
@@ -154,9 +110,9 @@ export default function NewDeliveryPage(props: NewDeliveryPageProps) {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Confirm Delivery</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Confirm Deliveries</h1>
         <p className="text-muted-foreground mt-2">
-          Select an order and record the actual delivery details
+          Select orders and confirm delivery details individually or in bulk
         </p>
       </div>
 

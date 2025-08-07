@@ -108,3 +108,17 @@ export const deliverySchema = z.object({
 })
 
 export type DeliveryFormData = z.infer<typeof deliverySchema>
+
+export const bulkDeliverySchema = z.object({
+  order_ids: z.array(z.string().uuid("Invalid order ID")).min(1, "At least one order must be selected"),
+  delivery_mode: z.enum(["as_planned", "custom"], { message: "Please select delivery mode" }),
+  delivery_person: z.string().max(100, "Delivery person name must be less than 100 characters").optional(),
+  delivered_at: z.date({ message: "Delivery time is required" }).optional(),
+  delivery_notes: z.string().max(500, "Delivery notes must be less than 500 characters").optional(),
+  custom_quantities: z.array(z.object({
+    order_id: z.string().uuid(),
+    actual_quantity: z.number().min(0, "Actual quantity cannot be negative")
+  })).optional(),
+})
+
+export type BulkDeliveryFormData = z.infer<typeof bulkDeliverySchema>
