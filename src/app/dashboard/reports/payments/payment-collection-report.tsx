@@ -14,36 +14,8 @@ import { PrintHeader } from "@/components/reports/PrintHeader"
 export function PaymentCollectionReport() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
-  // Mock data for demonstration
-  const mockData = [
-    {
-      period: "January 2025",
-      totalPayments: 125000,
-      paymentsCount: 28,
-      averagePayment: 4464,
-      outstandingStart: 15000,
-      outstandingEnd: 8000,
-      collectionRate: 95
-    },
-    {
-      period: "December 2024", 
-      totalPayments: 118000,
-      paymentsCount: 32,
-      averagePayment: 3687,
-      outstandingStart: 12000,
-      outstandingEnd: 15000,
-      collectionRate: 88
-    },
-    {
-      period: "November 2024",
-      totalPayments: 132000,
-      paymentsCount: 35,
-      averagePayment: 3771,
-      outstandingStart: 8000,
-      outstandingEnd: 12000,
-      collectionRate: 92
-    }
-  ]
+  // TODO: Replace with actual data from database
+  const paymentData: any[] = []
 
   const handleExport = () => {
     // In a real implementation, this would generate and download a report
@@ -65,11 +37,11 @@ export function PaymentCollectionReport() {
         title="Payment Collection Report"
         subtitle="Monthly Payment Collection Summary"
         date={new Date().toLocaleString()}
-        additionalInfo={[
-          `Report Period: Last 3 months`,
-          `Average Collection Rate: ${Math.round(mockData.reduce((sum, m) => sum + m.collectionRate, 0) / mockData.length)}%`,
-          `Total Payments: ${mockData.reduce((sum, m) => sum + m.paymentsCount, 0)} transactions`
-        ]}
+        additionalInfo={paymentData.length > 0 ? [
+          `Report Period: Last ${paymentData.length} months`,
+          `Average Collection Rate: ${Math.round(paymentData.reduce((sum, m) => sum + m.collectionRate, 0) / paymentData.length)}%`,
+          `Total Payments: ${paymentData.reduce((sum, m) => sum + m.paymentsCount, 0)} transactions`
+        ] : [`No payment data available`]}
       />
       
       {/* Date Selection */}
@@ -112,7 +84,7 @@ export function PaymentCollectionReport() {
 
       {/* Monthly Collection Summary */}
       <div className="grid gap-4 print:space-y-4">
-        {mockData.map((month, index) => (
+        {paymentData.length > 0 ? paymentData.map((month, index) => (
           <Card key={index} className="print:break-inside-avoid print:mb-4">
             <CardHeader className="print:pb-2">
               <div className="flex justify-between items-center print:flex-col print:items-start print:gap-1">
@@ -161,7 +133,16 @@ export function PaymentCollectionReport() {
               </div>
             </CardContent>
           </Card>
-        ))}
+        )) : (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center text-muted-foreground">
+                <p>No payment data available for the selected period.</p>
+                <p className="text-sm mt-2">Payment reports will appear here once payment data is available.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Summary Insights */}
@@ -171,26 +152,32 @@ export function PaymentCollectionReport() {
           <CardDescription className="print:text-sm print:text-black">Key metrics and trends from payment collection</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 text-sm print:space-y-1 print:text-xs">
-            <div className="flex justify-between print:justify-between">
-              <span className="text-muted-foreground print:text-black">Average monthly collection:</span>
-              <span className="font-medium print:font-bold">{formatCurrency(mockData.reduce((sum, m) => sum + m.totalPayments, 0) / mockData.length)}</span>
+          {paymentData.length > 0 ? (
+            <div className="space-y-2 text-sm print:space-y-1 print:text-xs">
+              <div className="flex justify-between print:justify-between">
+                <span className="text-muted-foreground print:text-black">Average monthly collection:</span>
+                <span className="font-medium print:font-bold">{formatCurrency(paymentData.reduce((sum, m) => sum + m.totalPayments, 0) / paymentData.length)}</span>
+              </div>
+              <div className="flex justify-between print:justify-between">
+                <span className="text-muted-foreground print:text-black">Average collection rate:</span>
+                <span className="font-medium print:font-bold">{Math.round(paymentData.reduce((sum, m) => sum + m.collectionRate, 0) / paymentData.length)}%</span>
+              </div>
+              <div className="flex justify-between print:justify-between">
+                <span className="text-muted-foreground print:text-black">Total payments processed:</span>
+                <span className="font-medium print:font-bold">{paymentData.reduce((sum, m) => sum + m.paymentsCount, 0)} payments</span>
+              </div>
+              <div className="flex justify-between print:justify-between">
+                <span className="text-muted-foreground print:text-black">Outstanding trend:</span>
+                <span className={`font-medium print:font-bold print:text-black ${paymentData[0].outstandingEnd < paymentData[paymentData.length - 1].outstandingStart ? 'text-green-600' : 'text-red-600'}`}>
+                  {paymentData[0].outstandingEnd < paymentData[paymentData.length - 1].outstandingStart ? 'Improving' : 'Needs attention'}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between print:justify-between">
-              <span className="text-muted-foreground print:text-black">Average collection rate:</span>
-              <span className="font-medium print:font-bold">{Math.round(mockData.reduce((sum, m) => sum + m.collectionRate, 0) / mockData.length)}%</span>
+          ) : (
+            <div className="text-center text-muted-foreground">
+              <p>No collection insights available without payment data.</p>
             </div>
-            <div className="flex justify-between print:justify-between">
-              <span className="text-muted-foreground print:text-black">Total payments processed:</span>
-              <span className="font-medium print:font-bold">{mockData.reduce((sum, m) => sum + m.paymentsCount, 0)} payments</span>
-            </div>
-            <div className="flex justify-between print:justify-between">
-              <span className="text-muted-foreground print:text-black">Outstanding trend:</span>
-              <span className={`font-medium print:font-bold print:text-black ${mockData[0].outstandingEnd < mockData[mockData.length - 1].outstandingStart ? 'text-green-600' : 'text-red-600'}`}>
-                {mockData[0].outstandingEnd < mockData[mockData.length - 1].outstandingStart ? 'Improving' : 'Needs attention'}
-              </span>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
