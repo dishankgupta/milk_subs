@@ -21,6 +21,7 @@ export function ProductionSummaryReport() {
   const [loading, setLoading] = useState(false)
   const [summary, setSummary] = useState<ProductionSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [currentDateTime, setCurrentDateTime] = useState<string>('')
 
   const loadSummary = async (date: Date) => {
     setLoading(true)
@@ -48,6 +49,11 @@ export function ProductionSummaryReport() {
     loadSummary(selectedDate)
   }, [selectedDate])
 
+  // Set current date/time on client side to avoid hydration mismatch
+  useEffect(() => {
+    setCurrentDateTime(new Date().toLocaleString())
+  }, [])
+
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date)
@@ -70,7 +76,7 @@ export function ProductionSummaryReport() {
       <PrintHeader 
         title="Daily Production Summary"
         subtitle={format(selectedDate, 'PPPP')}
-        date={new Date().toLocaleString()}
+        date={currentDateTime}
         additionalInfo={summary ? [
           `Total Orders: ${summary.totalOrders}`,
           `Total Value: ${formatCurrency(summary.totalValue)}`
