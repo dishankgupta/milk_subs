@@ -13,6 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { useSorting } from "@/hooks/useSorting"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -71,6 +73,13 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
     
     return statusMatch && typeMatch
   })
+
+  // Apply sorting to filtered subscriptions
+  const { sortedData: sortedSubscriptions, sortConfig, handleSort } = useSorting(
+    filteredSubscriptions,
+    'created_at',
+    'desc'
+  )
 
   const handleToggleStatus = async (subscriptionId: string) => {
     try {
@@ -154,7 +163,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {filteredSubscriptions.length} subscription{filteredSubscriptions.length !== 1 ? 's' : ''}
+          Showing {sortedSubscriptions.length} subscription{sortedSubscriptions.length !== 1 ? 's' : ''}
           {searchQuery && ` for "${searchQuery}"`}
         </p>
       </div>
@@ -164,12 +173,42 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead>Type</TableHead>
+              <SortableTableHead 
+                sortKey="customer.billing_name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Customer
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="product.name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Product
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="subscription_type" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Type
+              </SortableTableHead>
               <TableHead>Details</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
+              <SortableTableHead 
+                sortKey="is_active" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Status
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="created_at" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Created
+              </SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -181,7 +220,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                   <p className="mt-2 text-sm text-gray-600">Searching...</p>
                 </TableCell>
               </TableRow>
-            ) : filteredSubscriptions.length === 0 ? (
+            ) : sortedSubscriptions.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8">
                   <p className="text-muted-foreground">
@@ -190,7 +229,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSubscriptions.map((subscription) => (
+              sortedSubscriptions.map((subscription) => (
                 <TableRow key={subscription.id}>
                   <TableCell>
                     <div>

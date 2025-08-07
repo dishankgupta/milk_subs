@@ -3,7 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
-import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock } from "lucide-react"
+import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { useSorting } from "@/hooks/useSorting"
 
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
@@ -34,6 +35,13 @@ interface DeliveriesTableProps {
 export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Apply sorting to deliveries with default sort by order date descending
+  const { sortedData: sortedDeliveries, sortConfig, handleSort } = useSorting(
+    deliveries,
+    'daily_order.order_date',
+    'desc'
+  )
+
   async function handleDelete(id: string, customerName: string) {
     if (!confirm(`Are you sure you want to delete the delivery for ${customerName}?`)) {
       return
@@ -51,7 +59,7 @@ export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
     }
   }
 
-  if (deliveries.length === 0) {
+  if (sortedDeliveries.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -67,7 +75,70 @@ export function DeliveriesTable({ deliveries }: DeliveriesTableProps) {
 
   return (
     <div className="space-y-4">
-      {deliveries.map((delivery) => {
+      {/* Sort Options */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Showing {sortedDeliveries.length} delivery{sortedDeliveries.length !== 1 ? 'ies' : 'y'}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Sort by:</span>
+          <Button
+            variant={sortConfig?.key === 'daily_order.customer.billing_name' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('daily_order.customer.billing_name')}
+            className="text-xs h-7"
+          >
+            Customer
+            {sortConfig?.key === 'daily_order.customer.billing_name' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'daily_order.order_date' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('daily_order.order_date')}
+            className="text-xs h-7"
+          >
+            Order Date
+            {sortConfig?.key === 'daily_order.order_date' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'actual_quantity' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('actual_quantity')}
+            className="text-xs h-7"
+          >
+            Quantity
+            {sortConfig?.key === 'actual_quantity' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'delivered_at' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('delivered_at')}
+            className="text-xs h-7"
+          >
+            Delivered At
+            {sortConfig?.key === 'delivered_at' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {sortedDeliveries.map((delivery) => {
         const order = delivery.daily_order
         const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
         const amountVariance = quantityVariance * order.unit_price

@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Search, MoreHorizontal, Eye, Edit, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Search, MoreHorizontal, Eye, Edit, Trash2, ToggleLeft, ToggleRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { format } from 'date-fns'
+import { useSorting } from '@/hooks/useSorting'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +46,13 @@ export function ModificationsTable() {
     }
     setLoading(false)
   }, [search, statusFilter, typeFilter])
+
+  // Apply sorting to modifications with default sort by start date descending
+  const { sortedData: sortedModifications, sortConfig, handleSort } = useSorting(
+    modifications,
+    'start_date',
+    'desc'
+  )
 
   useEffect(() => {
     const timeoutId = setTimeout(loadModifications, 300)
@@ -141,11 +149,70 @@ export function ModificationsTable() {
         </CardContent>
       </Card>
 
-      <div className="text-sm text-gray-600">
-        Showing {resultCount} modification{resultCount !== 1 ? 's' : ''}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Showing {resultCount} modification{resultCount !== 1 ? 's' : ''}
+        </div>
+        
+        {/* Sort Options */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Sort by:</span>
+          <Button
+            variant={sortConfig?.key === 'customer.billing_name' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('customer.billing_name')}
+            className="text-xs h-7"
+          >
+            Customer
+            {sortConfig?.key === 'customer.billing_name' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'start_date' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('start_date')}
+            className="text-xs h-7"
+          >
+            Start Date
+            {sortConfig?.key === 'start_date' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'end_date' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('end_date')}
+            className="text-xs h-7"
+          >
+            End Date
+            {sortConfig?.key === 'end_date' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            variant={sortConfig?.key === 'modification_type' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleSort('modification_type')}
+            className="text-xs h-7"
+          >
+            Type
+            {sortConfig?.key === 'modification_type' && (
+              sortConfig.direction === 'asc' ? 
+                <ArrowUp className="ml-1 h-3 w-3" /> : 
+                <ArrowDown className="ml-1 h-3 w-3" />
+            )}
+          </Button>
+        </div>
       </div>
 
-      {modifications.length === 0 ? (
+      {sortedModifications.length === 0 ? (
         <Card>
           <CardContent className="text-center py-8">
             <p className="text-gray-500">No modifications found</p>
@@ -158,7 +225,7 @@ export function ModificationsTable() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {modifications.map((modification) => (
+          {sortedModifications.map((modification) => (
             <Card key={modification.id}>
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">

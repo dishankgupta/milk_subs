@@ -348,6 +348,18 @@ Detailed phased implementation plan for the Dairy Subscription Manager, refined 
 - [ ] Efficient data fetching patterns
 - [ ] Client-side caching strategies
 
+#### Table Sorting Enhancement - **NEW ADDITION**
+**Estimated Time:** 2-3 hours
+- [x] Create reusable `useSorting` hook for consistent sort state management
+- [x] Create `SortableTableHead` component with visual sort indicators (arrows)
+- [x] Add TypeScript types for sort configuration (`SortDirection`, `SortConfig`, `SortableColumn`)
+- [x] Orders List: Implement billing name ascending sort (special case - no UI indicators)
+- [x] Customers Table: Full sorting (Billing Name, Contact Person, Phone, Route, Delivery Time, Outstanding Amount, Status)
+- [x] Subscriptions Table: Full sorting (Customer Name, Product, Type, Status, Created Date)
+- [x] Payments Table: Full sorting (Customer Name, Amount, Payment Date, Payment Method)
+- [x] Modifications Table: Card-based sorting with custom UI (Customer Name, Start Date, End Date, Type)
+- [x] Deliveries Table: Card-based sorting with custom UI (Customer Name, Order Date, Actual Quantity, Delivered At)
+
 **Phase 4 Deliverables:**
 - [x] Complete payment tracking system
 - [x] Delivery confirmation and history
@@ -413,13 +425,15 @@ Detailed phased implementation plan for the Dairy Subscription Manager, refined 
 
 ---
 
-**Plan Status:** ✅ Phase 1 Complete - ✅ Phase 2 Complete - ✅ Phase 3 Complete - ✅ Phase 4.1, 4.2 & 4.3 Print Complete - ⚠️ Phase 4.3 Mobile Pending  
-**Last Updated:** August 6, 2025 - 7:45 PM  
+**Plan Status:** ✅ Phase 1 Complete - ✅ Phase 2 Complete - ✅ Phase 3 Complete - ✅ Phase 4.1, 4.2 & 4.3 Print Complete - ✅ Table Sorting Complete - ⚠️ Phase 4.3 Mobile Pending  
+**Last Updated:** August 7, 2025 - 11:45 AM  
 **Phase 1 Completed:** August 5, 2025  
 **Phase 2 Completed:** August 5, 2025  
 **Phase 3 Completed:** August 5, 2025 - All order generation, modifications, and reports implemented  
 **Phase 4.1 Payment Management Completed:** August 6, 2025 - Complete payment tracking and outstanding amount management  
 **Phase 4.2 Delivery Confirmation Completed:** August 6, 2025 - Complete delivery tracking with planned vs actual analysis  
 **Phase 4.3 Print Functionality Status:** ✅ **COMPLETED** - Professional print layouts implemented via dedicated API routes with PureDairy branding  
+**Table Sorting Enhancement Completed:** August 7, 2025 - Comprehensive sorting functionality across all 6 data display tables  
 **Print System Achievement:** All 5 report types now have fully functional, professional print layouts with auto-print capability  
+**Table Sorting Achievement:** All tables now have sorting capabilities with reusable infrastructure and consistent UX patterns  
 **Remaining Tasks:** Mobile interface optimization and performance tuning (non-critical for core functionality)

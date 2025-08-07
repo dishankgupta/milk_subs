@@ -116,13 +116,13 @@ Complete Supabase database with 9 tables:
 ## Key Features Implemented
 
 ### Customer Management (`/dashboard/customers`)
-- **Customer List**: Searchable table with filters (status, route, delivery time)
+- **Customer List**: Searchable table with filters (status, route, delivery time) + **sortable columns**
 - **Add Customer**: Complete form with validation (`/dashboard/customers/new`)
 - **Customer Details**: Comprehensive profile view (`/dashboard/customers/[id]`)
 - **Edit Customer**: Pre-populated form for updates (`/dashboard/customers/[id]/edit`)
 
 ### Subscription Management (`/dashboard/subscriptions`)
-- **Subscription List**: Searchable table with filters (status, type) and customer integration
+- **Subscription List**: Searchable table with filters (status, type) and customer integration + **sortable columns**
 - **Add Subscription**: Complete form with pattern preview (`/dashboard/subscriptions/new`)
 - **Subscription Details**: Comprehensive view with pattern visualization (`/dashboard/subscriptions/[id]`)
 - **Edit Subscription**: Pre-populated form for updates (`/dashboard/subscriptions/[id]/edit`)
@@ -133,12 +133,12 @@ Complete Supabase database with 9 tables:
 - **Orders Dashboard**: Real-time statistics and order management overview
 - **Generate Orders**: Date-based order generation with preview (`/dashboard/orders/generate`)
 - **Order Preview**: Summary statistics with breakdown by route and product
-- **Order Management**: List, filter, and manage daily orders by date and status
+- **Order Management**: List, filter, and manage daily orders by date and status + **billing name sort**
 - **Modification Support**: Complete system for skip/increase/decrease temporary changes
 - **Delete/Regenerate**: Ability to delete existing orders and regenerate as needed
 
 ### Modification Management (`/dashboard/modifications`)
-- **Modification List**: Searchable table with filters (status, type) and customer integration
+- **Modification List**: Searchable card-based interface with filters (status, type) + **custom sort controls**
 - **Add Modification**: Complete form with date range selection (`/dashboard/modifications/new`)
 - **Modification Details**: Comprehensive view with customer and product info (`/dashboard/modifications/[id]`)
 - **Edit Modification**: Pre-populated form for updates (`/dashboard/modifications/[id]/edit`)
@@ -146,7 +146,7 @@ Complete Supabase database with 9 tables:
 - **Automatic Application**: Modifications automatically applied during order generation
 
 ### Payment Management (`/dashboard/payments`)
-- **Payment List**: Searchable table with filters (customer, method, date range)
+- **Payment List**: Searchable table with filters (customer, method, date range) + **sortable columns**
 - **Add Payment**: Complete form with validation and customer pre-selection (`/dashboard/payments/new`)
 - **Payment Details**: Comprehensive payment view with customer info (`/dashboard/payments/[id]`)
 - **Edit Payment**: Pre-populated form for payment updates (`/dashboard/payments/[id]/edit`)
@@ -154,7 +154,7 @@ Complete Supabase database with 9 tables:
 - **Customer Integration**: Payment history sections on customer detail pages
 
 ### Delivery Management (`/dashboard/deliveries`)
-- **Delivery List**: Searchable table with filters (date, route, completion status)
+- **Delivery List**: Searchable card-based interface with filters (date, route, completion status) + **custom sort controls**
 - **Delivery Confirmation**: Select orders and record actual delivery details (`/dashboard/deliveries/new`)
 - **Delivery Details**: Comprehensive delivery view with variance analysis (`/dashboard/deliveries/[id]`)
 - **Edit Delivery**: Pre-populated form for delivery updates (`/dashboard/deliveries/[id]/edit`)
@@ -177,6 +177,7 @@ Complete Supabase database with 9 tables:
 - Mobile-responsive design throughout
 - TypeScript strict mode with proper type definitions
 - ESLint compliant code
+- **Comprehensive table sorting functionality** - All data tables support column sorting with visual indicators
 
 ## TypeScript Configuration
 
@@ -217,6 +218,7 @@ Complete Supabase database with 9 tables:
 - Comprehensive delivery performance reports with variance tracking and analytics
 - Phase 4.2 complete: Delivery confirmation system ready for production use
 - **PRINT SYSTEM COMPLETE**: Print functionality ✅ **WORKING** - Professional print layouts implemented via dedicated API routes with PureDairy branding
+- **TABLE SORTING COMPLETE**: All 6 data display tables now have comprehensive sorting functionality with reusable infrastructure and consistent UX patterns
 
 ## Development Workflow
 
@@ -235,6 +237,10 @@ Complete Supabase database with 9 tables:
 6. **Forms**: React Hook Form with Zod resolver for validation
 7. **Database**: Supabase with MCP server integration for CLI operations
 8. **Print System**: Dedicated API routes under `/src/app/api/print/` for professional report printing
+9. **Sorting Infrastructure**: 
+   - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
+   - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
+   - Sort types and configurations in `/src/lib/types.ts`
 
 ## Testing & Validation
 

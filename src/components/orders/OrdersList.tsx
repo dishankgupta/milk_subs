@@ -44,7 +44,7 @@ export function OrdersList() {
   }, [loadOrders])
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    const filtered = orders.filter(order => {
       const matchesSearch = !searchQuery || 
         order.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -54,6 +54,13 @@ export function OrdersList() {
       const matchesRoute = routeFilter === "all" || order.route_id === routeFilter
 
       return matchesSearch && matchesStatus && matchesRoute
+    })
+    
+    // Sort by billing name ascending
+    return filtered.sort((a, b) => {
+      const nameA = a.customer?.billing_name?.toLowerCase() || ''
+      const nameB = b.customer?.billing_name?.toLowerCase() || ''
+      return nameA.localeCompare(nameB)
     })
   }, [orders, searchQuery, statusFilter, routeFilter])
 

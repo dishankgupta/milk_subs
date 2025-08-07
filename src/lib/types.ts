@@ -118,3 +118,17 @@ export interface DashboardStats {
   totalProducts: number
   totalRoutes: number
 }
+
+// Sort configuration types
+export type SortDirection = 'asc' | 'desc'
+
+export interface SortConfig<T> {
+  key: keyof T | string
+  direction: SortDirection
+}
+
+export interface SortableColumn {
+  key: string
+  label: string
+  sortable?: boolean
+}

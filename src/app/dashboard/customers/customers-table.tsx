@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,29 +19,39 @@ import { formatCurrency } from "@/lib/utils"
 import { Search, Edit, Eye } from "lucide-react"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useSorting } from "@/hooks/useSorting"
 
 export function CustomersTable() {
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [routeFilter, setRouteFilter] = useState<string>("all")
   const [timeFilter, setTimeFilter] = useState<string>("all")
 
+  // Filter customers based on search and filters
+  const filteredCustomers = customers.filter(customer => {
+    const matchesStatus = statusFilter === "all" || customer.status === statusFilter
+    const matchesRoute = routeFilter === "all" || customer.route?.name === routeFilter
+    const matchesTime = timeFilter === "all" || customer.delivery_time === timeFilter
+    return matchesStatus && matchesRoute && matchesTime
+  })
+
+  // Apply sorting to filtered customers
+  const { sortedData: sortedCustomers, sortConfig, handleSort } = useSorting(
+    filteredCustomers,
+    'billing_name',
+    'asc'
+  )
+
   useEffect(() => {
     loadCustomers()
   }, [])
-
-  useEffect(() => {
-    filterCustomers()
-  }, [customers, searchQuery, statusFilter, routeFilter, timeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadCustomers = async () => {
     try {
       const { customers: data } = await getCustomers()
       setCustomers(data)
-      setFilteredCustomers(data)
     } catch (error) {
       console.error("Failed to load customers:", error)
     } finally {
@@ -60,24 +71,6 @@ export function CustomersTable() {
     } else {
       loadCustomers()
     }
-  }
-
-  const filterCustomers = () => {
-    let filtered = customers
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(customer => customer.status === statusFilter)
-    }
-
-    if (routeFilter !== "all") {
-      filtered = filtered.filter(customer => customer.route?.name === routeFilter)
-    }
-
-    if (timeFilter !== "all") {
-      filtered = filtered.filter(customer => customer.delivery_time === timeFilter)
-    }
-
-    setFilteredCustomers(filtered)
   }
 
   const uniqueRoutes = Array.from(new Set(customers.map(c => c.route?.name).filter(Boolean)))
@@ -138,7 +131,7 @@ export function CustomersTable() {
 
       {/* Results count */}
       <div className="text-sm text-muted-foreground">
-        Showing {filteredCustomers.length} of {customers.length} customers
+        Showing {sortedCustomers.length} of {customers.length} customers
       </div>
 
       {/* Table */}
@@ -146,25 +139,67 @@ export function CustomersTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Billing Name</TableHead>
-              <TableHead>Contact Person</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Delivery</TableHead>
-              <TableHead>Outstanding</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead 
+                sortKey="billing_name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Billing Name
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="contact_person" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Contact Person
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="phone_primary" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Phone
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="route.name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Route
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="delivery_time" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Delivery
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="outstanding_amount" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Outstanding
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="status" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Status
+              </SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCustomers.length === 0 ? (
+            {sortedCustomers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   {searchQuery ? "No customers found matching your search." : "No customers found."}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCustomers.map((customer) => (
+              sortedCustomers.map((customer) => (
                 <TableRow key={customer.id}>
                   <TableCell className="font-medium">
                     {customer.billing_name}

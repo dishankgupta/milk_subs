@@ -4,6 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { useSorting } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +35,13 @@ export default function PaymentsTable({
 }: PaymentsTableProps) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState(searchParams.search || "")
+
+  // Apply sorting to payments with default sort by payment date descending
+  const { sortedData: sortedPayments, sortConfig, handleSort } = useSorting(
+    initialPayments,
+    'payment_date',
+    'desc'
+  )
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
@@ -85,24 +94,48 @@ export default function PaymentsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Payment Date</TableHead>
-              <TableHead>Method</TableHead>
+              <SortableTableHead 
+                sortKey="customer.billing_name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Customer
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="amount" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Amount
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="payment_date" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Payment Date
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="payment_method" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Method
+              </SortableTableHead>
               <TableHead>Period</TableHead>
               <TableHead>Notes</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {initialPayments.length === 0 ? (
+            {sortedPayments.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center">
                   No payments found
                 </TableCell>
               </TableRow>
             ) : (
-              initialPayments.map((payment) => (
+              sortedPayments.map((payment) => (
                 <TableRow key={payment.id}>
                   <TableCell>
                     <div>
