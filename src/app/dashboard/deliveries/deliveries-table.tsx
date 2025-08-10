@@ -8,7 +8,7 @@ import { useSorting } from "@/hooks/useSorting"
 
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { deleteDelivery } from "@/lib/actions/deliveries"
+import { deleteDelivery, bulkDeleteDeliveries } from "@/lib/actions/deliveries"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -33,9 +33,10 @@ interface DeliveriesTableProps {
       route: Route
     }
   })[]
+  onDataChange?: () => void
 }
 
-export function DeliveriesTable({ initialDeliveries }: DeliveriesTableProps) {
+export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [dateFilter, setDateFilter] = useState<string>("all")
@@ -91,6 +92,7 @@ export function DeliveriesTable({ initialDeliveries }: DeliveriesTableProps) {
     try {
       await deleteDelivery(id)
       toast.success("Delivery deleted successfully")
+      onDataChange?.()
     } catch (error) {
       console.error('Delete error:', error)
       toast.error("Failed to delete delivery")
@@ -111,28 +113,23 @@ export function DeliveriesTable({ initialDeliveries }: DeliveriesTableProps) {
     }
 
     setBulkDeleting(true)
-    let successCount = 0
-    let failureCount = 0
+    const deliveryIds = Array.from(selectedDeliveries)
 
     try {
-      for (const deliveryId of selectedDeliveries) {
-        try {
-          await deleteDelivery(deliveryId)
-          successCount++
-        } catch (error) {
-          console.error(`Failed to delete delivery ${deliveryId}:`, error)
-          failureCount++
-        }
-      }
-
+      const { successCount, failureCount } = await bulkDeleteDeliveries(deliveryIds)
+      
       if (successCount > 0) {
         toast.success(`Successfully deleted ${successCount} deliveries`)
+        onDataChange?.()
       }
       if (failureCount > 0) {
         toast.error(`Failed to delete ${failureCount} deliveries`)
       }
 
       setSelectedDeliveries(new Set())
+    } catch (error) {
+      console.error('Bulk delete error:', error)
+      toast.error("Failed to delete deliveries")
     } finally {
       setBulkDeleting(false)
     }

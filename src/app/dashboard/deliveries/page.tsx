@@ -35,22 +35,23 @@ function DeliveriesContent() {
   })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [deliveriesData, statsData] = await Promise.all([
-          getDeliveries(),
-          getDeliveryStats()
-        ])
-        setDeliveries(deliveriesData)
-        setStats(statsData)
-      } catch (error) {
-        console.error("Failed to load deliveries data:", error)
-      } finally {
-        setLoading(false)
-      }
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [deliveriesData, statsData] = await Promise.all([
+        getDeliveries(),
+        getDeliveryStats()
+      ])
+      setDeliveries(deliveriesData)
+      setStats(statsData)
+    } catch (error) {
+      console.error("Failed to load deliveries data:", error)
+    } finally {
+      setLoading(false)
     }
-    
+  }
+
+  useEffect(() => {
     loadData()
   }, [])
 
@@ -146,7 +147,7 @@ function DeliveriesContent() {
       </div>
 
       {/* Deliveries Table */}
-      <DeliveriesTable initialDeliveries={deliveries} />
+      <DeliveriesTable initialDeliveries={deliveries} onDataChange={loadData} />
     </div>
   )
 }

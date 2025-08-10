@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -35,7 +35,12 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Calculate filter options
   const filterOptions = useMemo((): FilterOption[] => {
@@ -139,6 +144,38 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
     }),
     { quantity: 0, amount: 0 }
   )
+
+  if (!mounted) {
+    // Render a loading state during SSR to prevent hydration mismatch
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-20 bg-muted rounded-md animate-pulse" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-24 bg-muted rounded-md animate-pulse" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="h-16 bg-muted rounded-md animate-pulse" />
+          </CardContent>
+        </Card>
+        <div className="grid gap-4">
+          {orders.slice(0, 3).map((order, index) => (
+            <Card key={`loading-${index}`}>
+              <CardContent className="pt-6">
+                <div className="h-20 bg-muted rounded-md animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

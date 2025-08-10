@@ -276,6 +276,57 @@ export async function deleteDelivery(id: string) {
   revalidatePath('/dashboard/orders')
 }
 
+export async function bulkDeleteDeliveries(deliveryIds: string[]) {
+  if (deliveryIds.length === 0) {
+    return { successCount: 0, failureCount: 0 }
+  }
+
+  const supabase = await createClient()
+  
+  // First get all deliveries to get their order IDs
+  const { data: deliveries, error: fetchError } = await supabase
+    .from('deliveries')
+    .select('id, daily_order_id')
+    .in('id', deliveryIds)
+
+  if (fetchError) {
+    console.error('Error fetching deliveries for bulk deletion:', fetchError)
+    throw new Error('Failed to find deliveries')
+  }
+
+  if (deliveries.length === 0) {
+    return { successCount: 0, failureCount: 0 }
+  }
+
+  // Bulk delete deliveries
+  const { error: deleteError } = await supabase
+    .from('deliveries')
+    .delete()
+    .in('id', deliveryIds)
+
+  if (deleteError) {
+    console.error('Error bulk deleting deliveries:', deleteError)
+    throw new Error('Failed to delete deliveries')
+  }
+
+  // Bulk update daily orders status back to 'Generated'
+  const orderIds = deliveries.map(d => d.daily_order_id)
+  const { error: updateError } = await supabase
+    .from('daily_orders')
+    .update({ status: 'Generated' })
+    .in('id', orderIds)
+
+  if (updateError) {
+    console.error('Error updating order statuses after bulk deletion:', updateError)
+    // Don't throw error here as deliveries were deleted successfully
+  }
+
+  revalidatePath('/dashboard/deliveries')
+  revalidatePath('/dashboard/orders')
+  
+  return { successCount: deliveries.length, failureCount: 0 }
+}
+
 export async function getUndeliveredOrders(date?: string) {
   const supabase = await createClient()
   
