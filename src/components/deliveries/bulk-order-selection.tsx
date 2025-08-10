@@ -273,7 +273,10 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
                   checked={allFilteredSelected}
                   onCheckedChange={handleSelectAll}
                   ref={(el) => {
-                    if (el) el.indeterminate = someFilteredSelected
+                    if (el) {
+                      const input = el.querySelector('input') as HTMLInputElement
+                      if (input) input.indeterminate = someFilteredSelected
+                    }
                   }}
                 />
                 <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">

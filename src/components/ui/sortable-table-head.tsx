@@ -3,21 +3,21 @@ import { TableHead } from '@/components/ui/table'
 import { SortConfig, SortDirection } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-interface SortableTableHeadProps {
+interface SortableTableHeadProps<T = unknown> {
   children: React.ReactNode
   sortKey: string
-  sortConfig: SortConfig<any> | null
+  sortConfig: SortConfig<T> | null
   onSort: (key: string) => void
   className?: string
 }
 
-export function SortableTableHead({
+export function SortableTableHead<T = unknown>({
   children,
   sortKey,
   sortConfig,
   onSort,
   className
-}: SortableTableHeadProps) {
+}: SortableTableHeadProps<T>) {
   const isSorted = sortConfig?.key === sortKey
   const sortDirection: SortDirection | null = isSorted ? sortConfig.direction : null
 

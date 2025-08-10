@@ -51,11 +51,24 @@ export interface RouteDeliveryReport {
     productName: string
     quantity: number
     totalAmount: number
+    baseQuantity?: number
+    isModified: boolean
+    appliedModifications: Array<{
+      type: 'Skip' | 'Increase' | 'Decrease'
+      reason: string | null
+      quantityChange: number | null
+    }>
   }>
   summary: {
     totalOrders: number
     totalQuantity: number
     totalValue: number
+    modifiedOrders: number
+    modificationSummary: {
+      skip: number
+      increase: number
+      decrease: number
+    }
     productBreakdown: {
       [productCode: string]: {
         name: string
@@ -200,23 +213,44 @@ export async function getRouteDeliveryReport(
   try {
     const supabase = await createClient()
     
-    const { data: orders, error } = await supabase
-      .from('daily_orders')
-      .select(`
-        *,
-        customer:customers(billing_name, contact_person, address, phone_primary),
-        product:products(name, code),
-        route:routes(name)
-      `)
-      .eq('order_date', date)
-      .eq('route_id', routeId)
-      .eq('delivery_time', deliveryTime)
-      .eq('status', 'Generated')
-      .order('customer_id')
+    // Fetch orders and active modifications in parallel
+    const [ordersResult, modificationsResult] = await Promise.all([
+      supabase
+        .from('daily_orders')
+        .select(`
+          *,
+          customer:customers(id, billing_name, contact_person, address, phone_primary),
+          product:products(id, name, code),
+          route:routes(name)
+        `)
+        .eq('order_date', date)
+        .eq('route_id', routeId)
+        .eq('delivery_time', deliveryTime)
+        .eq('status', 'Generated')
+        .order('customer_id'),
+      
+      supabase
+        .from('modifications')
+        .select(`
+          *,
+          customer:customers(id, billing_name),
+          product:products(id, name)
+        `)
+        .eq('is_active', true)
+        .lte('start_date', date)
+        .gte('end_date', date)
+    ])
 
-    if (error) {
-      throw error
+    if (ordersResult.error) {
+      throw ordersResult.error
     }
+
+    if (modificationsResult.error) {
+      throw modificationsResult.error
+    }
+
+    const orders = ordersResult.data
+    const modifications = modificationsResult.data || []
 
     if (!orders || orders.length === 0) {
       // Get route name even if no orders
@@ -238,6 +272,12 @@ export async function getRouteDeliveryReport(
             totalOrders: 0,
             totalQuantity: 0,
             totalValue: 0,
+            modifiedOrders: 0,
+            modificationSummary: {
+              skip: 0,
+              increase: 0,
+              decrease: 0
+            },
             productBreakdown: {}
           }
         }
@@ -251,11 +291,58 @@ export async function getRouteDeliveryReport(
     let totalOrders = 0
     let totalQuantity = 0
     let totalValue = 0
+    let modifiedOrders = 0
+    const modificationSummary = { skip: 0, increase: 0, decrease: 0 }
 
     for (const order of orders as DailyOrder[]) {
       totalOrders++
       totalQuantity += order.planned_quantity
       totalValue += order.total_amount
+
+      // Find applicable modifications for this order
+      const orderModifications = modifications.filter(mod => 
+        mod.customer_id === order.customer_id && 
+        mod.product_id === order.product_id
+      )
+
+      let baseQuantity = order.planned_quantity
+      let isModified = false
+      const appliedModifications: Array<{
+        type: 'Skip' | 'Increase' | 'Decrease'
+        reason: string | null
+        quantityChange: number | null
+      }> = []
+
+      // Calculate base quantity by reversing modifications
+      if (orderModifications.length > 0) {
+        isModified = true
+        modifiedOrders++
+
+        for (const mod of orderModifications) {
+          appliedModifications.push({
+            type: mod.modification_type as 'Skip' | 'Increase' | 'Decrease',
+            reason: mod.reason,
+            quantityChange: mod.quantity_change
+          })
+
+          // Count modification types
+          const modType = mod.modification_type.toLowerCase() as keyof typeof modificationSummary
+          if (modType in modificationSummary) {
+            modificationSummary[modType]++
+          }
+
+          // Reverse the modification to calculate base quantity
+          if (mod.modification_type === 'Skip') {
+            // For skip, the base quantity would be non-zero but final is 0
+            // We need to calculate what the base would have been
+            baseQuantity = order.planned_quantity > 0 ? order.planned_quantity : 1
+          } else if (mod.modification_type === 'Increase') {
+            baseQuantity = order.planned_quantity - (mod.quantity_change || 0)
+          } else if (mod.modification_type === 'Decrease') {
+            baseQuantity = order.planned_quantity + Math.abs(mod.quantity_change || 0)
+          }
+        }
+      }
 
       reportOrders.push({
         customerName: order.customer?.billing_name || 'Unknown Customer',
@@ -264,7 +351,10 @@ export async function getRouteDeliveryReport(
         phone: order.customer?.phone_primary || '',
         productName: order.product?.name || 'Unknown Product',
         quantity: order.planned_quantity,
-        totalAmount: order.total_amount
+        totalAmount: order.total_amount,
+        baseQuantity: isModified ? baseQuantity : undefined,
+        isModified,
+        appliedModifications
       })
 
       // Product breakdown
@@ -295,6 +385,8 @@ export async function getRouteDeliveryReport(
           totalOrders,
           totalQuantity,
           totalValue,
+          modifiedOrders,
+          modificationSummary,
           productBreakdown
         }
       }

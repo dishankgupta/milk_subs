@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format } from 'date-fns'
-import { CalendarIcon, Download, RefreshCw, MapPin, Clock } from 'lucide-react'
+import { CalendarIcon, Download, RefreshCw, MapPin, Clock, AlertCircle, TrendingUp, TrendingDown, Minus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { useSorting } from '@/hooks/useSorting'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +11,6 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { cn, formatCurrency } from '@/lib/utils'
 
 import { getRouteDeliveryReport } from '@/lib/actions/reports'
@@ -27,6 +27,38 @@ export function DeliveryReportsInterface() {
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<RouteDeliveryReport | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  // Sort the orders when report is available
+  const sortedOrders = useMemo(() => {
+    if (!report?.orders) return []
+    return [...report.orders]
+  }, [report?.orders])
+  
+  const { sortedData: finalSortedOrders, sortConfig, handleSort } = useSorting(sortedOrders, 'customerName', 'asc')
+
+  const loadReport = useCallback(async () => {
+    if (!selectedRoute) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd')
+      const result = await getRouteDeliveryReport(dateStr, selectedRoute, selectedTime)
+      
+      if (result.success) {
+        setReport(result.data || null)
+      } else {
+        setError(result.error || 'Failed to load report')
+        setReport(null)
+      }
+    } catch {
+      setError('Something went wrong')
+      setReport(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedDate, selectedRoute, selectedTime])
 
   // Load routes on component mount
   useEffect(() => {
@@ -51,31 +83,7 @@ export function DeliveryReportsInterface() {
     if (selectedRoute) {
       loadReport()
     }
-  }, [selectedDate, selectedRoute, selectedTime])
-
-  const loadReport = async () => {
-    if (!selectedRoute) return
-    
-    setLoading(true)
-    setError(null)
-    
-    try {
-      const dateStr = format(selectedDate, 'yyyy-MM-dd')
-      const result = await getRouteDeliveryReport(dateStr, selectedRoute, selectedTime)
-      
-      if (result.success) {
-        setReport(result.data || null)
-      } else {
-        setError(result.error || 'Failed to load report')
-        setReport(null)
-      }
-    } catch (error) {
-      setError('Something went wrong')
-      setReport(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [selectedDate, selectedRoute, selectedTime, loadReport])
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
@@ -94,6 +102,10 @@ export function DeliveryReportsInterface() {
     window.open(printUrl, '_blank')
   }
 
+  const handleOrderSort = (key: string) => {
+    handleSort(key)
+  }
+
   return (
     <div className="space-y-6">
       {/* Print Header */}
@@ -105,7 +117,11 @@ export function DeliveryReportsInterface() {
           `Date: ${format(selectedDate, 'PPPP')}`,
           `Total Orders: ${report.summary.totalOrders}`,
           `Total Quantity: ${report.summary.totalQuantity}L`,
-          `Total Value: ${formatCurrency(report.summary.totalValue)}`
+          `Total Value: ${formatCurrency(report.summary.totalValue)}`,
+          ...(report.summary.modifiedOrders > 0 ? [`Modified Orders: ${report.summary.modifiedOrders}`] : []),
+          ...(report.summary.modificationSummary.skip > 0 ? [`Skipped: ${report.summary.modificationSummary.skip}`] : []),
+          ...(report.summary.modificationSummary.increase > 0 ? [`Increased: ${report.summary.modificationSummary.increase}`] : []),
+          ...(report.summary.modificationSummary.decrease > 0 ? [`Decreased: ${report.summary.modificationSummary.decrease}`] : [])
         ] : undefined}
       />
       
@@ -243,7 +259,7 @@ export function DeliveryReportsInterface() {
                     <span>
                       {report.routeName} - {report.deliveryTime} Delivery
                     </span>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
                       <Badge variant="outline" className="print:border print:border-black print:text-xs">
                         {report.summary.totalOrders} orders
                       </Badge>
@@ -253,6 +269,12 @@ export function DeliveryReportsInterface() {
                       <Badge variant="outline" className="print:border print:border-black print:text-xs">
                         {formatCurrency(report.summary.totalValue)}
                       </Badge>
+                      {report.summary.modifiedOrders > 0 && (
+                        <Badge variant="secondary" className="print:border print:border-black print:text-xs">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          {report.summary.modifiedOrders} modified
+                        </Badge>
+                      )}
                     </div>
                   </CardTitle>
                 </CardHeader>
@@ -271,6 +293,46 @@ export function DeliveryReportsInterface() {
                         ))}
                       </div>
                     </div>
+                    {report.summary.modifiedOrders > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Modification Summary</h4>
+                        <div className="grid gap-2 md:grid-cols-3">
+                          {report.summary.modificationSummary.skip > 0 && (
+                            <div className="flex items-center justify-between p-2 bg-red-50 rounded">
+                              <div className="flex items-center gap-2">
+                                <Minus className="h-4 w-4 text-red-600" />
+                                <span className="font-medium text-red-800">Skipped</span>
+                              </div>
+                              <span className="text-sm font-bold text-red-600">
+                                {report.summary.modificationSummary.skip}
+                              </span>
+                            </div>
+                          )}
+                          {report.summary.modificationSummary.increase > 0 && (
+                            <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                              <div className="flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4 text-green-600" />
+                                <span className="font-medium text-green-800">Increased</span>
+                              </div>
+                              <span className="text-sm font-bold text-green-600">
+                                {report.summary.modificationSummary.increase}
+                              </span>
+                            </div>
+                          )}
+                          {report.summary.modificationSummary.decrease > 0 && (
+                            <div className="flex items-center justify-between p-2 bg-orange-50 rounded">
+                              <div className="flex items-center gap-2">
+                                <TrendingDown className="h-4 w-4 text-orange-600" />
+                                <span className="font-medium text-orange-800">Decreased</span>
+                              </div>
+                              <span className="text-sm font-bold text-orange-600">
+                                {report.summary.modificationSummary.decrease}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -278,10 +340,69 @@ export function DeliveryReportsInterface() {
               <Card className="print:border-none print:shadow-none">
                 <CardHeader className="print:pb-2">
                   <CardTitle className="print:text-lg print:font-bold print:mb-2">Delivery List</CardTitle>
+                  <div className="flex items-center gap-2 print:hidden">
+                    <span className="text-sm text-muted-foreground">Sort by:</span>
+                    <Button
+                      variant={sortConfig?.key === 'customerName' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleOrderSort('customerName')}
+                      className="text-xs h-7"
+                    >
+                      Customer
+                      {sortConfig?.key === 'customerName' && (
+                        sortConfig.direction === 'asc' ? 
+                          <ArrowUp className="ml-1 h-3 w-3" /> : 
+                          <ArrowDown className="ml-1 h-3 w-3" />
+                      )}
+                      {sortConfig?.key !== 'customerName' && <ArrowUpDown className="ml-1 h-3 w-3" />}
+                    </Button>
+                    <Button
+                      variant={sortConfig?.key === 'productName' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleOrderSort('productName')}
+                      className="text-xs h-7"
+                    >
+                      Product
+                      {sortConfig?.key === 'productName' && (
+                        sortConfig.direction === 'asc' ? 
+                          <ArrowUp className="ml-1 h-3 w-3" /> : 
+                          <ArrowDown className="ml-1 h-3 w-3" />
+                      )}
+                      {sortConfig?.key !== 'productName' && <ArrowUpDown className="ml-1 h-3 w-3" />}
+                    </Button>
+                    <Button
+                      variant={sortConfig?.key === 'quantity' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleOrderSort('quantity')}
+                      className="text-xs h-7"
+                    >
+                      Quantity
+                      {sortConfig?.key === 'quantity' && (
+                        sortConfig.direction === 'asc' ? 
+                          <ArrowUp className="ml-1 h-3 w-3" /> : 
+                          <ArrowDown className="ml-1 h-3 w-3" />
+                      )}
+                      {sortConfig?.key !== 'quantity' && <ArrowUpDown className="ml-1 h-3 w-3" />}
+                    </Button>
+                    <Button
+                      variant={sortConfig?.key === 'totalAmount' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleOrderSort('totalAmount')}
+                      className="text-xs h-7"
+                    >
+                      Amount
+                      {sortConfig?.key === 'totalAmount' && (
+                        sortConfig.direction === 'asc' ? 
+                          <ArrowUp className="ml-1 h-3 w-3" /> : 
+                          <ArrowDown className="ml-1 h-3 w-3" />
+                      )}
+                      {sortConfig?.key !== 'totalAmount' && <ArrowUpDown className="ml-1 h-3 w-3" />}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 print:space-y-2">
-                    {report.orders.map((order, index) => (
+                    {finalSortedOrders.map((order, index) => (
                       <div key={index} className="border rounded-lg p-4 print:break-inside-avoid print:border print:border-gray-400 print:rounded-none print:p-3">
                         <div className="grid gap-3 md:grid-cols-2 print:gap-2">
                           <div>
@@ -293,13 +414,49 @@ export function DeliveryReportsInterface() {
                             <p className="text-gray-600 print:text-black print:text-sm">📞 {order.phone}</p>
                           </div>
                           <div className="md:text-right print:text-right">
-                            <p className="font-medium print:text-sm">{order.productName}</p>
-                            <p className="text-lg font-bold print:text-base print:font-bold">{order.quantity}L</p>
+                            <div className="flex items-center justify-end gap-2 mb-1 print:justify-end">
+                              <p className="font-medium print:text-sm">{order.productName}</p>
+                              {order.isModified && (
+                                <Badge variant="secondary" className="text-xs print:text-xs">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  Modified
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-lg font-bold print:text-base print:font-bold">
+                              {order.isModified && order.baseQuantity && (
+                                <span className="text-sm text-gray-500 line-through mr-2 print:text-xs">
+                                  {order.baseQuantity}L
+                                </span>
+                              )}
+                              <span>{order.quantity}L</span>
+                            </div>
                             <p className="text-gray-600 print:text-black print:text-sm">{formatCurrency(order.totalAmount)}</p>
                           </div>
                         </div>
                         
                         <div className="mt-3 pt-3 border-t border-gray-200 print:mt-2 print:pt-2 print:border-t print:border-gray-400">
+                          {order.isModified && order.appliedModifications.length > 0 && (
+                            <div className="mb-3 print:mb-2">
+                              <div className="text-xs font-medium text-gray-600 mb-1 print:text-black">Modifications:</div>
+                              <div className="space-y-1">
+                                {order.appliedModifications.map((mod, modIndex) => (
+                                  <div key={modIndex} className="flex items-center gap-2 text-xs text-gray-600 print:text-black">
+                                    {mod.type === 'Skip' && <Minus className="w-3 h-3 text-red-500" />}
+                                    {mod.type === 'Increase' && <TrendingUp className="w-3 h-3 text-green-500" />}
+                                    {mod.type === 'Decrease' && <TrendingDown className="w-3 h-3 text-orange-500" />}
+                                    <span className="font-medium">{mod.type}</span>
+                                    {mod.quantityChange && (
+                                      <span>({mod.quantityChange > 0 ? '+' : ''}{mod.quantityChange}L)</span>
+                                    )}
+                                    {mod.reason && (
+                                      <span className="italic">- {mod.reason}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-3 gap-2 text-sm text-gray-500 print:text-xs print:text-black print:gap-1">
                             <div>□ Delivered</div>
                             <div>□ Partial: ___L</div>

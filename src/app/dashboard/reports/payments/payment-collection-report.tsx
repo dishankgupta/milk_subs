@@ -15,7 +15,16 @@ export function PaymentCollectionReport() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
   // TODO: Replace with actual data from database
-  const paymentData: any[] = []
+  interface PaymentData {
+    period: string;
+    collectionRate: number;
+    paymentsCount: number;
+    totalPayments: number;
+    averagePayment: number;
+    outstandingStart: number;
+    outstandingEnd: number;
+  }
+  const paymentData: PaymentData[] = []
 
   const handleExport = () => {
     // In a real implementation, this would generate and download a report

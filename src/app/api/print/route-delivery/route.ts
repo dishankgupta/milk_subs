@@ -235,6 +235,41 @@ export async function GET(request: NextRequest) {
       color: #333;
     }
     
+    .modification-indicator {
+      font-size: 8px;
+      color: #666;
+      font-style: italic;
+      margin-top: 2px;
+    }
+    
+    .base-quantity {
+      text-decoration: line-through;
+      color: #999;
+      font-size: 9px;
+      margin-right: 5px;
+    }
+    
+    .modified-row {
+      background-color: #fffbeb !important;
+    }
+    
+    .modification-icon {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      font-size: 8px;
+      line-height: 12px;
+      text-align: center;
+      margin-right: 3px;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .mod-skip { background-color: #dc2626; }
+    .mod-increase { background-color: #059669; }
+    .mod-decrease { background-color: #ea580c; }
+    
     
     .no-data {
       text-align: center;
@@ -286,10 +321,37 @@ export async function GET(request: NextRequest) {
       <div class="value">${formatCurrency(report.summary.totalValue)}</div>
     </div>
     <div class="summary-item">
-      <h3>Avg per Order</h3>
-      <div class="value">${formatCurrency(report.summary.totalValue / report.summary.totalOrders)}</div>
+      <h3>Modified Orders</h3>
+      <div class="value">${report.summary.modifiedOrders}</div>
     </div>
   </div>
+
+  ${report.summary.modifiedOrders > 0 ? `
+  <!-- Modification Summary -->
+  <div class="product-summary">
+    <h3>Modification Summary</h3>
+    <div class="product-breakdown">
+      ${report.summary.modificationSummary.skip > 0 ? `
+      <div class="product-item" style="background: #fee2e2;">
+        <div class="name" style="color: #dc2626;">Skipped Orders</div>
+        <div class="value" style="color: #dc2626;">${report.summary.modificationSummary.skip}</div>
+      </div>
+      ` : ''}
+      ${report.summary.modificationSummary.increase > 0 ? `
+      <div class="product-item" style="background: #dcfce7;">
+        <div class="name" style="color: #059669;">Increased Orders</div>
+        <div class="value" style="color: #059669;">${report.summary.modificationSummary.increase}</div>
+      </div>
+      ` : ''}
+      ${report.summary.modificationSummary.decrease > 0 ? `
+      <div class="product-item" style="background: #fed7aa;">
+        <div class="name" style="color: #ea580c;">Decreased Orders</div>
+        <div class="value" style="color: #ea580c;">${report.summary.modificationSummary.decrease}</div>
+      </div>
+      ` : ''}
+    </div>
+  </div>
+  ` : ''}
 
   <!-- Product Summary -->
   ${Object.keys(report.summary.productBreakdown).length > 0 ? `
@@ -311,17 +373,18 @@ export async function GET(request: NextRequest) {
   <table class="orders-table">
     <thead>
       <tr>
-        <th style="width: 25%;">Customer Details</th>
-        <th style="width: 30%;">Address</th>
+        <th style="width: 22%;">Customer Details</th>
+        <th style="width: 26%;">Address</th>
         <th style="width: 12%;">Phone</th>
-        <th style="width: 15%;">Product</th>
-        <th style="width: 8%;">Qty</th>
-        <th style="width: 10%;">Amount</th>
+        <th style="width: 13%;">Product</th>
+        <th style="width: 10%;">Qty</th>
+        <th style="width: 9%;">Amount</th>
+        <th style="width: 8%;">Notes</th>
       </tr>
     </thead>
     <tbody>
       ${report.orders.map((order, index) => `
-      <tr>
+      <tr ${order.isModified ? 'class="modified-row"' : ''}>
         <td>
           <div class="customer-name">${order.customerName}</div>
           ${order.contactPerson ? `<div class="contact-info">Contact: ${order.contactPerson}</div>` : ''}
@@ -333,8 +396,25 @@ export async function GET(request: NextRequest) {
           <div class="phone">${order.phone || 'Not provided'}</div>
         </td>
         <td>${order.productName}</td>
-        <td class="quantity">${order.quantity}L</td>
+        <td class="quantity">
+          ${order.isModified && order.baseQuantity ? `<span class="base-quantity">${order.baseQuantity}L</span>` : ''}
+          <strong>${order.quantity}L</strong>
+        </td>
         <td class="amount">${formatCurrency(order.totalAmount)}</td>
+        <td style="font-size: 8px;">
+          ${order.isModified && order.appliedModifications.length > 0 ? 
+            order.appliedModifications.map(mod => `
+              <div style="margin-bottom: 2px;">
+                <span class="modification-icon mod-${mod.type.toLowerCase()}">
+                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : '↓'}
+                </span>
+                ${mod.type}${mod.quantityChange ? ` (${mod.quantityChange > 0 ? '+' : ''}${mod.quantityChange}L)` : ''}
+                ${mod.reason ? `<br><em>${mod.reason}</em>` : ''}
+              </div>
+            `).join('') : 
+            '—'
+          }
+        </td>
       </tr>
       `).join('')}
     </tbody>

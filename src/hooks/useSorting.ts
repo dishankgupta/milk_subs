@@ -5,7 +5,7 @@ export function useSorting<T>(
   data: T[],
   defaultSortKey?: keyof T | string,
   defaultDirection: SortDirection = 'asc',
-  customValueGetter?: (item: T, key: string) => any
+  customValueGetter?: (item: T, key: string) => unknown
 ) {
   const [sortConfig, setSortConfig] = useState<SortConfig<T> | null>(
     defaultSortKey ? { key: defaultSortKey, direction: defaultDirection } : null
@@ -68,6 +68,10 @@ export function useSorting<T>(
 }
 
 // Helper function to get nested object values using dot notation
-function getNestedValue(obj: any, path: string): any {
-  return path.split('.').reduce((current, key) => current?.[key], obj)
+function getNestedValue(obj: unknown, path: string): unknown {
+  return path.split('.').reduce((current: unknown, key: string) => {
+    return current && typeof current === 'object' && current !== null && key in current 
+      ? (current as Record<string, unknown>)[key] 
+      : undefined
+  }, obj)
 }
