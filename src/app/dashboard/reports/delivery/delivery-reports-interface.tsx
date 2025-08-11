@@ -98,7 +98,8 @@ export function DeliveryReportsInterface() {
   const handlePrint = () => {
     if (!selectedRoute) return
     const dateStr = format(selectedDate, 'yyyy-MM-dd')
-    const printUrl = `/api/print/route-delivery?date=${dateStr}&route=${selectedRoute}&time_slot=${selectedTime}`
+    const sortParams = sortConfig ? `&sort_key=${sortConfig.key}&sort_direction=${sortConfig.direction}` : ''
+    const printUrl = `/api/print/route-delivery?date=${dateStr}&route=${selectedRoute}&time_slot=${selectedTime}${sortParams}`
     window.open(printUrl, '_blank')
   }
 

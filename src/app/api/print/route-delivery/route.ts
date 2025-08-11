@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
     const routeId = searchParams.get('route')
     const timeSlot = searchParams.get('time_slot') as 'Morning' | 'Evening'
+    const sortKey = searchParams.get('sort_key') || 'customerName'
+    const sortDirection = searchParams.get('sort_direction') as 'asc' | 'desc' || 'asc'
     
     if (!routeId || !timeSlot) {
       return new Response('Missing required parameters: route and time_slot', { status: 400 })
@@ -21,6 +23,47 @@ export async function GET(request: NextRequest) {
     }
 
     const report = result.data!
+    
+    // Apply sorting to the orders
+    if (report.orders && report.orders.length > 0) {
+      report.orders.sort((a, b) => {
+        let aValue: any
+        let bValue: any
+        
+        switch (sortKey) {
+          case 'customerName':
+            aValue = a.customerName
+            bValue = b.customerName
+            break
+          case 'productName':
+            aValue = a.productName
+            bValue = b.productName
+            break
+          case 'quantity':
+            aValue = a.quantity
+            bValue = b.quantity
+            break
+          case 'totalAmount':
+            aValue = a.totalAmount
+            bValue = b.totalAmount
+            break
+          default:
+            aValue = a.customerName
+            bValue = b.customerName
+        }
+        
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.localeCompare(bValue)
+          return sortDirection === 'asc' ? comparison : -comparison
+        }
+        
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue
+        }
+        
+        return 0
+      })
+    }
     
     const html = `
 <!DOCTYPE html>
