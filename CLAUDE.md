@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Next.js 15 application called "milk_subs" - a dairy subscription management system using:
+This is a Next.js 15 application called "milk_subs" - a comprehensive dairy business management system featuring both subscription management and manual sales tracking using:
 - TypeScript for type safety
 - Tailwind CSS 4 for styling
 - pnpm as the package manager
@@ -39,9 +39,9 @@ The project follows Next.js App Router structure:
 
 ## Database Schema
 
-Complete Supabase database with 9 tables:
-- `customers` - Customer profiles with billing/contact info, routes, payment details
-- `products` - Cow Milk (₹75/L) and Buffalo Milk (₹80/L) 
+Complete Supabase database with 12 tables:
+- `customers` - Customer profiles with billing/contact info, routes, payment details, opening balance
+- `products` - Extended product catalog with GST rates (Cow/Buffalo Milk, Malai Paneer, Buffalo/Cow Ghee)
 - `routes` - Route 1 and Route 2 with personnel management
 - `base_subscriptions` - Daily/Pattern subscription types with 2-day cycle support
 - `modifications` - Temporary subscription changes (skip/increase/decrease)
@@ -49,6 +49,9 @@ Complete Supabase database with 9 tables:
 - `deliveries` - Actual vs planned delivery tracking
 - `payments` - Customer payment history and outstanding amounts
 - `product_pricing_history` - Price change audit trail
+- `sales` - Manual sales tracking (Cash/Credit) with GST compliance
+- `invoice_metadata` - Invoice generation tracking with financial year numbering
+- `gst_calculations` - GST breakdowns for compliance reporting
 
 ## Current Implementation Status
 
@@ -113,6 +116,15 @@ Complete Supabase database with 9 tables:
 - Daily, customer-wise, and product-wise delivery breakdowns
 - Mobile-responsive delivery interfaces with professional reporting
 
+### 📋 Phase 5: Sales Management System (PLANNED)
+- **Database Schema Extensions**: Product GST fields, sales table creation, opening balance integration
+- **Manual Sales Entry**: Cash vs Credit sale types with business logic validation
+- **GST-Compliant Invoicing**: Professional PDF generation with financial year numbering
+- **Outstanding Reports Enhancement**: Triple-level expandable reports (Opening + Current = Total)
+- **Bulk Invoice Generation**: Date range processing with progress tracking
+- **Customer Integration**: Enhanced outstanding display with sales history
+- **Print System Integration**: Leveraging existing print infrastructure for invoices and statements
+
 ## Key Features Implemented
 
 ### Customer Management (`/dashboard/customers`)
@@ -174,6 +186,20 @@ Complete Supabase database with 9 tables:
 - **Print Functionality**: ✅ **WORKING** - Dedicated print API routes with professional layouts, PureDairy branding, and auto-print functionality
 - **Modification Integration**: Route delivery reports show modification details, base quantities (strikethrough), and modification summaries
 
+### Sales Management (PLANNED - `/dashboard/sales`)
+- **Sales Entry**: Cash vs Credit sales with automatic customer validation
+- **Sales History**: Advanced filtering and search with GST breakdowns
+- **Invoice Generation**: Individual and bulk PDF generation with professional layouts
+- **GST Reporting**: Compliance reports with product-wise tax breakdowns
+- **Customer Integration**: Sales history sections on customer detail pages
+
+### Invoice Management (PLANNED - `/dashboard/invoices`)
+- **Invoice Generation**: Combined subscription + manual sales invoicing
+- **Bulk Processing**: Date range and customer selection with progress tracking
+- **Financial Year Management**: Automatic invoice numbering (YYYYYYYYNNNNN format)
+- **PDF Storage**: Organized file structure with dated subfolders
+- **Professional Layouts**: PureDairy branding with GST-compliant formatting
+
 ### Technical Features
 - Form validation with Zod schemas and React Hook Form
 - Toast notifications for user feedback
@@ -229,19 +255,56 @@ Complete Supabase database with 9 tables:
 - **BULK DELIVERY DELETE COMPLETE**: Added comprehensive bulk selection and deletion functionality with progress feedback and visual selection indicators
 - **DELIVERY REPORTS SORTING COMPLETE**: Implemented full sorting capabilities for delivery report lists with customer, product, quantity, and amount sorting options
 
+## Phase 5 Sales System Architecture (PLANNED)
+
+### Database Schema Extensions
+- **Products Table**: GST rate fields (gst_rate, unit_of_measure, is_subscription_product)
+- **Customers Table**: opening_balance field for historical outstanding tracking
+- **Sales Table**: Cash/Credit sale types with GST amount tracking and payment status
+- **Invoice Metadata**: Financial year-based numbering with file path storage
+
+### Business Logic Implementation
+- **Cash Sales**: No customer assignment, immediate payment completion
+- **Credit Sales**: Customer required, automatic outstanding amount updates
+- **GST Calculations**: Inclusive pricing with base amount and tax separation
+- **Invoice Numbering**: YYYYYYYYNNNNN format with financial year tracking
+
+### UI Integration Plan
+- **Enhanced Navigation**: Sales and Invoices sections with sub-menus
+- **Dashboard Extensions**: Sales metrics cards and pending invoice indicators
+- **Customer Profiles**: Sales history sections with enhanced outstanding display
+- **Outstanding Reports**: Triple-level expandable tables (Customer → Transaction Type → Details)
+
+### Professional Invoice System
+- **PDF Generation**: Professional layouts with PureDairy branding
+- **Bulk Processing**: Date range selection with progress tracking
+- **File Organization**: Dated subfolders with individual and combined PDFs
+- **GST Compliance**: Proper tax breakdowns and regulatory formatting
+
+### Critical Features
+- **Outstanding Report Enhancement**: Most critical feature - comprehensive customer balance tracking
+- **Opening Balance Integration**: Historical outstanding amounts + current period = total
+- **Real-time Calculations**: Automatic updates to customer outstanding on credit sales
+- **Print System Integration**: Leveraging existing print infrastructure for consistency
+
 ## Development Workflow
 
 1. **Server Actions**: Use `/src/lib/actions/` for database operations
-   - `/src/lib/actions/customers.ts` - Customer CRUD operations
+   - `/src/lib/actions/customers.ts` - Customer CRUD operations and opening balance management
    - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
    - `/src/lib/actions/orders.ts` - Order generation and management operations
    - `/src/lib/actions/modifications.ts` - Modification CRUD operations
    - `/src/lib/actions/payments.ts` - Payment CRUD operations and outstanding amount management
    - `/src/lib/actions/deliveries.ts` - Individual and bulk delivery confirmation operations
    - `/src/lib/actions/reports.ts` - Production and delivery report generation
-2. **Validation**: Zod schemas in `/src/lib/validations.ts`
-3. **Types**: TypeScript interfaces in `/src/lib/types.ts`
-4. **Utilities**: Helper functions in `/src/lib/subscription-utils.ts` for pattern calculations
+   - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations (PLANNED)
+   - `/src/lib/actions/invoices.ts` - Invoice generation and bulk processing operations (PLANNED)
+2. **Validation**: Zod schemas in `/src/lib/validations.ts` (includes sales and invoice schemas)
+3. **Types**: TypeScript interfaces in `/src/lib/types.ts` (extended for sales system)
+4. **Utilities**: Helper functions for business logic
+   - `/src/lib/subscription-utils.ts` - Pattern calculations
+   - `/src/lib/gst-utils.ts` - GST calculations and invoice numbering (PLANNED)
+   - `/src/lib/invoice-utils.ts` - PDF generation and file management (PLANNED)
 5. **UI Components**: Shadcn/ui components in `/src/components/ui/`
 6. **Forms**: React Hook Form with Zod resolver for validation
 7. **Database**: Supabase with MCP server integration for CLI operations

@@ -412,11 +412,132 @@ Detailed phased implementation plan for the Dairy Subscription Manager, refined 
 - [ ] User training and documentation
 - [ ] Backup and recovery testing
 
+---
+
+## Phase 5: Sales Management System (NEW) 
+**Goal:** Complete manual sales tracking, GST-compliant invoicing, and comprehensive outstanding reports
+
+### 5.1 Database Schema Extensions (Phase 5.1) @user_docs\sales_plan_phase1.md
+**Estimated Time:** 2-3 days
+
+#### Product Table Extensions
+- [ ] Add GST rate fields (gst_rate, unit_of_measure, is_subscription_product)
+- [ ] Extend existing products to support manual sales items
+- [ ] Add product pricing history for GST items (Malai Paneer ₹15/gms @ 5%, Buffalo/Cow Ghee @ 18%)
+- [ ] Update existing milk products with GST fields
+
+#### Sales Table Creation
+- [ ] Create sales table with Cash/Credit sale types
+- [ ] Implement business logic constraints (Cash sales = no customer, Credit sales = require customer)
+- [ ] Add GST amount tracking and payment status management
+- [ ] Foreign key relationships with customers and products
+
+#### Customer Extensions
+- [ ] Add opening_balance field to customers table
+- [ ] Create total outstanding calculation function (opening + current)
+- [ ] Enhance outstanding amount tracking for manual sales integration
+
+#### Invoice Metadata System
+- [ ] Create invoice_metadata table for tracking generated invoices
+- [ ] Financial year-based invoice numbering (YYYYYYYYNNNNN format)
+- [ ] Invoice sequence generation with atomic database functions
+- [ ] File path tracking for generated PDFs
+
+### 5.2 Sales Management System (Phase 5.2) @user_docs\sales_plan_phase2.md
+**Estimated Time:** 4-5 days
+
+#### Manual Sales Entry
+- [ ] Sales form with Cash vs Credit logic validation
+- [ ] Product selection with GST display and real-time calculations
+- [ ] Customer autocomplete (optional for Cash, required for Credit)
+- [ ] Automatic outstanding amount updates for credit sales
+- [ ] Editable unit prices with GST recalculation
+
+#### Sales History & Management
+- [ ] Sales list with advanced filtering (customer, product, type, date range)
+- [ ] Sales detail views with customer and product information
+- [ ] Sales editing with business rule validation
+- [ ] Sortable columns and search functionality
+
+#### Customer Integration
+- [ ] Sales history section on customer detail pages
+- [ ] Enhanced outstanding display (opening + current balance)
+- [ ] Cash sales reporting (for tracking only, not invoicing)
+- [ ] Credit sales integration with invoice generation
+
+### 5.3 Invoice Generation System (Phase 5.3) @user_docs\sales_plan_phase3.md
+**Estimated Time:** 5-6 days
+
+#### Individual Invoice Generation
+- [ ] Single customer invoice generation from customer profile
+- [ ] Combined subscription + manual sales data collection
+- [ ] Professional PDF layouts with PureDairy branding
+- [ ] GST-compliant invoice format with breakdowns
+- [ ] Daily summary integration for delivery tracking
+
+#### Bulk Invoice Generation
+- [ ] Date range and customer selection interface
+- [ ] Progress tracking with error handling for large batches
+- [ ] Duplicate invoice detection and warnings
+- [ ] Combined PDF generation for batch printing
+- [ ] File organization with dated subfolders
+
+#### Financial Year Management
+- [ ] Automatic invoice numbering based on financial year (Apr-Mar)
+- [ ] Sequence management with atomic database operations
+- [ ] Invoice metadata storage and retrieval
+- [ ] File path management and organization
+
+### 5.4 Outstanding Reports System (Phase 5.4) - MOST CRITICAL @user_docs\sales_plan_phase4.md
+**Estimated Time:** 6-7 days
+
+#### Comprehensive Outstanding Report (Triple-Level Expandable)
+- [ ] Level 1: Customer summary with opening balance + current outstanding
+- [ ] Level 2: Transaction type groups (Subscriptions, Manual Sales, Payments)
+- [ ] Level 3: Individual transaction details with dates and amounts
+- [ ] Monthly subscription grouping with product-level breakdowns
+- [ ] Manual sales integration with GST details
+- [ ] Payment history with method and period tracking
+
+#### Enhanced Print Options
+- [ ] Summary Report: Overview table with totals and statistics
+- [ ] Customer Statements: Individual customer pages with detailed breakdown
+- [ ] Complete Report: Summary + detailed customer statements combined
+- [ ] Professional layouts with PureDairy branding and A4 optimization
+- [ ] Modular print system using existing print infrastructure
+
+#### Smart Data Grouping
+- [ ] Opening balance calculation as of specific start date
+- [ ] Monthly subscription data with daily quantity calculations
+- [ ] Chronological transaction ordering within groups
+- [ ] Real-time outstanding amount calculations (Opening + Current = Total)
+
+### 5.5 Integration & Testing (Phase 5.5) @user_docs\sales_plan_phase5.md
+**Estimated Time:** 4-5 days
+
+#### UI Integration
+- [ ] Enhanced navigation with Sales and Invoices sections
+- [ ] Dashboard cards for sales metrics and pending invoices
+- [ ] Customer profile integration with sales history and enhanced outstanding
+- [ ] Mobile-responsive interfaces throughout
+
+#### Data Migration
+- [ ] Opening balance import from existing records
+- [ ] Historical sales data validation and import
+- [ ] Customer outstanding amount reconciliation
+- [ ] Database integrity verification
+
+#### Testing & Performance
+- [ ] End-to-end sales workflow testing
+- [ ] Bulk invoice generation performance testing
+- [ ] Outstanding report accuracy validation
+- [ ] Mobile responsiveness and print functionality testing
+
 ### Future Enhancement Phases
-- **Phase 5:** Customer communication (SMS/WhatsApp)
-- **Phase 6:** Advanced analytics and reporting
-- **Phase 7:** Route optimization features
-- **Phase 8:** Customer self-service portal
+- **Phase 6:** Customer communication (SMS/WhatsApp integration)
+- **Phase 7:** Advanced analytics and reporting (sales trends, customer insights)
+- **Phase 8:** Route optimization features
+- **Phase 9:** Customer self-service portal
 
 ---
 
