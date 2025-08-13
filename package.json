@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "puppeteer browsers install chrome",
+    "test-pdf": "node scripts/test-pdf.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

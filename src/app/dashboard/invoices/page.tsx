@@ -1,13 +1,16 @@
 import { Metadata } from "next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BulkInvoiceGenerator } from "@/components/invoices/bulk-invoice-generator"
+import { getInvoiceStats } from "@/lib/actions/invoices"
+import { formatCurrency } from "@/lib/utils"
 
 export const metadata: Metadata = {
   title: "Invoice Generation - PureDairy",
   description: "Generate individual and bulk invoices for customers",
 }
 
-export default function InvoicesPage() {
+export default async function InvoicesPage() {
+  const stats = await getInvoiceStats()
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
@@ -22,9 +25,9 @@ export default function InvoicesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">{stats.thisMonthCount}</div>
             <p className="text-xs text-muted-foreground">
-              Coming soon
+              This month
             </p>
           </CardContent>
         </Card>
@@ -35,9 +38,9 @@ export default function InvoicesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalInvoiceValue)}</div>
             <p className="text-xs text-muted-foreground">
-              Coming soon
+              All time
             </p>
           </CardContent>
         </Card>
@@ -48,9 +51,9 @@ export default function InvoicesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">{stats.pendingInvoicesCount}</div>
             <p className="text-xs text-muted-foreground">
-              Coming soon
+              Customers with outstanding
             </p>
           </CardContent>
         </Card>
@@ -61,9 +64,9 @@ export default function InvoicesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.avgInvoiceValue)}</div>
             <p className="text-xs text-muted-foreground">
-              Coming soon
+              Per invoice
             </p>
           </CardContent>
         </Card>

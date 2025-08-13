@@ -104,27 +104,105 @@ export async function combinePdfs(inputPaths: string[], outputPath: string): Pro
 export async function generatePdfFromHtml(html: string, outputPath: string): Promise<void> {
   const puppeteer = await import('puppeteer')
   
-  const browser = await puppeteer.default.launch({ 
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  })
-
+  // Ensure the output directory exists
+  const outputDir = path.dirname(outputPath)
+  await invoiceFileManager.ensureFolderExists(outputDir)
+  
+  let browser
+  let page
+  
   try {
-    const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
-    
-    await page.pdf({
-      path: outputPath,
-      format: 'A4',
-      margin: {
-        top: '20mm',
-        right: '20mm',
-        bottom: '20mm',
-        left: '20mm'
-      },
-      printBackground: true
+    // Launch browser with extended timeout and better stability options
+    browser = await puppeteer.default.launch({ 
+      headless: true,
+      timeout: 60000, // 60 second timeout for browser launch
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--run-all-compositor-stages-before-draw',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows'
+      ]
     })
+
+    // Create page with timeout protection
+    page = await browser.newPage()
+    
+    // Set longer timeouts for page operations
+    page.setDefaultTimeout(60000)
+    page.setDefaultNavigationTimeout(60000)
+    
+    // Set viewport
+    await page.setViewport({ width: 1200, height: 1600 })
+    
+    // Set content with more lenient wait conditions
+    await page.setContent(html, { 
+      waitUntil: 'domcontentloaded', // Less strict than networkidle0
+      timeout: 45000 
+    })
+    
+    // Add a small delay to ensure rendering is complete
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Generate PDF with timeout protection
+    await Promise.race([
+      page.pdf({
+        path: outputPath,
+        format: 'A4',
+        margin: {
+          top: '20mm',
+          right: '20mm',
+          bottom: '20mm',
+          left: '20mm'
+        },
+        printBackground: true,
+        preferCSSPageSize: false,
+        timeout: 30000 // 30 second timeout for PDF generation
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('PDF generation timeout')), 45000)
+      )
+    ])
+    
+  } catch (error) {
+    console.error('PDF generation error:', error)
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('Target closed')) {
+        throw new Error('Browser closed unexpectedly during PDF generation. Please try again.')
+      } else if (error.message.includes('timeout')) {
+        throw new Error('PDF generation timed out. The invoice may be too complex.')
+      } else if (error.message.includes('Protocol error')) {
+        throw new Error('Browser protocol error. Please check system resources and try again.')
+      }
+    }
+    
+    throw new Error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
   } finally {
-    await browser.close()
+    // Ensure cleanup happens in the right order
+    try {
+      if (page && !page.isClosed()) {
+        await page.close()
+      }
+    } catch (e) {
+      console.warn('Error closing page:', e)
+    }
+    
+    try {
+      if (browser && browser.process()) {
+        await browser.close()
+      }
+    } catch (e) {
+      console.warn('Error closing browser:', e)
+    }
   }
 }

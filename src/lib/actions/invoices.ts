@@ -6,6 +6,7 @@ import { markSalesAsBilled } from "@/lib/actions/sales"
 import { invoiceFileManager, generatePdfFromHtml, combinePdfs } from "@/lib/file-utils"
 import { format } from "date-fns"
 import path from "path"
+import { formatCurrency } from "@/lib/utils"
 import type { Customer, Sale, DailyOrder } from "@/lib/types"
 
 export interface InvoiceData {
@@ -367,12 +368,12 @@ export async function generateBulkInvoices(params: {
   period_end: string
   customer_ids: string[]
   output_folder: string
-  onProgress?: (progress: GenerationProgress) => void
 }): Promise<{
   successful: number
   errors: string[]
   invoiceNumbers: string[]
   combinedPdfPath: string
+  progress: GenerationProgress
 }> {
   const { output_folder, customer_ids, period_start, period_end } = params
 
@@ -410,7 +411,6 @@ export async function generateBulkInvoices(params: {
           .single()
 
         progress.currentCustomer = customer?.billing_name || `Customer ${i + 1}`
-        params.onProgress?.(progress)
 
         // Prepare invoice data
         const invoiceData = await prepareInvoiceData(customerId, period_start, period_end)
@@ -425,9 +425,29 @@ export async function generateBulkInvoices(params: {
         )
         const pdfFilePath = path.join(dateFolder, pdfFileName)
 
-        // Generate HTML content and create PDF
+        // Generate HTML content and create PDF with retry logic
         const html = await generateInvoiceHTML(invoiceData)
-        await generatePdfFromHtml(html, pdfFilePath)
+        
+        // Retry PDF generation up to 3 times for transient failures
+        let pdfAttempts = 0
+        const maxPdfAttempts = 3
+        
+        while (pdfAttempts < maxPdfAttempts) {
+          try {
+            await generatePdfFromHtml(html, pdfFilePath)
+            break // Success, exit retry loop
+          } catch (pdfError) {
+            pdfAttempts++
+            console.log(`PDF generation attempt ${pdfAttempts} failed for ${invoiceData.customer.billing_name}:`, pdfError)
+            
+            if (pdfAttempts >= maxPdfAttempts) {
+              throw pdfError // Final attempt failed, throw the error
+            }
+            
+            // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, pdfAttempts - 1)))
+          }
+        }
 
         // Save invoice metadata
         await saveInvoiceMetadata(invoiceData, pdfFilePath)
@@ -445,7 +465,6 @@ export async function generateBulkInvoices(params: {
 
       // Update progress
       progress.completed = i + 1
-      params.onProgress?.(progress)
     }
 
     // Generate combined PDF
@@ -462,10 +481,12 @@ export async function generateBulkInvoices(params: {
 
   } finally {
     progress.isComplete = true
-    params.onProgress?.(progress)
   }
 
-  return results
+  return {
+    ...results,
+    progress
+  }
 }
 
 export async function generateSingleInvoice(params: {
@@ -495,9 +516,29 @@ export async function generateSingleInvoice(params: {
     )
     const filePath = path.join(dateFolder, fileName)
 
-    // Generate PDF and save
+    // Generate PDF and save with retry logic
     const html = await generateInvoiceHTML(invoiceData)
-    await generatePdfFromHtml(html, filePath)
+    
+    // Retry PDF generation up to 3 times for transient failures
+    let pdfAttempts = 0
+    const maxPdfAttempts = 3
+    
+    while (pdfAttempts < maxPdfAttempts) {
+      try {
+        await generatePdfFromHtml(html, filePath)
+        break // Success, exit retry loop
+      } catch (pdfError) {
+        pdfAttempts++
+        console.log(`PDF generation attempt ${pdfAttempts} failed for ${invoiceData.customer.billing_name}:`, pdfError)
+        
+        if (pdfAttempts >= maxPdfAttempts) {
+          throw pdfError // Final attempt failed, throw the error
+        }
+        
+        // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, pdfAttempts - 1)))
+      }
+    }
     
     // Save metadata
     await saveInvoiceMetadata(invoiceData, filePath)
@@ -520,9 +561,51 @@ export async function generateSingleInvoice(params: {
 }
 
 // This function will be moved to the API route
-export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {
-  const { formatCurrency } = await import("@/lib/utils")
+export async function getInvoiceStats() {
+  const supabase = await createClient()
   
+  try {
+    // Get invoice counts and totals
+    const { data: invoiceData } = await supabase
+      .from("invoice_metadata")
+      .select("total_amount, invoice_date")
+      .eq("status", "Generated")
+    
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    
+    const thisMonthInvoices = invoiceData?.filter(invoice => {
+      const invoiceDate = new Date(invoice.invoice_date)
+      return invoiceDate.getMonth() === currentMonth && invoiceDate.getFullYear() === currentYear
+    }) || []
+    
+    const totalInvoiceValue = invoiceData?.reduce((sum, invoice) => sum + Number(invoice.total_amount), 0) || 0
+    const avgInvoiceValue = invoiceData?.length ? totalInvoiceValue / invoiceData.length : 0
+    
+    // Get pending invoices (customers with outstanding amounts)
+    const { data: customersWithOutstanding } = await supabase
+      .from("customers")
+      .select("outstanding_amount")
+      .gt("outstanding_amount", 0)
+    
+    return {
+      thisMonthCount: thisMonthInvoices.length,
+      totalInvoiceValue,
+      avgInvoiceValue,
+      pendingInvoicesCount: customersWithOutstanding?.length || 0
+    }
+  } catch (error) {
+    console.error("Error fetching invoice stats:", error)
+    return {
+      thisMonthCount: 0,
+      totalInvoiceValue: 0,
+      avgInvoiceValue: 0,
+      pendingInvoicesCount: 0
+    }
+  }
+}
+
+export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {
   return `
 <!DOCTYPE html>
 <html lang="en">

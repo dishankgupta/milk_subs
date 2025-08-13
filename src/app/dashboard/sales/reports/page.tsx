@@ -126,7 +126,7 @@ export default async function SalesReportsPage() {
         </CardHeader>
         <CardContent>
           <Button asChild className="w-full">
-            <Link href="/dashboard/invoices/generate">
+            <Link href="/dashboard/invoices">
               Generate Customer Invoices
             </Link>
           </Button>

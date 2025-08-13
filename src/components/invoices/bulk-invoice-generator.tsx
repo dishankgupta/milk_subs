@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/utils"
 import { bulkInvoiceSchema, type BulkInvoiceFormData } from "@/lib/validations"
-import { getBulkInvoicePreview } from "@/lib/actions/invoices"
+import { getBulkInvoicePreview, generateBulkInvoices, type GenerationProgress } from "@/lib/actions/invoices"
 import { toast } from "sonner"
 
 interface BulkInvoicePreviewItem {
@@ -38,8 +38,18 @@ export function BulkInvoiceGenerator() {
   const [previewData, setPreviewData] = useState<BulkInvoicePreviewItem[]>([])
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set())
   const [outputFolder, setOutputFolder] = useState("")
-  const [generationProgress, setGenerationProgress] = useState<number | null>(null)
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+
+  const commonFolders = [
+    "C:\\PureDairy\\Invoices",
+    "C:\\Users\\%USERNAME%\\Documents\\PureDairy\\Invoices",
+    "D:\\PureDairy\\Invoices"
+  ]
+
+  const handleQuickSelect = (folderPath: string) => {
+    setOutputFolder(folderPath)
+  }
 
   const form = useForm<BulkInvoiceFormData>({
     resolver: zodResolver(bulkInvoiceSchema),
@@ -93,24 +103,40 @@ export function BulkInvoiceGenerator() {
     }
 
     setIsGenerating(true)
-    setGenerationProgress(0)
+    setGenerationProgress({
+      completed: 0,
+      total: selectedCustomers.size,
+      currentCustomer: "",
+      isComplete: false,
+      errors: []
+    })
 
     try {
-      // This is a simplified version - in full implementation, this would call generateBulkInvoices
-      toast.info("Bulk invoice generation will be implemented in the next update")
+      const result = await generateBulkInvoices({
+        period_start: form.getValues("period_start").toISOString().split('T')[0],
+        period_end: form.getValues("period_end").toISOString().split('T')[0],
+        customer_ids: Array.from(selectedCustomers),
+        output_folder: outputFolder
+      })
+
+      // Update progress with the final result
+      setGenerationProgress(result.progress)
+
+      toast.success(`Successfully generated ${result.successful} invoices`)
       
-      // Simulate progress
-      for (let i = 0; i <= 100; i += 10) {
-        setGenerationProgress(i)
-        await new Promise(resolve => setTimeout(resolve, 200))
+      if (result.errors.length > 0) {
+        toast.warning(`${result.errors.length} invoices had errors`)
       }
 
-      toast.success("Invoice generation workflow ready")
+      if (result.combinedPdfPath) {
+        toast.info(`Combined PDF saved at: ${result.combinedPdfPath}`)
+      }
+
     } catch (error) {
       toast.error("Failed to generate invoices")
+      console.error("Bulk invoice generation error:", error)
     } finally {
       setIsGenerating(false)
-      setGenerationProgress(null)
     }
   }
 
@@ -236,15 +262,40 @@ export function BulkInvoiceGenerator() {
           </div>
 
           {/* Output Folder Selection */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label>Output Folder</Label>
             <Input
               value={outputFolder}
               onChange={(e) => setOutputFolder(e.target.value)}
-              placeholder="Enter folder path (e.g., C:\PureDairy\Invoices\)"
+              placeholder="Enter full folder path (e.g., C:\PureDairy\Invoices)"
             />
-            <div className="text-sm text-gray-600">
-              PDFs will be saved in: <code>{outputFolder || "[folder]"}/YYYYMMDD_generated_invoices/</code>
+            
+            {/* Quick Select Buttons */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700">Quick Select:</div>
+              <div className="flex flex-wrap gap-2">
+                {commonFolders.map((folder, index) => (
+                  <Button
+                    key={index}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQuickSelect(folder)}
+                    className="text-xs"
+                  >
+                    {folder.length > 30 ? `...${folder.slice(-27)}` : folder}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
+              <div className="text-sm font-medium text-blue-800">📁 Folder Path Format:</div>
+              <div className="text-xs text-blue-700 space-y-1">
+                <div>• Windows: <code>C:\PureDairy\Invoices</code></div>
+                <div>• Make sure the folder exists or will be created</div>
+                <div>• PDFs will be saved in: <code className="bg-white px-1 rounded">{outputFolder || "[folder]"}/YYYYMMDD_generated_invoices/</code></div>
+              </div>
             </div>
           </div>
 
@@ -360,7 +411,7 @@ export function BulkInvoiceGenerator() {
       )}
 
       {/* Generation Progress */}
-      {generationProgress !== null && (
+      {generationProgress && (
         <Card>
           <CardHeader>
             <CardTitle>Generation Progress</CardTitle>
@@ -369,18 +420,40 @@ export function BulkInvoiceGenerator() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Progress</span>
-                <span>{generationProgress}%</span>
+                <span>{generationProgress.completed} of {generationProgress.total}</span>
               </div>
-              <Progress value={generationProgress} className="w-full" />
+              <Progress 
+                value={(generationProgress.completed / generationProgress.total) * 100} 
+                className="w-full"
+              />
             </div>
             
-            {generationProgress === 100 && (
+            {generationProgress.currentCustomer && (
+              <div className="text-sm text-gray-600">
+                Currently processing: {generationProgress.currentCustomer}
+              </div>
+            )}
+
+            {generationProgress.errors.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-red-600">Errors:</div>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {generationProgress.errors.map((error, index) => (
+                    <div key={index} className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                      {error}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {generationProgress.isComplete && (
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="text-green-800 font-medium">
-                  Invoice generation workflow ready!
+                  Invoice generation completed!
                 </div>
                 <div className="text-green-600 text-sm mt-1">
-                  Full implementation coming in Phase 5.3 completion
+                  {generationProgress.completed - generationProgress.errors.length} invoices generated successfully
                 </div>
               </div>
             )}

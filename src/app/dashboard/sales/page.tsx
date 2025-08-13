@@ -75,7 +75,7 @@ export default function SalesPage() {
             </Button>
 
             <Button asChild variant="outline" className="w-full justify-start">
-              <Link href="/dashboard/invoices/generate">
+              <Link href="/dashboard/invoices">
                 <FileText className="h-4 w-4 mr-2" />
                 Generate Invoices
               </Link>

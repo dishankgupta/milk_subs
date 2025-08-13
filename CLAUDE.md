@@ -21,6 +21,7 @@ This is a Next.js 15 application called "milk_subs" - a comprehensive dairy busi
 - `pnpm build` - Build production application
 - `pnpm start` - Start production server
 - `pnpm lint` - Run ESLint
+- `pnpm test-pdf` - Test PDF generation functionality with Chrome browser
 
 ## Architecture
 
@@ -204,10 +205,12 @@ Complete Supabase database with 12 tables:
 
 ### Invoice Management (`/dashboard/invoices`)
 - **Invoice Generation**: Combined subscription + manual sales invoicing
-- **Bulk Processing**: Date range and customer selection with progress tracking
+- **Bulk Processing**: Date range and customer selection with enhanced folder selection UI
 - **Financial Year Management**: Automatic invoice numbering (YYYYYYYYNNNNN format)
 - **PDF Storage**: Organized file structure with dated subfolders
 - **Professional Layouts**: PureDairy branding with GST-compliant formatting
+- **Robust PDF Generation**: Automatic retry mechanism with up to 3 attempts for transient failures
+- **Enhanced Stability**: Chrome browser integration with proper timeout handling and error recovery
 
 ### Outstanding Reports System (`/dashboard/reports/outstanding`)
 - **Triple-Level Expandable Reports**: Customer → Transaction Type → Individual Details
@@ -274,6 +277,7 @@ Complete Supabase database with 12 tables:
 - **INVOICE GENERATION SYSTEM COMPLETE**: Professional PDF generation with financial year numbering, bulk processing, and comprehensive data integration
 - **OUTSTANDING REPORTS SYSTEM COMPLETE**: Triple-level expandable reports with opening balance integration and professional print layouts
 - **PRODUCT MANAGEMENT NAVIGATION ENHANCEMENT COMPLETE**: Moved Products to separate sidebar section with improved navigation structure and user experience
+- **INVOICE GENERATION SYSTEM FIXES COMPLETE**: Resolved client reference errors and PDF generation "Target closed" protocol errors with comprehensive stability improvements
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
@@ -329,10 +333,14 @@ Complete Supabase database with 12 tables:
 6. **Forms**: React Hook Form with Zod resolver for validation
 7. **Database**: Supabase with MCP server integration for CLI operations
 8. **Print System**: Dedicated API routes under `/src/app/api/print/` for professional report printing
-9. **Sorting Infrastructure**: 
-   - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
-   - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
-   - Sort types and configurations in `/src/lib/types.ts`
+9. **PDF Generation**: Puppeteer-based PDF generation with Chrome browser integration
+   - `/src/lib/file-utils.ts` - PDF generation utilities with retry mechanisms and timeout handling
+   - `/scripts/test-pdf.js` - PDF generation testing script for validation
+   - Automatic Chrome installation via postinstall script
+10. **Sorting Infrastructure**: 
+    - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
+    - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
+    - Sort types and configurations in `/src/lib/types.ts`
 
 ## Testing & Validation
 
