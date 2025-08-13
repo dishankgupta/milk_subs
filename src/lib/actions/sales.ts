@@ -87,7 +87,7 @@ export async function getSales(searchParams?: {
       *,
       customer:customers(billing_name, contact_person),
       product:products(name, code, unit_of_measure)
-    `)
+    `, { count: 'exact' })
     .order("sale_date", { ascending: false })
 
   // Apply filters
@@ -123,13 +123,21 @@ export async function getSales(searchParams?: {
 
   query = query.range(start, end)
 
-  const { data, error } = await query
+  const { data, error, count } = await query
 
   if (error) {
     throw new Error("Failed to fetch sales")
   }
 
-  return data as Sale[]
+  const totalCount = count || 0
+  const totalPages = Math.ceil(totalCount / limit)
+
+  return {
+    sales: (data as Sale[]) || [],
+    totalCount,
+    totalPages,
+    currentPage: page
+  }
 }
 
 export async function getSalesStats(dateRange?: { from: string; to: string }) {

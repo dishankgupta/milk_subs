@@ -5,7 +5,7 @@ import { getSales } from '@/lib/actions/sales'
 
 export async function RecentSales() {
   try {
-    const sales = await getSales({ limit: 5 })
+    const { sales } = await getSales({ limit: 5 })
 
     if (!sales || sales.length === 0) {
       return (

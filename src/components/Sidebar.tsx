@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { 
   Home, 
   Users, 
+  Package,
   Calendar, 
   ClipboardList, 
   Edit,
@@ -24,6 +25,7 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Customers', href: '/dashboard/customers', icon: Users },
+  { name: 'Products', href: '/dashboard/products', icon: Package },
   { name: 'Subscriptions', href: '/dashboard/subscriptions', icon: Calendar },
   { name: 'Modifications', href: '/dashboard/modifications', icon: Edit },
   { name: 'Daily Orders', href: '/dashboard/orders', icon: ClipboardList },

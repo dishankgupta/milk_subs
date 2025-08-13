@@ -181,14 +181,14 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Customer (Optional - for reporting only)</Label>
                 <Select
-                  value={form.watch("customer_id") || ""}
-                  onValueChange={(value) => form.setValue("customer_id", value || null)}
+                  value={form.watch("customer_id") || "none"}
+                  onValueChange={(value) => form.setValue("customer_id", value === "none" ? null : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select customer (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Customer</SelectItem>
+                    <SelectItem value="none">No Customer</SelectItem>
                     {customers.map((customer) => (
                       <SelectItem key={customer.id} value={customer.id}>
                         {customer.billing_name} - {customer.contact_person}
