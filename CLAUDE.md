@@ -31,6 +31,7 @@ The project follows Next.js App Router structure:
 - `/src/app/auth/login/` - Authentication pages
 - `/src/app/dashboard/` - Protected admin dashboard
 - `/src/app/dashboard/customers/` - Customer management pages
+- `/src/app/dashboard/products/` - Product management pages
 - `/src/app/globals.css` - Global styles with CSS variables
 - `/src/components/` - Reusable UI components
 - `/src/components/ui/` - Shadcn/ui component library
@@ -132,6 +133,14 @@ Complete Supabase database with 12 tables:
 - **Add Customer**: Complete form with validation (`/dashboard/customers/new`)
 - **Customer Details**: Comprehensive profile view (`/dashboard/customers/[id]`)
 - **Edit Customer**: Pre-populated form for updates (`/dashboard/customers/[id]/edit`)
+
+### Product Management (`/dashboard/products`)
+- **Product List**: Comprehensive product catalog with GST details and subscription indicators + **sortable display**
+- **Add Product**: Complete form with GST configuration and real-time breakdown preview (`/dashboard/products/new`)
+- **Product Details**: Comprehensive product information with GST calculations
+- **Edit Product**: Pre-populated form for product updates (`/dashboard/products/[id]/edit`)
+- **GST Integration**: Real-time GST calculations with base amount and tax separation
+- **Subscription Support**: Toggle for subscription-eligible products
 
 ### Subscription Management (`/dashboard/subscriptions`)
 - **Subscription List**: Searchable table with filters (status, type) and customer integration + **sortable columns**
@@ -264,6 +273,7 @@ Complete Supabase database with 12 tables:
 - **SALES MANAGEMENT SYSTEM COMPLETE**: Complete manual sales tracking with Cash/Credit business logic, GST compliance, and customer integration
 - **INVOICE GENERATION SYSTEM COMPLETE**: Professional PDF generation with financial year numbering, bulk processing, and comprehensive data integration
 - **OUTSTANDING REPORTS SYSTEM COMPLETE**: Triple-level expandable reports with opening balance integration and professional print layouts
+- **PRODUCT MANAGEMENT NAVIGATION ENHANCEMENT COMPLETE**: Moved Products to separate sidebar section with improved navigation structure and user experience
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
