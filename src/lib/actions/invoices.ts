@@ -561,6 +561,48 @@ export async function generateSingleInvoice(params: {
 }
 
 // This function will be moved to the API route
+export async function getInvoicesList(params?: {
+  customer_id?: string
+  status?: string
+  limit?: number
+  offset?: number
+}) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from("invoice_metadata")
+    .select(`
+      *,
+      customer:customers(billing_name, contact_person, phone_primary)
+    `)
+    .order("created_at", { ascending: false })
+
+  if (params?.customer_id) {
+    query = query.eq("customer_id", params.customer_id)
+  }
+  
+  if (params?.status) {
+    query = query.eq("status", params.status)
+  }
+
+  if (params?.limit) {
+    query = query.limit(params.limit)
+  }
+
+  if (params?.offset) {
+    query = query.range(params.offset, (params.offset) + (params.limit || 50) - 1)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error("Error fetching invoices:", error)
+    return []
+  }
+
+  return data || []
+}
+
 export async function getInvoiceStats() {
   const supabase = await createClient()
   
@@ -602,6 +644,110 @@ export async function getInvoiceStats() {
       avgInvoiceValue: 0,
       pendingInvoicesCount: 0
     }
+  }
+}
+
+export async function deleteInvoice(invoiceId: string): Promise<{ success: boolean; message: string }> {
+  const supabase = await createClient()
+  
+  try {
+    // Start a transaction by getting the invoice data first
+    const { data: invoice, error: invoiceError } = await supabase
+      .from("invoice_metadata")
+      .select("*")
+      .eq("id", invoiceId)
+      .single()
+      
+    if (invoiceError || !invoice) {
+      return { success: false, message: "Invoice not found" }
+    }
+    
+    // Prevent deletion of paid invoices
+    if (invoice.status === 'Paid') {
+      return { success: false, message: "Cannot delete paid invoices" }
+    }
+    
+    // Start transaction operations
+    
+    // 1. Revert linked credit sales back to 'Pending' status
+    await revertLinkedSales(invoice.customer_id, invoice.period_start, invoice.period_end)
+    
+    // 2. Delete the invoice metadata record
+    const { error: deleteError } = await supabase
+      .from("invoice_metadata")
+      .delete()
+      .eq("id", invoiceId)
+      
+    if (deleteError) {
+      throw new Error(`Failed to delete invoice: ${deleteError.message}`)
+    }
+    
+    // 3. Recalculate customer outstanding amount
+    await recalculateCustomerBalance(invoice.customer_id)
+    
+    return { 
+      success: true, 
+      message: `Invoice ${invoice.invoice_number} deleted successfully. Manual file cleanup required.` 
+    }
+    
+  } catch (error) {
+    console.error("Error deleting invoice:", error)
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : "Unknown error occurred" 
+    }
+  }
+}
+
+async function revertLinkedSales(customerId: string, periodStart: string, periodEnd: string) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase
+    .from("sales")
+    .update({ 
+      payment_status: 'Pending'
+    })
+    .eq("customer_id", customerId)
+    .eq("sale_type", "Credit")
+    .eq("payment_status", "Billed")
+    .gte("sale_date", periodStart)
+    .lte("sale_date", periodEnd)
+    
+  if (error) {
+    throw new Error(`Failed to revert sales status: ${error.message}`)
+  }
+}
+
+async function recalculateCustomerBalance(customerId: string) {
+  const supabase = await createClient()
+  
+  // Get current outstanding from credit sales that are still pending
+  const { data: pendingSales } = await supabase
+    .from("sales")
+    .select("total_amount")
+    .eq("customer_id", customerId)
+    .eq("sale_type", "Credit")
+    .eq("payment_status", "Pending")
+    
+  // Get customer's opening balance
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("opening_balance")
+    .eq("id", customerId)
+    .single()
+    
+  const openingBalance = Number(customer?.opening_balance || 0)
+  const pendingAmount = pendingSales?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
+  const newOutstandingAmount = openingBalance + pendingAmount
+  
+  // Update customer's outstanding amount
+  const { error } = await supabase
+    .from("customers")
+    .update({ outstanding_amount: newOutstandingAmount })
+    .eq("id", customerId)
+    
+  if (error) {
+    throw new Error(`Failed to recalculate customer balance: ${error.message}`)
   }
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CalendarIcon, Download, AlertTriangle } from "lucide-react"
@@ -40,6 +40,7 @@ export function BulkInvoiceGenerator() {
   const [outputFolder, setOutputFolder] = useState("")
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   const commonFolders = [
     "C:\\PureDairy\\Invoices",
@@ -54,13 +55,23 @@ export function BulkInvoiceGenerator() {
   const form = useForm<BulkInvoiceFormData>({
     resolver: zodResolver(bulkInvoiceSchema),
     defaultValues: {
-      period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      period_end: new Date(),
+      period_start: undefined,
+      period_end: undefined,
       customer_selection: "with_outstanding",
       selected_customer_ids: [],
       output_folder: ""
     }
   })
+
+  // Set default dates after component mounts to avoid hydration issues
+  useEffect(() => {
+    setMounted(true)
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    
+    form.setValue("period_start", startOfMonth)
+    form.setValue("period_end", now)
+  }, [form])
 
   // Load preview data when form changes
   const loadPreview = async () => {
@@ -161,6 +172,21 @@ export function BulkInvoiceGenerator() {
   const selectedTotal = previewData
     .filter(item => selectedCustomers.has(item.customerId))
     .reduce((sum, item) => sum + item.totalAmount, 0)
+
+  // Prevent render until component is mounted to avoid hydration issues
+  if (!mounted) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

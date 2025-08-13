@@ -1,8 +1,8 @@
 import { Metadata } from "next"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { BulkInvoiceGenerator } from "@/components/invoices/bulk-invoice-generator"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getInvoiceStats } from "@/lib/actions/invoices"
 import { formatCurrency } from "@/lib/utils"
+import { InvoiceTabsContainer } from "@/components/invoices/invoice-tabs-container"
 
 export const metadata: Metadata = {
   title: "Invoice Generation - PureDairy",
@@ -72,19 +72,7 @@ export default async function InvoicesPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Bulk Invoice Generation</CardTitle>
-            <CardDescription>
-              Generate invoices for multiple customers at once with professional PDF layouts
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BulkInvoiceGenerator />
-          </CardContent>
-        </Card>
-      </div>
+      <InvoiceTabsContainer />
     </div>
   )
 }
