@@ -11,6 +11,7 @@ export interface Customer {
   payment_method: "Monthly" | "Prepaid"
   billing_cycle_day: number
   outstanding_amount: number
+  opening_balance: number
   status: "Active" | "Inactive"
   created_at: string
   updated_at: string
@@ -32,6 +33,9 @@ export interface Product {
   code: string
   current_price: number
   unit: string
+  gst_rate: number
+  unit_of_measure: string
+  is_subscription_product: boolean
   created_at: string
   updated_at: string
 }
@@ -117,6 +121,90 @@ export interface DashboardStats {
   activeCustomers: number
   totalProducts: number
   totalRoutes: number
+}
+
+// Sales Management System Types
+
+export interface Sale {
+  id: string
+  customer_id: string | null // NULL for cash sales
+  product_id: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  gst_amount: number
+  sale_type: 'Cash' | 'Credit'
+  sale_date: string
+  payment_status: 'Completed' | 'Pending' | 'Billed'
+  notes: string | null
+  created_at: string
+  updated_at: string
+  // Relations
+  customer?: Customer
+  product?: Product
+}
+
+export interface InvoiceMetadata {
+  id: string
+  invoice_number: string
+  customer_id: string
+  invoice_date: string
+  period_start: string
+  period_end: string
+  subscription_amount: number
+  manual_sales_amount: number
+  total_amount: number
+  gst_amount: number
+  file_path: string | null
+  status: 'Generated' | 'Sent' | 'Paid'
+  created_at: string
+  updated_at: string
+  customer?: Customer
+}
+
+// Sales Form Types
+
+export interface SaleFormData {
+  customer_id: string | null
+  product_id: string
+  quantity: number
+  unit_price: number
+  sale_type: 'Cash' | 'Credit'
+  sale_date: Date
+  notes?: string
+}
+
+// Outstanding Report Types
+
+export interface OutstandingReportFilter {
+  start_date: Date
+  end_date: Date
+  customer_selection: 'all' | 'with_outstanding' | 'selected'
+  selected_customer_ids?: string[]
+}
+
+export interface OutstandingReportData {
+  customer_id: string
+  customer_name: string
+  opening_balance: number
+  subscription_amount: number
+  manual_sales_amount: number
+  payments_amount: number
+  current_outstanding: number
+  // Detailed breakdowns
+  subscription_details: MonthlySubscriptionDetail[]
+  manual_sales_details: Sale[]
+  payment_details: Payment[]
+}
+
+export interface MonthlySubscriptionDetail {
+  month: string // "2025-08"
+  total_amount: number
+  product_details: {
+    product_name: string
+    quantity: number
+    amount: number
+  }[]
 }
 
 // Sort configuration types

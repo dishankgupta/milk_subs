@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
     // Apply sorting to the orders
     if (report.orders && report.orders.length > 0) {
       report.orders.sort((a, b) => {
-        let aValue: any
-        let bValue: any
+        let aValue: string | number
+        let bValue: string | number
         
         switch (sortKey) {
           case 'customerName':

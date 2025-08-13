@@ -122,3 +122,87 @@ export const bulkDeliverySchema = z.object({
 })
 
 export type BulkDeliveryFormData = z.infer<typeof bulkDeliverySchema>
+
+// Sales Management System Validation Schemas
+
+export const saleSchema = z.object({
+  customer_id: z.string().uuid().nullable(),
+  product_id: z.string().uuid("Product selection is required"),
+  quantity: z.number()
+    .min(0.001, "Quantity must be greater than 0")
+    .max(10000, "Quantity too large"),
+  unit_price: z.number()
+    .min(0.01, "Unit price must be greater than 0")
+    .max(100000, "Unit price too high"),
+  sale_type: z.enum(['Cash', 'Credit']),
+  sale_date: z.date().max(new Date(), "Sale date cannot be in the future"),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional()
+}).refine((data) => {
+  // Business rule: Cash sales cannot have customer_id
+  if (data.sale_type === 'Cash' && data.customer_id !== null) {
+    return false
+  }
+  // Business rule: Credit sales must have customer_id
+  if (data.sale_type === 'Credit' && data.customer_id === null) {
+    return false
+  }
+  return true
+}, {
+  message: "Cash sales cannot have customer, Credit sales must have customer",
+  path: ["customer_id"]
+})
+
+export type SaleFormData = z.infer<typeof saleSchema>
+
+// Extended product schema with GST fields
+export const productSchema = z.object({
+  name: z.string()
+    .min(2, "Product name must be at least 2 characters")
+    .max(100, "Product name too long"),
+  code: z.string()
+    .min(2, "Product code must be at least 2 characters")
+    .max(10, "Product code too long")
+    .regex(/^[A-Z0-9]+$/, "Product code must be uppercase letters and numbers only"),
+  current_price: z.number()
+    .min(0.01, "Price must be greater than 0")
+    .max(100000, "Price too high"),
+  unit: z.string()
+    .min(1, "Unit is required"),
+  gst_rate: z.number()
+    .min(0, "GST rate cannot be negative")
+    .max(30, "GST rate cannot exceed 30%"),
+  unit_of_measure: z.string()
+    .min(1, "Unit of measure is required")
+    .max(20, "Unit of measure too long"),
+  is_subscription_product: z.boolean()
+})
+
+export type ProductFormData = z.infer<typeof productSchema>
+
+// Outstanding report validation
+export const outstandingReportSchema = z.object({
+  start_date: z.date(),
+  end_date: z.date(),
+  customer_selection: z.enum(['all', 'with_outstanding', 'selected']),
+  selected_customer_ids: z.array(z.string().uuid()).optional()
+}).refine((data) => {
+  // End date must be after start date
+  if (data.end_date <= data.start_date) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date",
+  path: ["end_date"]
+}).refine((data) => {
+  // Selected customers must be provided if selection is 'selected'
+  if (data.customer_selection === 'selected' && (!data.selected_customer_ids || data.selected_customer_ids.length === 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one customer must be selected",
+  path: ["selected_customer_ids"]
+})
+
+export type OutstandingReportFormData = z.infer<typeof outstandingReportSchema>
