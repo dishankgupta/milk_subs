@@ -27,3 +27,26 @@ export function formatQuantity(quantity: number | string | null | undefined): st
   
   return `${numQuantity}L`
 }
+
+// GST calculation utilities
+export function calculateGSTFromInclusive(inclusiveAmount: number, gstRate: number) {
+  const baseAmount = inclusiveAmount / (1 + (gstRate / 100))
+  const gstAmount = inclusiveAmount - baseAmount
+  
+  return {
+    baseAmount: Math.round(baseAmount * 100) / 100,
+    gstAmount: Math.round(gstAmount * 100) / 100,
+    totalAmount: inclusiveAmount
+  }
+}
+
+export function calculateGSTFromExclusive(exclusiveAmount: number, gstRate: number) {
+  const gstAmount = exclusiveAmount * (gstRate / 100)
+  const totalAmount = exclusiveAmount + gstAmount
+  
+  return {
+    baseAmount: exclusiveAmount,
+    gstAmount: Math.round(gstAmount * 100) / 100,
+    totalAmount: Math.round(totalAmount * 100) / 100
+  }
+}

@@ -1,0 +1,243 @@
+"use server"
+
+import { createClient } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
+import { saleSchema, type SaleFormData } from "@/lib/validations"
+import { updateCustomerOutstandingWithSales } from "@/lib/actions/customers"
+import type { Sale } from "@/lib/types"
+import { z } from "zod"
+
+export async function createSale(data: SaleFormData & { 
+  total_amount: number
+  gst_amount: number 
+}) {
+  const supabase = await createClient()
+
+  // Validate the form data (extended schema with calculated fields)
+  const extendedSchema = saleSchema.extend({
+    total_amount: z.number().min(0.01, "Total amount must be greater than 0"),
+    gst_amount: z.number().min(0, "GST amount cannot be negative")
+  })
+  
+  const validatedData = extendedSchema.parse(data)
+
+  // Determine payment status based on sale type
+  const paymentStatus = validatedData.sale_type === 'Cash' ? 'Completed' : 'Pending'
+
+  // Insert sale
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .insert([{
+      customer_id: validatedData.customer_id,
+      product_id: validatedData.product_id,
+      quantity: validatedData.quantity,
+      unit_price: validatedData.unit_price,
+      total_amount: validatedData.total_amount,
+      gst_amount: validatedData.gst_amount,
+      sale_type: validatedData.sale_type,
+      sale_date: validatedData.sale_date.toISOString().split('T')[0],
+      payment_status: paymentStatus,
+      notes: validatedData.notes || null,
+    }])
+    .select(`
+      *,
+      customer:customers(*),
+      product:products(*)
+    `)
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create sale: ${error.message}`)
+  }
+
+  // Update customer outstanding amount for credit sales
+  if (validatedData.sale_type === 'Credit' && validatedData.customer_id) {
+    await updateCustomerOutstandingWithSales(
+      validatedData.customer_id, 
+      validatedData.total_amount,
+      'credit_sale'
+    )
+  }
+
+  revalidatePath("/dashboard/sales")
+  revalidatePath("/dashboard/customers")
+  if (validatedData.customer_id) {
+    revalidatePath(`/dashboard/customers/${validatedData.customer_id}`)
+  }
+  
+  return sale
+}
+
+export async function getSales(searchParams?: {
+  search?: string
+  customer_id?: string
+  product_id?: string
+  sale_type?: 'Cash' | 'Credit'
+  payment_status?: 'Completed' | 'Pending' | 'Billed'
+  date_from?: string
+  date_to?: string
+  page?: number
+  limit?: number
+}) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from("sales")
+    .select(`
+      *,
+      customer:customers(billing_name, contact_person),
+      product:products(name, code, unit_of_measure)
+    `)
+    .order("sale_date", { ascending: false })
+
+  // Apply filters
+  if (searchParams?.customer_id) {
+    query = query.eq("customer_id", searchParams.customer_id)
+  }
+
+  if (searchParams?.product_id) {
+    query = query.eq("product_id", searchParams.product_id)
+  }
+
+  if (searchParams?.sale_type) {
+    query = query.eq("sale_type", searchParams.sale_type)
+  }
+
+  if (searchParams?.payment_status) {
+    query = query.eq("payment_status", searchParams.payment_status)
+  }
+
+  if (searchParams?.date_from) {
+    query = query.gte("sale_date", searchParams.date_from)
+  }
+
+  if (searchParams?.date_to) {
+    query = query.lte("sale_date", searchParams.date_to)
+  }
+
+  // Pagination
+  const page = searchParams?.page || 1
+  const limit = searchParams?.limit || 20
+  const start = (page - 1) * limit
+  const end = start + limit - 1
+
+  query = query.range(start, end)
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error("Failed to fetch sales")
+  }
+
+  return data as Sale[]
+}
+
+export async function getSalesStats(dateRange?: { from: string; to: string }) {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from("sales")
+    .select("sale_type, total_amount, payment_status")
+
+  if (dateRange) {
+    query = query
+      .gte("sale_date", dateRange.from)
+      .lte("sale_date", dateRange.to)
+  }
+
+  const { data: sales, error } = await query
+
+  if (error) {
+    throw new Error("Failed to fetch sales statistics")
+  }
+
+  // Calculate statistics
+  const stats = {
+    totalCashSales: 0,
+    totalCashAmount: 0,
+    totalCreditSales: 0,
+    totalCreditAmount: 0,
+    pendingCreditAmount: 0,
+    billedCreditAmount: 0,
+    completedCreditAmount: 0
+  }
+
+  sales?.forEach(sale => {
+    if (sale.sale_type === 'Cash') {
+      stats.totalCashSales++
+      stats.totalCashAmount += Number(sale.total_amount)
+    } else {
+      stats.totalCreditSales++
+      stats.totalCreditAmount += Number(sale.total_amount)
+      
+      if (sale.payment_status === 'Pending') {
+        stats.pendingCreditAmount += Number(sale.total_amount)
+      } else if (sale.payment_status === 'Billed') {
+        stats.billedCreditAmount += Number(sale.total_amount)
+      } else {
+        stats.completedCreditAmount += Number(sale.total_amount)
+      }
+    }
+  })
+
+  return stats
+}
+
+export async function getCustomerSales(customerId: string) {
+  const supabase = await createClient()
+
+  const { data: sales, error } = await supabase
+    .from("sales")
+    .select(`
+      *,
+      product:products(name, code, unit_of_measure)
+    `)
+    .eq("customer_id", customerId)
+    .order("sale_date", { ascending: false })
+
+  if (error) {
+    throw new Error("Failed to fetch customer sales")
+  }
+
+  return sales as Sale[]
+}
+
+export async function updateSalePaymentStatus(saleId: string, status: 'Pending' | 'Billed' | 'Completed') {
+  const supabase = await createClient()
+
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .update({
+      payment_status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", saleId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error("Failed to update sale payment status")
+  }
+
+  revalidatePath("/dashboard/sales")
+  return sale
+}
+
+// Bulk update payment status for invoice generation
+export async function markSalesAsBilled(saleIds: string[], invoiceNumber: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from("sales")
+    .update({
+      payment_status: 'Billed',
+      updated_at: new Date().toISOString()
+    })
+    .in("id", saleIds)
+
+  if (error) {
+    throw new Error("Failed to mark sales as billed")
+  }
+
+  revalidatePath("/dashboard/sales")
+}

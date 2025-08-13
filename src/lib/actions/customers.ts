@@ -204,3 +204,75 @@ export async function searchCustomers(query: string): Promise<Customer[]> {
 
   return data || []
 }
+
+// Sales management integration
+export async function updateCustomerOutstandingWithSales(
+  customerId: string, 
+  amount: number, 
+  type: 'credit_sale' | 'payment'
+) {
+  const supabase = await createClient()
+
+  // Get current customer data
+  const { data: customer, error: fetchError } = await supabase
+    .from("customers")
+    .select("outstanding_amount")
+    .eq("id", customerId)
+    .single()
+
+  if (fetchError) {
+    throw new Error("Customer not found")
+  }
+
+  const currentOutstanding = Number(customer.outstanding_amount) || 0
+  let newOutstanding: number
+
+  if (type === 'credit_sale') {
+    // Credit sale increases outstanding amount
+    newOutstanding = currentOutstanding + amount
+  } else {
+    // Payment decreases outstanding amount
+    newOutstanding = Math.max(0, currentOutstanding - amount)
+  }
+
+  const { error: updateError } = await supabase
+    .from("customers")
+    .update({
+      outstanding_amount: newOutstanding,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", customerId)
+
+  if (updateError) {
+    throw new Error("Failed to update customer outstanding amount")
+  }
+
+  revalidatePath("/dashboard/customers")
+  revalidatePath(`/dashboard/customers/${customerId}`)
+  
+  return newOutstanding
+}
+
+export async function calculateTotalOutstanding(customerId: string) {
+  const supabase = await createClient()
+
+  const { data: customer, error } = await supabase
+    .from("customers")
+    .select("outstanding_amount, opening_balance")
+    .eq("id", customerId)
+    .single()
+
+  if (error) {
+    throw new Error("Customer not found")
+  }
+
+  const openingBalance = Number(customer.opening_balance) || 0
+  const currentOutstanding = Number(customer.outstanding_amount) || 0
+  const total = openingBalance + currentOutstanding
+
+  return {
+    opening_balance: openingBalance,
+    current_outstanding: currentOutstanding,
+    total: total
+  }
+}

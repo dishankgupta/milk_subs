@@ -13,6 +13,7 @@ import {
   FileText,
   Truck, 
   CreditCard, 
+  ShoppingCart,
   Settings, 
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
   { name: 'Delivery Routes', href: '/dashboard/deliveries', icon: Truck },
   { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
+  { name: 'Sales', href: '/dashboard/sales', icon: ShoppingCart },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
