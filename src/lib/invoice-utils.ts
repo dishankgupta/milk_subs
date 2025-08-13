@@ -1,21 +1,46 @@
-// Invoice Number Generation and Management Utilities
-// Handles financial year-based invoice numbering system
+import { createClient } from "@/lib/supabase/server"
 
-/**
- * Generate invoice number in format YYYYYYYYNNNNN
- * Example: 20242500001 (Financial Year 2024-25, Sequence 00001)
- */
-export function generateInvoiceNumber(sequenceNumber: number): string {
+export interface InvoiceNumberResult {
+  invoiceNumber: string
+  financialYear: string
+  sequenceNumber: number
+}
+
+export async function getNextInvoiceNumber(): Promise<InvoiceNumberResult> {
+  const supabase = await createClient()
+
+  // Get current financial year
   const currentDate = new Date()
-  const financialYear = currentDate.getMonth() >= 3 ? 
-    currentDate.getFullYear() : 
-    currentDate.getFullYear() - 1
+  const currentMonth = currentDate.getMonth() + 1 // JS months are 0-based
   
-  const nextYear = financialYear + 1
-  const yearCode = `${financialYear}${nextYear.toString().slice(-2)}`
-  const paddedSequence = sequenceNumber.toString().padStart(5, '0')
+  // Financial year starts from April (month 4)
+  let financialYearStart: number
+  if (currentMonth >= 4) {
+    financialYearStart = currentDate.getFullYear()
+  } else {
+    financialYearStart = currentDate.getFullYear() - 1
+  }
   
-  return `${yearCode}${paddedSequence}`
+  const financialYearEnd = financialYearStart + 1
+  const financialYearCode = `${financialYearStart}${financialYearEnd.toString().slice(-2)}`
+  
+  // Get next sequence number from database
+  const { data, error } = await supabase.rpc('get_next_invoice_sequence', {
+    year_code: financialYearCode
+  })
+
+  if (error) {
+    throw new Error(`Failed to get next invoice number: ${error.message}`)
+  }
+
+  const sequenceNumber = data || 1
+  const invoiceNumber = `${financialYearCode}${sequenceNumber.toString().padStart(5, '0')}`
+
+  return {
+    invoiceNumber,
+    financialYear: `${financialYearStart}-${financialYearEnd}`,
+    sequenceNumber
+  }
 }
 
 /**
@@ -24,29 +49,49 @@ export function generateInvoiceNumber(sequenceNumber: number): string {
  */
 export function parseInvoiceNumber(invoiceNumber: string): {
   financialYear: string
+  yearCode: string
   sequenceNumber: number
 } {
-  const yearPart = invoiceNumber.slice(0, 6) // 202425
-  const sequencePart = invoiceNumber.slice(6) // 00001
+  // Example: "20242500001" -> "2024-25", "202425", 1
+  const yearCode = invoiceNumber.slice(0, 6) // "202425"
+  const sequenceStr = invoiceNumber.slice(6) // "00001"
+  
+  const startYear = yearCode.slice(0, 4) // "2024"
+  const endYear = "20" + yearCode.slice(4) // "2025"
   
   return {
-    financialYear: `${yearPart.slice(0, 4)}-${yearPart.slice(4)}`,
-    sequenceNumber: parseInt(sequencePart, 10)
+    financialYear: `${startYear}-${endYear}`,
+    yearCode,
+    sequenceNumber: parseInt(sequenceStr, 10)
   }
 }
 
-/**
- * Get current financial year
- * Returns the current financial year in YYYY-YY format
- */
-export function getCurrentFinancialYear(): string {
+export function getCurrentFinancialYear(): {
+  startYear: number
+  endYear: number
+  yearCode: string
+  displayYear: string
+} {
   const currentDate = new Date()
-  const financialYear = currentDate.getMonth() >= 3 ? 
-    currentDate.getFullYear() : 
-    currentDate.getFullYear() - 1
+  const currentMonth = currentDate.getMonth() + 1
   
-  const nextYear = (financialYear + 1).toString().slice(-2)
-  return `${financialYear}-${nextYear}`
+  let startYear: number
+  if (currentMonth >= 4) {
+    startYear = currentDate.getFullYear()
+  } else {
+    startYear = currentDate.getFullYear() - 1
+  }
+  
+  const endYear = startYear + 1
+  const yearCode = `${startYear}${endYear.toString().slice(-2)}`
+  const displayYear = `${startYear}-${endYear}`
+  
+  return {
+    startYear,
+    endYear,
+    yearCode,
+    displayYear
+  }
 }
 
 /**

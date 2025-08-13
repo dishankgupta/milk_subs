@@ -206,3 +206,62 @@ export const outstandingReportSchema = z.object({
 })
 
 export type OutstandingReportFormData = z.infer<typeof outstandingReportSchema>
+
+// Invoice Generation Validation Schemas
+
+export const bulkInvoiceSchema = z.object({
+  period_start: z.date(),
+  period_end: z.date(),
+  customer_selection: z.enum(['all', 'with_outstanding', 'selected']),
+  selected_customer_ids: z.array(z.string().uuid()).optional(),
+  output_folder: z.string().min(1, "Output folder is required")
+}).refine((data) => {
+  // End date must be after start date
+  if (data.period_end <= data.period_start) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date", 
+  path: ["period_end"]
+}).refine((data) => {
+  // Selected customers must be provided if selection is 'selected'
+  if (data.customer_selection === 'selected' && (!data.selected_customer_ids || data.selected_customer_ids.length === 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one customer must be selected",
+  path: ["selected_customer_ids"]
+})
+
+export type BulkInvoiceFormData = z.infer<typeof bulkInvoiceSchema>
+
+export const singleInvoiceSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  period_start: z.date(),
+  period_end: z.date(),
+  include_subscriptions: z.boolean(),
+  include_credit_sales: z.boolean(),
+  output_folder: z.string().optional()
+}).refine((data) => {
+  // End date must be after start date
+  if (data.period_end <= data.period_start) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date",
+  path: ["period_end"]
+}).refine((data) => {
+  // At least one option must be selected
+  if (!data.include_subscriptions && !data.include_credit_sales) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one option (subscriptions or credit sales) must be selected",
+  path: ["include_subscriptions"]
+})
+
+export type SingleInvoiceFormData = z.infer<typeof singleInvoiceSchema>

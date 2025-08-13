@@ -14,6 +14,7 @@ import {
   Truck, 
   CreditCard, 
   ShoppingCart,
+  Receipt,
   Settings, 
   LogOut,
   Menu,
@@ -30,6 +31,7 @@ const navigation = [
   { name: 'Delivery Routes', href: '/dashboard/deliveries', icon: Truck },
   { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
   { name: 'Sales', href: '/dashboard/sales', icon: ShoppingCart },
+  { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
