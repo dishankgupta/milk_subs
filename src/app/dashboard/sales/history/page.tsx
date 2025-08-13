@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { getSales } from '@/lib/actions/sales'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
+import { SalesHistoryClient } from './sales-history-client'
 
 export default async function SalesHistoryPage(props: {
   searchParams: Promise<{
@@ -84,54 +85,7 @@ export default async function SalesHistoryPage(props: {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {sales.map((sale) => (
-              <div key={sale.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium">{sale.product?.name}</h3>
-                      <Badge variant={sale.sale_type === 'Cash' ? 'default' : 'secondary'}>
-                        {sale.sale_type}
-                      </Badge>
-                      <Badge 
-                        variant={
-                          sale.payment_status === 'Completed' ? 'default' : 
-                          sale.payment_status === 'Pending' ? 'destructive' : 'outline'
-                        }
-                      >
-                        {sale.payment_status}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {sale.customer && (
-                        <span>{sale.customer.billing_name} - {sale.customer.contact_person} • </span>
-                      )}
-                      {sale.quantity} {sale.product?.unit_of_measure} @ {formatCurrency(sale.unit_price)}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {format(new Date(sale.sale_date), 'PPP')}
-                      {sale.notes && <span> • {sale.notes}</span>}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold">{formatCurrency(sale.total_amount)}</div>
-                    {sale.gst_amount > 0 && (
-                      <div className="text-sm text-gray-600">
-                        GST: {formatCurrency(sale.gst_amount)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            {sales.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No sales transactions found
-              </div>
-            )}
-          </div>
+          <SalesHistoryClient sales={sales} />
         </CardContent>
       </Card>
 

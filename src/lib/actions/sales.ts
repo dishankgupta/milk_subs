@@ -249,3 +249,167 @@ export async function markSalesAsBilled(saleIds: string[], invoiceNumber: string
 
   revalidatePath("/dashboard/sales")
 }
+
+export async function deleteSale(saleId: string) {
+  const supabase = await createClient()
+
+  // First get the sale to check if we need to update customer outstanding
+  const { data: sale, error: fetchError } = await supabase
+    .from("sales")
+    .select(`
+      *,
+      customer:customers(*)
+    `)
+    .eq("id", saleId)
+    .single()
+
+  if (fetchError) {
+    return {
+      success: false,
+      error: "Sale not found"
+    }
+  }
+
+  // If it's a credit sale, reverse the outstanding amount
+  if (sale.sale_type === 'Credit' && sale.customer_id) {
+    await updateCustomerOutstandingWithSales(
+      sale.customer_id, 
+      -sale.total_amount, // Negative amount to reduce outstanding
+      'payment' // Use 'payment' type to reduce outstanding amount
+    )
+  }
+
+  // Delete the sale
+  const { error: deleteError } = await supabase
+    .from("sales")
+    .delete()
+    .eq("id", saleId)
+
+  if (deleteError) {
+    return {
+      success: false,
+      error: `Failed to delete sale: ${deleteError.message}`
+    }
+  }
+
+  revalidatePath("/dashboard/sales")
+  revalidatePath("/dashboard/customers")
+  if (sale.customer_id) {
+    revalidatePath(`/dashboard/customers/${sale.customer_id}`)
+  }
+
+  return {
+    success: true
+  }
+}
+
+export async function updateSale(saleId: string, data: SaleFormData & { 
+  total_amount: number
+  gst_amount: number 
+}) {
+  const supabase = await createClient()
+
+  // Get the existing sale to compare changes
+  const { data: existingSale, error: fetchError } = await supabase
+    .from("sales")
+    .select(`
+      *,
+      customer:customers(*),
+      product:products(*)
+    `)
+    .eq("id", saleId)
+    .single()
+
+  if (fetchError) {
+    throw new Error("Sale not found")
+  }
+
+  // Validate the form data (extended schema with calculated fields)
+  const extendedSchema = saleSchema.extend({
+    total_amount: z.number().min(0.01, "Total amount must be greater than 0"),
+    gst_amount: z.number().min(0, "GST amount cannot be negative")
+  })
+  
+  const validatedData = extendedSchema.parse(data)
+
+  // Determine payment status based on sale type
+  const paymentStatus = validatedData.sale_type === 'Cash' ? 'Completed' : 'Pending'
+
+  // Update the sale
+  const { data: updatedSale, error: updateError } = await supabase
+    .from("sales")
+    .update({
+      customer_id: validatedData.customer_id,
+      product_id: validatedData.product_id,
+      quantity: validatedData.quantity,
+      unit_price: validatedData.unit_price,
+      total_amount: validatedData.total_amount,
+      gst_amount: validatedData.gst_amount,
+      sale_type: validatedData.sale_type,
+      sale_date: validatedData.sale_date.toISOString().split('T')[0],
+      payment_status: paymentStatus,
+      notes: validatedData.notes || null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", saleId)
+    .select(`
+      *,
+      customer:customers(*),
+      product:products(*)
+    `)
+    .single()
+
+  if (updateError) {
+    throw new Error(`Failed to update sale: ${updateError.message}`)
+  }
+
+  // Handle outstanding amount changes for credit sales
+  if (existingSale.sale_type === 'Credit' && existingSale.customer_id) {
+    // Reverse the old amount
+    await updateCustomerOutstandingWithSales(
+      existingSale.customer_id, 
+      -existingSale.total_amount,
+      'payment'
+    )
+  }
+
+  if (validatedData.sale_type === 'Credit' && validatedData.customer_id) {
+    // Add the new amount
+    await updateCustomerOutstandingWithSales(
+      validatedData.customer_id, 
+      validatedData.total_amount,
+      'credit_sale'
+    )
+  }
+
+  revalidatePath("/dashboard/sales")
+  revalidatePath("/dashboard/customers")
+  if (existingSale.customer_id) {
+    revalidatePath(`/dashboard/customers/${existingSale.customer_id}`)
+  }
+  if (validatedData.customer_id && validatedData.customer_id !== existingSale.customer_id) {
+    revalidatePath(`/dashboard/customers/${validatedData.customer_id}`)
+  }
+  
+  return updatedSale
+}
+
+export async function getSale(saleId: string) {
+  const supabase = await createClient()
+
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .select(`
+      *,
+      customer:customers(*),
+      product:products(*)
+    `)
+    .eq("id", saleId)
+    .single()
+
+  if (error) {
+    throw new Error("Sale not found")
+  }
+
+  return sale
+}
