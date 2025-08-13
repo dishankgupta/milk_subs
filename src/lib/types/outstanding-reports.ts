@@ -6,7 +6,7 @@ import type { Customer } from "../types"
 export interface OutstandingReportConfiguration {
   start_date: Date
   end_date: Date
-  customer_selection: 'all' | 'with_outstanding' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected'
   selected_customer_ids?: string[]
 }
 
@@ -85,7 +85,7 @@ export interface OutstandingReportSummary {
 export interface OutstandingReportFormData {
   start_date: Date
   end_date: Date
-  customer_selection: 'all' | 'with_outstanding' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected'
   selected_customer_ids?: string[]
 }
 

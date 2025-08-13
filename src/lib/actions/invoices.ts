@@ -65,6 +65,7 @@ export interface BulkInvoicePreviewItem {
   totalAmount: number
   hasExistingInvoice: boolean
   existingInvoiceNumber?: string
+  _customerOutstanding?: number // Temporary field for filtering
 }
 
 export interface GenerationProgress {
@@ -96,18 +97,17 @@ export async function prepareInvoiceData(
     throw new Error("Customer not found")
   }
 
-  // Get subscription data (from daily_orders)
+  // Get subscription data (from daily_orders that have been delivered)
   const { data: dailyOrders, error: ordersError } = await supabase
     .from("daily_orders")
     .select(`
       *,
       product:products(*),
-      delivery:deliveries(actual_quantity)
+      deliveries!inner(actual_quantity)
     `)
     .eq("customer_id", customerId)
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
-    .eq("status", "Generated")
 
   if (ordersError) {
     throw new Error("Failed to fetch subscription orders")
@@ -288,7 +288,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
 export async function getBulkInvoicePreview(params: {
   period_start: string
   period_end: string
-  customer_selection: 'all' | 'with_outstanding' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected'
   selected_customer_ids?: string[]
 }): Promise<BulkInvoicePreviewItem[]> {
   const supabase = await createClient()
@@ -313,14 +313,16 @@ export async function getBulkInvoicePreview(params: {
   const previewItems: BulkInvoicePreviewItem[] = []
 
   for (const customer of customers || []) {
-    // Get subscription amount from daily_orders
+    // Get subscription amount from daily_orders that have been delivered
     const { data: subscriptionOrders } = await supabase
       .from("daily_orders")
-      .select("total_amount")
+      .select(`
+        total_amount,
+        deliveries!inner(id)
+      `)
       .eq("customer_id", customer.id)
       .gte("order_date", params.period_start)
       .lte("order_date", params.period_end)
-      .eq("status", "Generated")
 
     const subscriptionAmount = subscriptionOrders?.reduce(
       (sum, order) => sum + Number(order.total_amount), 0
@@ -349,6 +351,8 @@ export async function getBulkInvoicePreview(params: {
       .lte("period_end", params.period_end)
       .single()
 
+    const existingOutstanding = Number(customer.outstanding_amount || 0)
+    
     previewItems.push({
       customerId: customer.id,
       customerName: customer.billing_name,
@@ -356,11 +360,22 @@ export async function getBulkInvoicePreview(params: {
       creditSalesAmount,
       totalAmount: subscriptionAmount + creditSalesAmount,
       hasExistingInvoice: !!existingInvoice,
-      existingInvoiceNumber: existingInvoice?.invoice_number
+      existingInvoiceNumber: existingInvoice?.invoice_number,
+      // Store the customer data for filtering
+      _customerOutstanding: existingOutstanding
     })
   }
 
-  return previewItems.sort((a, b) => a.customerName.localeCompare(b.customerName))
+  // Apply special filtering for customers with subscription dues OR outstanding amounts
+  let filteredItems = previewItems
+  if (params.customer_selection === 'with_subscription_and_outstanding') {
+    filteredItems = previewItems.filter(item => 
+      item.subscriptionAmount > 0 || // Has subscription dues (delivered orders)
+      (item._customerOutstanding || 0) > 0 // OR has existing outstanding amount
+    )
+  }
+
+  return filteredItems.sort((a, b) => a.customerName.localeCompare(b.customerName))
 }
 
 export async function generateBulkInvoices(params: {

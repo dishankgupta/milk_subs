@@ -183,7 +183,7 @@ export type ProductFormData = z.infer<typeof productSchema>
 export const outstandingReportSchema = z.object({
   start_date: z.date(),
   end_date: z.date(),
-  customer_selection: z.enum(['all', 'with_outstanding', 'selected']),
+  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional()
 }).refine((data) => {
   // End date must be after start date
@@ -212,7 +212,7 @@ export type OutstandingReportFormData = z.infer<typeof outstandingReportSchema>
 export const bulkInvoiceSchema = z.object({
   period_start: z.date(),
   period_end: z.date(),
-  customer_selection: z.enum(['all', 'with_outstanding', 'selected']),
+  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional(),
   output_folder: z.string().min(1, "Output folder is required")
 }).refine((data) => {

@@ -37,6 +37,8 @@ export async function generateOutstandingReport(
   } else if (config.customer_selection === 'selected' && config.selected_customer_ids) {
     customersQuery = customersQuery.in("id", config.selected_customer_ids)
   }
+  // Note: 'with_subscription_and_outstanding' filtering will be applied after data processing
+  // since it requires checking both subscription data and outstanding amounts
 
   const { data: customers, error: customersError } = await customersQuery
 
@@ -82,8 +84,52 @@ export async function generateOutstandingReport(
     summary.total_outstanding_amount += customerData.total_outstanding
   }
 
+  // Apply special filtering for customers with subscription dues AND outstanding amounts
+  let filteredCustomersData = customersData
+  if (config.customer_selection === 'with_subscription_and_outstanding') {
+    filteredCustomersData = customersData.filter(customerData => {
+      const hasSubscriptionDues = customerData.subscription_breakdown.some(month => month.total_amount > 0)
+      const hasOutstanding = customerData.total_outstanding > 0
+      return hasSubscriptionDues && hasOutstanding
+    })
+    
+    // Recalculate summary for filtered customers
+    const filteredSummary: OutstandingReportSummary = {
+      total_customers: filteredCustomersData.length,
+      customers_with_outstanding: 0,
+      total_opening_balance: 0,
+      total_subscription_amount: 0,
+      total_manual_sales_amount: 0,
+      total_payments_amount: 0,
+      total_outstanding_amount: 0
+    }
+    
+    for (const customerData of filteredCustomersData) {
+      if (customerData.total_outstanding > 0) {
+        filteredSummary.customers_with_outstanding++
+      }
+      
+      filteredSummary.total_opening_balance += customerData.opening_balance
+      filteredSummary.total_subscription_amount += customerData.subscription_breakdown.reduce(
+        (sum, month) => sum + month.total_amount, 0
+      )
+      filteredSummary.total_manual_sales_amount += customerData.manual_sales_breakdown.reduce(
+        (sum, sales) => sum + sales.total_amount, 0
+      )
+      filteredSummary.total_payments_amount += customerData.payment_breakdown.reduce(
+        (sum, payments) => sum + payments.total_amount, 0
+      )
+      filteredSummary.total_outstanding_amount += customerData.total_outstanding
+    }
+    
+    return {
+      customers: filteredCustomersData,
+      summary: filteredSummary
+    }
+  }
+
   return {
-    customers: customersData,
+    customers: filteredCustomersData,
     summary
   }
 }

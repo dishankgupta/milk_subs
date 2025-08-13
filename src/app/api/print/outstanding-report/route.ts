@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const reportData = await generateOutstandingReport({
       start_date: new Date(startDate),
       end_date: new Date(endDate),
-      customer_selection: customerSelection as 'all' | 'with_outstanding' | 'selected',
+      customer_selection: customerSelection as 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected',
       selected_customer_ids: selectedCustomerIds
     })
 

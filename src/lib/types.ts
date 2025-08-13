@@ -179,7 +179,7 @@ export interface SaleFormData {
 export interface OutstandingReportFilter {
   start_date: Date
   end_date: Date
-  customer_selection: 'all' | 'with_outstanding' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected'
   selected_customer_ids?: string[]
 }
 

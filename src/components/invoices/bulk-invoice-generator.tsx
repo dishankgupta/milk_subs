@@ -31,6 +31,7 @@ interface BulkInvoicePreviewItem {
   totalAmount: number
   hasExistingInvoice: boolean
   existingInvoiceNumber?: string
+  _customerOutstanding?: number // Temporary field for filtering
 }
 
 export function BulkInvoiceGenerator() {
@@ -94,9 +95,17 @@ export function BulkInvoiceGenerator() {
         setSelectedCustomers(new Set(
           preview.filter(item => item.totalAmount > 0).map(item => item.customerId)
         ))
+      } else if (formData.customer_selection === "with_subscription_and_outstanding") {
+        setSelectedCustomers(new Set(
+          preview.filter(item => 
+            item.subscriptionAmount > 0 || 
+            (item._customerOutstanding || 0) > 0
+          ).map(item => item.customerId)
+        ))
       }
     } catch (error) {
-      toast.error("Failed to load invoice preview")
+      console.error("Invoice preview error:", error)
+      toast.error(`Failed to load invoice preview: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsLoading(false)
     }
@@ -271,10 +280,10 @@ export function BulkInvoiceGenerator() {
             <RadioGroup
               value={form.watch("customer_selection")}
               onValueChange={(value) => {
-                form.setValue("customer_selection", value as "all" | "with_outstanding" | "selected")
+                form.setValue("customer_selection", value as "all" | "with_outstanding" | "with_subscription_and_outstanding" | "selected")
                 setPreviewData([])
               }}
-              className="flex space-x-6"
+              className="grid grid-cols-1 md:grid-cols-2 gap-3"
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="all" id="all" />
@@ -283,6 +292,10 @@ export function BulkInvoiceGenerator() {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="with_outstanding" id="with_outstanding" />
                 <Label htmlFor="with_outstanding">Customers with Outstanding Amounts</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="with_subscription_and_outstanding" id="with_subscription_and_outstanding" />
+                <Label htmlFor="with_subscription_and_outstanding">Customers with Subscription Dues &gt; 0 OR Outstanding &gt; 0</Label>
               </div>
             </RadioGroup>
           </div>
