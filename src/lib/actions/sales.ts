@@ -90,6 +90,18 @@ export async function getSales(searchParams?: {
     `, { count: 'exact' })
     .order("sale_date", { ascending: false })
 
+  // Apply search filter
+  if (searchParams?.search && searchParams.search.trim()) {
+    const searchTerm = `%${searchParams.search.trim()}%`
+    query = query.or(`
+      customers.billing_name.ilike.${searchTerm},
+      customers.contact_person.ilike.${searchTerm},
+      products.name.ilike.${searchTerm},
+      products.code.ilike.${searchTerm},
+      notes.ilike.${searchTerm}
+    `)
+  }
+
   // Apply filters
   if (searchParams?.customer_id) {
     query = query.eq("customer_id", searchParams.customer_id)
