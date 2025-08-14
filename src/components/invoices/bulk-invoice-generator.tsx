@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { bulkInvoiceSchema, type BulkInvoiceFormData } from "@/lib/validations"
 import { getBulkInvoicePreview, type GenerationProgress } from "@/lib/actions/invoices"
 import { toast } from "sonner"
@@ -104,8 +104,8 @@ export function BulkInvoiceGenerator() {
     setIsLoading(true)
     try {
       const preview = await getBulkInvoicePreview({
-        period_start: formData.period_start.toISOString().split('T')[0],
-        period_end: formData.period_end.toISOString().split('T')[0],
+        period_start: formatDateForAPI(formData.period_start),
+        period_end: formatDateForAPI(formData.period_end),
         customer_selection: formData.customer_selection
       })
       setPreviewData(preview)
@@ -165,8 +165,8 @@ export function BulkInvoiceGenerator() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          period_start: form.getValues("period_start").toISOString().split('T')[0],
-          period_end: form.getValues("period_end").toISOString().split('T')[0],
+          period_start: formatDateForAPI(form.getValues("period_start")),
+          period_end: formatDateForAPI(form.getValues("period_end")),
           customer_ids: Array.from(selectedCustomers),
           output_folder: outputFolder
         }),

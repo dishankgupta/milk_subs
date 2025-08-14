@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface GenerateCustomerInvoiceProps {
@@ -72,7 +72,7 @@ export function GenerateCustomerInvoice({
     setIsLoading(true)
     try {
       // Generate the preview URL for this customer
-      const previewUrl = `/api/print/customer-invoice?customer_id=${customerId}&period_start=${formData.period_start.toISOString().split('T')[0]}&period_end=${formData.period_end.toISOString().split('T')[0]}`
+      const previewUrl = `/api/print/customer-invoice?customer_id=${customerId}&period_start=${formatDateForAPI(formData.period_start)}&period_end=${formatDateForAPI(formData.period_end)}`
       
       // Open in new window
       window.open(previewUrl, '_blank')
