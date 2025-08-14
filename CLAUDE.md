@@ -198,14 +198,15 @@ Complete Supabase database with 12 tables:
 
 ### Sales Management (`/dashboard/sales`)
 - **Sales Entry**: Cash vs Credit sales with automatic customer validation
-- **Sales History**: Advanced filtering and search with GST breakdowns
+- **Sales History**: ✅ **ENHANCED** - Professional sortable table with real-time search, advanced filtering (sale type, payment status), CSV export functionality, and instant client-side performance
 - **Product Management**: GST rate configuration and product catalog management
 - **GST Calculations**: Real-time inclusive/exclusive pricing with tax breakdowns
 - **Customer Integration**: Sales history sections on customer detail pages
 
 ### Invoice Management (`/dashboard/invoices`)
 - **Invoice Generation**: Combined subscription + manual sales invoicing
-- **Bulk Processing**: Date range and customer selection with enhanced folder selection UI
+- **Bulk Processing**: ✅ **ENHANCED** - Real-time progress updates with EventSource, cancellation support, and improved user feedback during invoice generation
+- **Invoice Management**: ✅ **NEW** - Date filtering by invoice generation date with intuitive range picker, bulk selection with checkboxes, and bulk delete functionality with comprehensive safety warnings
 - **Financial Year Management**: Automatic invoice numbering (YYYYYYYYNNNNN format)
 - **PDF Storage**: Organized file structure with dated subfolders
 - **Professional Layouts**: PureDairy branding with GST-compliant formatting
@@ -270,7 +271,10 @@ Complete Supabase database with 12 tables:
 
 ### Recent Achievements (August 2025)
 - **Sales Management System**: Complete manual sales tracking with Cash/Credit business logic
+- **Sales History Enhancement**: Professional sortable table with real-time search, advanced filtering, CSV export, and hydration fix implementation
 - **Invoice Generation**: Professional PDF generation with financial year numbering and bulk processing
+- **Bulk Invoice Enhancement**: Real-time progress updates, cancellation support, and improved user feedback during generation
+- **Invoice Management Enhancement**: Date filtering and bulk delete functionality with comprehensive safety features
 - **Outstanding Reports**: Triple-level expandable reports with comprehensive data integration
 - **System Stability**: Resolved all PDF generation errors with robust retry mechanisms
 - **Enhanced UX**: Improved navigation structure and user experience throughout

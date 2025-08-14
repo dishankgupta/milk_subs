@@ -579,6 +579,8 @@ export async function generateSingleInvoice(params: {
 export async function getInvoicesList(params?: {
   customer_id?: string
   status?: string
+  date_from?: string
+  date_to?: string
   limit?: number
   offset?: number
 }) {
@@ -598,6 +600,14 @@ export async function getInvoicesList(params?: {
   
   if (params?.status) {
     query = query.eq("status", params.status)
+  }
+
+  if (params?.date_from) {
+    query = query.gte("invoice_date", params.date_from)
+  }
+
+  if (params?.date_to) {
+    query = query.lte("invoice_date", params.date_to)
   }
 
   if (params?.limit) {
@@ -764,6 +774,39 @@ async function recalculateCustomerBalance(customerId: string) {
   if (error) {
     throw new Error(`Failed to recalculate customer balance: ${error.message}`)
   }
+}
+
+export async function bulkDeleteInvoices(invoiceIds: string[]): Promise<{
+  successful: number
+  failed: number
+  errors: string[]
+  messages: string[]
+}> {
+  const results = {
+    successful: 0,
+    failed: 0,
+    errors: [] as string[],
+    messages: [] as string[]
+  }
+
+  for (const invoiceId of invoiceIds) {
+    try {
+      const result = await deleteInvoice(invoiceId)
+      if (result.success) {
+        results.successful++
+        results.messages.push(result.message)
+      } else {
+        results.failed++
+        results.errors.push(result.message)
+      }
+    } catch (error) {
+      results.failed++
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
+      results.errors.push(`Invoice ${invoiceId}: ${errorMsg}`)
+    }
+  }
+
+  return results
 }
 
 export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {
