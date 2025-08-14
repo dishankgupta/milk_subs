@@ -248,6 +248,14 @@ Complete Supabase database with 12 tables:
 
 ### Development Journal
 - Journal entries stored in /dev-journal/ folder using format YYYYMMDDHHMM-dev-journal.md
+- New Entries to /dev-journal/ have to be in the following format of sections:
+   **Date - Title**
+   **Time**
+   **Goals**
+   **What I accomplished:**
+   **Challenges faced:**
+   **Key learnings:**
+   **Next session goals:**
 - Development history shows systematic implementation from basic CRUD to advanced features
 - Latest entries document complete sales management system implementation
 
