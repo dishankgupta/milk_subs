@@ -328,13 +328,13 @@ export async function getBulkInvoicePreview(params: {
       (sum, order) => sum + Number(order.total_amount), 0
     ) || 0
 
-    // Get credit sales amount
+    // Get credit sales amount (both Pending and Billed to show all credit sales in period)
     const { data: creditSales } = await supabase
       .from("sales")
       .select("total_amount")
       .eq("customer_id", customer.id)
       .eq("sale_type", "Credit")
-      .eq("payment_status", "Pending")
+      .in("payment_status", ["Pending", "Billed"])
       .gte("sale_date", params.period_start)
       .lte("sale_date", params.period_end)
 

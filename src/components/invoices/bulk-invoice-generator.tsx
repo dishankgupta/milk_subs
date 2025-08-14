@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarIcon, Download, AlertTriangle } from "lucide-react"
+import { CalendarIcon, Download, AlertTriangle, X } from "lucide-react"
 import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/utils"
 import { bulkInvoiceSchema, type BulkInvoiceFormData } from "@/lib/validations"
-import { getBulkInvoicePreview, generateBulkInvoices, type GenerationProgress } from "@/lib/actions/invoices"
+import { getBulkInvoicePreview, type GenerationProgress } from "@/lib/actions/invoices"
 import { toast } from "sonner"
 
 interface BulkInvoicePreviewItem {
@@ -42,6 +42,13 @@ export function BulkInvoiceGenerator() {
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [generationResults, setGenerationResults] = useState<{
+    successful: number
+    combinedPdfPath: string
+    invoiceNumbers: string[]
+  } | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const commonFolders = [
     "C:\\PureDairy\\Invoices",
@@ -73,6 +80,21 @@ export function BulkInvoiceGenerator() {
     form.setValue("period_start", startOfMonth)
     form.setValue("period_end", now)
   }, [form])
+
+  // Cleanup effect for EventSource and abort controller
+  useEffect(() => {
+    return () => {
+      const eventSource = eventSourceRef.current
+      const abortController = abortControllerRef.current
+      
+      if (eventSource) {
+        eventSource.close()
+      }
+      if (abortController) {
+        abortController.abort()
+      }
+    }
+  }, [])
 
   // Load preview data when form changes
   const loadPreview = async () => {
@@ -130,33 +152,127 @@ export function BulkInvoiceGenerator() {
       isComplete: false,
       errors: []
     })
+    setGenerationResults(null)
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController()
 
     try {
-      const result = await generateBulkInvoices({
-        period_start: form.getValues("period_start").toISOString().split('T')[0],
-        period_end: form.getValues("period_end").toISOString().split('T')[0],
-        customer_ids: Array.from(selectedCustomers),
-        output_folder: outputFolder
+      // Use EventSource for real-time progress updates
+      const response = await fetch('/api/invoices/bulk-generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          period_start: form.getValues("period_start").toISOString().split('T')[0],
+          period_end: form.getValues("period_end").toISOString().split('T')[0],
+          customer_ids: Array.from(selectedCustomers),
+          output_folder: outputFolder
+        }),
+        signal: abortControllerRef.current.signal
       })
 
-      // Update progress with the final result
-      setGenerationProgress(result.progress)
-
-      toast.success(`Successfully generated ${result.successful} invoices`)
-      
-      if (result.errors.length > 0) {
-        toast.warning(`${result.errors.length} invoices had errors`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      if (result.combinedPdfPath) {
-        toast.info(`Combined PDF saved at: ${result.combinedPdfPath}`)
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body reader available')
+      }
+
+      let buffer = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        
+        // Process complete messages
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'progress') {
+                setGenerationProgress(prev => prev ? {
+                  ...prev,
+                  completed: data.completed,
+                  total: data.total,
+                  currentCustomer: data.currentCustomer || prev.currentCustomer
+                } : {
+                  completed: data.completed,
+                  total: data.total,
+                  currentCustomer: data.currentCustomer || '',
+                  isComplete: false,
+                  errors: []
+                })
+              } else if (data.type === 'error') {
+                setGenerationProgress(prev => prev ? {
+                  ...prev,
+                  completed: data.completed,
+                  errors: [...prev.errors, data.error]
+                } : {
+                  completed: data.completed,
+                  total: data.total,
+                  currentCustomer: '',
+                  isComplete: false,
+                  errors: [data.error]
+                })
+              } else if (data.type === 'complete') {
+                setGenerationProgress(prev => prev ? {
+                  ...prev,
+                  completed: data.completed,
+                  total: data.total,
+                  isComplete: true
+                } : {
+                  completed: data.completed,
+                  total: data.total,
+                  currentCustomer: '',
+                  isComplete: true,
+                  errors: []
+                })
+                
+                setGenerationResults({
+                  successful: data.successful || 0,
+                  combinedPdfPath: data.combinedPdfPath || '',
+                  invoiceNumbers: data.invoiceNumbers || []
+                })
+                
+                toast.success(`Successfully generated ${data.successful} invoices`)
+                
+                if (data.combinedPdfPath) {
+                  toast.info(`Combined PDF saved at: ${data.combinedPdfPath}`)
+                }
+                
+                break // Exit the processing loop
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError)
+            }
+          }
+        }
       }
 
     } catch (error) {
-      toast.error("Failed to generate invoices")
-      console.error("Bulk invoice generation error:", error)
+      if (abortControllerRef.current?.signal.aborted) {
+        toast.info("Invoice generation cancelled")
+        setGenerationProgress(prev => prev ? { ...prev, isComplete: true } : null)
+      } else {
+        toast.error("Failed to generate invoices")
+        console.error("Bulk invoice generation error:", error)
+      }
     } finally {
       setIsGenerating(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -435,14 +551,28 @@ export function BulkInvoiceGenerator() {
             </div>
 
             {/* Generate Button */}
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end gap-3 mt-6">
+              {isGenerating && (
+                <Button 
+                  onClick={() => {
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort()
+                    }
+                  }}
+                  variant="outline"
+                  size="lg"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+              )}
               <Button 
                 onClick={handleGenerateInvoices}
                 disabled={selectedCustomers.size === 0 || !outputFolder || isGenerating}
                 size="lg"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Generate {selectedCustomers.size} Invoices
+                {isGenerating ? 'Generating...' : `Generate ${selectedCustomers.size} Invoices`}
               </Button>
             </div>
           </CardContent>
@@ -492,8 +622,13 @@ export function BulkInvoiceGenerator() {
                   Invoice generation completed!
                 </div>
                 <div className="text-green-600 text-sm mt-1">
-                  {generationProgress.completed - generationProgress.errors.length} invoices generated successfully
+                  {generationResults ? generationResults.successful : generationProgress.completed - generationProgress.errors.length} invoices generated successfully
                 </div>
+                {generationResults?.combinedPdfPath && (
+                  <div className="text-green-600 text-xs mt-2">
+                    Combined PDF: {generationResults.combinedPdfPath}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
