@@ -34,7 +34,11 @@ interface BulkInvoicePreviewItem {
   _customerOutstanding?: number // Temporary field for filtering
 }
 
-export function BulkInvoiceGenerator() {
+interface BulkInvoiceGeneratorProps {
+  onStatsRefresh: () => void
+}
+
+export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [previewData, setPreviewData] = useState<BulkInvoicePreviewItem[]>([])
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set())
@@ -59,6 +63,12 @@ export function BulkInvoiceGenerator() {
   const handleQuickSelect = (folderPath: string) => {
     setOutputFolder(folderPath)
   }
+
+  // Check if any selected customers have existing invoices
+  const hasSelectedDuplicates = Array.from(selectedCustomers).some(customerId => {
+    const item = previewData.find(p => p.customerId === customerId)
+    return item?.hasExistingInvoice
+  })
 
   const form = useForm<BulkInvoiceFormData>({
     resolver: zodResolver(bulkInvoiceSchema),
@@ -252,6 +262,9 @@ export function BulkInvoiceGenerator() {
                 if (data.combinedPdfPath) {
                   toast.info(`Combined PDF saved at: ${data.combinedPdfPath}`)
                 }
+                
+                // Refresh stats after successful generation
+                onStatsRefresh()
                 
                 break // Exit the processing loop
               }
@@ -550,6 +563,17 @@ export function BulkInvoiceGenerator() {
               </Table>
             </div>
 
+            {/* Duplicate Warning */}
+            {hasSelectedDuplicates && (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Cannot generate invoices: Some selected customers already have invoices for this period. 
+                  Please deselect customers with &quot;Duplicate&quot; status or delete their existing invoices first.
+                </span>
+              </div>
+            )}
+
             {/* Generate Button */}
             <div className="flex justify-end gap-3 mt-6">
               {isGenerating && (
@@ -568,11 +592,11 @@ export function BulkInvoiceGenerator() {
               )}
               <Button 
                 onClick={handleGenerateInvoices}
-                disabled={selectedCustomers.size === 0 || !outputFolder || isGenerating}
+                disabled={selectedCustomers.size === 0 || !outputFolder || isGenerating || hasSelectedDuplicates}
                 size="lg"
               >
                 <Download className="h-4 w-4 mr-2" />
-                {isGenerating ? 'Generating...' : `Generate ${selectedCustomers.size} Invoices`}
+                {isGenerating ? 'Generating...' : hasSelectedDuplicates ? 'Remove Duplicates to Generate' : `Generate ${selectedCustomers.size} Invoices`}
               </Button>
             </div>
           </CardContent>

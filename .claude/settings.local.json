@@ -21,7 +21,8 @@
       "Bash(cp:*)",
       "Bash(pnpm list:*)",
       "mcp__brave-search__brave_web_search",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git add:*)"
     ]
   },
   "enabledMcpjsonServers": [

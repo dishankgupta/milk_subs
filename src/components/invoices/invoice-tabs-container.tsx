@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button"
 import { BulkInvoiceGenerator } from "./bulk-invoice-generator"
 import { InvoiceList } from "./invoice-list"
 
-export function InvoiceTabsContainer() {
+interface InvoiceTabsContainerProps {
+  onStatsRefresh: () => void
+}
+
+export function InvoiceTabsContainer({ onStatsRefresh }: InvoiceTabsContainerProps) {
   const [activeTab, setActiveTab] = useState("generate")
 
   return (
@@ -39,7 +43,7 @@ export function InvoiceTabsContainer() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <BulkInvoiceGenerator />
+            <BulkInvoiceGenerator onStatsRefresh={onStatsRefresh} />
           </CardContent>
         </Card>
       )}
@@ -53,7 +57,7 @@ export function InvoiceTabsContainer() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <InvoiceList />
+            <InvoiceList onStatsRefresh={onStatsRefresh} />
           </CardContent>
         </Card>
       )}

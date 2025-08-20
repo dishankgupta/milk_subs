@@ -41,7 +41,11 @@ type InvoiceWithCustomer = InvoiceMetadata & {
   } 
 }
 
-export function InvoiceList() {
+interface InvoiceListProps {
+  onStatsRefresh: () => void
+}
+
+export function InvoiceList({ onStatsRefresh }: InvoiceListProps) {
   const [invoices, setInvoices] = useState<InvoiceWithCustomer[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
@@ -83,6 +87,7 @@ export function InvoiceList() {
       if (result.success) {
         toast.success(result.message)
         await loadInvoices() // Refresh the list
+        onStatsRefresh() // Refresh the stats
       } else {
         toast.error(result.message)
       }
@@ -117,6 +122,7 @@ export function InvoiceList() {
       
       setSelectedInvoices(new Set())
       await loadInvoices()
+      onStatsRefresh() // Refresh the stats
     } catch (error) {
       toast.error("Failed to delete invoices")
       console.error(error)

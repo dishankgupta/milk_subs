@@ -7,7 +7,7 @@ import { invoiceFileManager, generatePdfFromHtml, combinePdfs } from "@/lib/file
 import { format } from "date-fns"
 import path from "path"
 import { formatCurrency } from "@/lib/utils"
-import type { Customer, Sale, DailyOrder } from "@/lib/types"
+import type { Customer } from "@/lib/types"
 
 export interface InvoiceData {
   customer: Customer
@@ -392,6 +392,51 @@ export async function generateBulkInvoices(params: {
 }> {
   const { output_folder, customer_ids, period_start, period_end } = params
 
+  // Check for existing invoices before starting generation
+  const supabase = await createClient()
+  const customersWithExistingInvoices: string[] = []
+  
+  for (const customerId of customer_ids) {
+    const { data: existingInvoice } = await supabase
+      .from("invoice_metadata")
+      .select("invoice_number")
+      .eq("customer_id", customerId)
+      .gte("period_start", period_start)
+      .lte("period_end", period_end)
+      .single()
+      
+    if (existingInvoice) {
+      // Get customer name separately to avoid TypeScript issues
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("billing_name")
+        .eq("id", customerId)
+        .single()
+        
+      const customerName = customer?.billing_name || 'Unknown Customer'
+      customersWithExistingInvoices.push(`${customerName} (Invoice: ${existingInvoice.invoice_number})`)
+    }
+  }
+  
+  // If any customers have existing invoices, prevent generation
+  if (customersWithExistingInvoices.length > 0) {
+    const errorMsg = `Cannot generate invoices. The following customers already have invoices for this period: ${customersWithExistingInvoices.join(', ')}. Please delete existing invoices first.`
+    
+    return {
+      successful: 0,
+      errors: [errorMsg],
+      invoiceNumbers: [],
+      combinedPdfPath: "",
+      progress: {
+        completed: 0,
+        total: customer_ids.length,
+        currentCustomer: "",
+        isComplete: true,
+        errors: [errorMsg]
+      }
+    }
+  }
+
   // Create dated subfolder
   const dateFolder = await invoiceFileManager.createDateFolder(output_folder)
   
@@ -418,7 +463,6 @@ export async function generateBulkInvoices(params: {
       
       try {
         // Get customer name for progress
-        const supabase = await createClient()
         const { data: customer } = await supabase
           .from("customers")
           .select("billing_name")
@@ -632,42 +676,93 @@ export async function getInvoiceStats() {
   const supabase = await createClient()
   
   try {
-    // Get invoice counts and totals
-    const { data: invoiceData } = await supabase
-      .from("invoice_metadata")
-      .select("total_amount, invoice_date")
-      .eq("status", "Generated")
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const today = now.toISOString().split('T')[0]
+    const startOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0]
     
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
+    // 1. Ready for Generation - customers with subscription dues OR outstanding amounts
     
-    const thisMonthInvoices = invoiceData?.filter(invoice => {
-      const invoiceDate = new Date(invoice.invoice_date)
-      return invoiceDate.getMonth() === currentMonth && invoiceDate.getFullYear() === currentYear
-    }) || []
-    
-    const totalInvoiceValue = invoiceData?.reduce((sum, invoice) => sum + Number(invoice.total_amount), 0) || 0
-    const avgInvoiceValue = invoiceData?.length ? totalInvoiceValue / invoiceData.length : 0
-    
-    // Get pending invoices (customers with outstanding amounts)
+    // Get all customers with outstanding amounts
     const { data: customersWithOutstanding } = await supabase
       .from("customers")
-      .select("outstanding_amount")
+      .select("id")
       .gt("outstanding_amount", 0)
+
+    // Get all customers who have delivered subscription orders this month
+    const { data: customersWithDeliveries } = await supabase
+      .from("customers")
+      .select(`
+        id,
+        daily_orders!inner(
+          id,
+          deliveries!inner(id)
+        )
+      `)
+      .gte("daily_orders.order_date", startOfMonth)
+      .lte("daily_orders.order_date", today)
+
+    // Combine both sets of customers (subscription dues OR outstanding amounts)
+    const eligibleCustomerIds = new Set([
+      ...(customersWithOutstanding?.map(c => c.id) || []),
+      ...(customersWithDeliveries?.map(c => c.id) || [])
+    ])
+
+    // Check which eligible customers already have invoices for current period
+    const { data: existingInvoices } = await supabase
+      .from("invoice_metadata")
+      .select("customer_id")
+      .in("customer_id", Array.from(eligibleCustomerIds))
+      .gte("period_start", startOfMonth)
+      .lte("period_end", today)
+
+    const customersWithExistingInvoices = new Set(existingInvoices?.map(inv => inv.customer_id) || [])
+    
+    // Count customers who are eligible but don't have existing invoices
+    const readyForGeneration = Array.from(eligibleCustomerIds).filter(customerId => 
+      !customersWithExistingInvoices.has(customerId)
+    ).length
+
+    // 2. Total Generated Today
+    const { data: todayInvoices } = await supabase
+      .from("invoice_metadata")
+      .select("id")
+      .gte("created_at", `${today}T00:00:00`)
+      .lt("created_at", `${today}T23:59:59`)
+
+    const generatedToday = todayInvoices?.length || 0
+
+    // 3. Invoices This Month
+    const { data: monthInvoices } = await supabase
+      .from("invoice_metadata")
+      .select("id")
+      .gte("invoice_date", startOfMonth)
+      .lte("invoice_date", today)
+
+    const invoicesThisMonth = monthInvoices?.length || 0
+
+    // 4. Customers with Outstanding
+    const { data: customersWithOutstandingFinal } = await supabase
+      .from("customers")
+      .select("id")
+      .gt("outstanding_amount", 0)
+
+    const customersWithOutstandingCount = customersWithOutstandingFinal?.length || 0
     
     return {
-      thisMonthCount: thisMonthInvoices.length,
-      totalInvoiceValue,
-      avgInvoiceValue,
-      pendingInvoicesCount: customersWithOutstanding?.length || 0
+      readyForGeneration,
+      generatedToday,
+      invoicesThisMonth,
+      customersWithOutstandingCount
     }
   } catch (error) {
     console.error("Error fetching invoice stats:", error)
     return {
-      thisMonthCount: 0,
-      totalInvoiceValue: 0,
-      avgInvoiceValue: 0,
-      pendingInvoicesCount: 0
+      readyForGeneration: 0,
+      generatedToday: 0,
+      invoicesThisMonth: 0,
+      customersWithOutstandingCount: 0
     }
   }
 }
