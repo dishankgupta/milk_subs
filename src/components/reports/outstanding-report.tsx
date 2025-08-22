@@ -52,20 +52,10 @@ export function OutstandingReport() {
     resolver: zodResolver(outstandingReportSchema),
     defaultValues: {
       start_date: new Date(2025, 7, 1), // Fixed date to prevent hydration issues
-      end_date: new Date(2025, 7, 22),
+      end_date: new Date(2025, 7, 22), // Today's date (22nd August 2025)
       customer_selection: "with_outstanding"
     }
   })
-
-  // Set current dates after component mounts to avoid hydration issues
-  useEffect(() => {
-    const now = new Date()
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    
-    form.setValue('start_date', currentMonthStart)
-    form.setValue('end_date', currentDate)
-  }, [form])
 
   const generateReport = async (data: OutstandingReportFormData) => {
     setIsLoading(true)

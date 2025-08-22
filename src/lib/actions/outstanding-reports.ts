@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { formatDateForAPI } from "@/lib/utils"
 import type { 
   OutstandingReportConfiguration, 
   OutstandingCustomerData,
@@ -20,8 +21,10 @@ export async function generateOutstandingReport(
   summary: OutstandingReportSummary
 }> {
   const supabase = await createClient()
-  const startDate = config.start_date.toISOString().split('T')[0]
-  const endDate = config.end_date.toISOString().split('T')[0]
+  const startDate = formatDateForAPI(config.start_date)
+  const endDate = formatDateForAPI(config.end_date)
+  
+  console.log("Outstanding report config:", { startDate, endDate, customer_selection: config.customer_selection })
   
   // Use the optimized master view for initial customer data
   let customersQuery = supabase
@@ -222,6 +225,9 @@ async function getManualSalesBreakdownBatch(
 ): Promise<Map<string, ManualSalesBreakdown[]>> {
   const supabase = await createClient()
   
+  console.log("Manual sales query - startDate:", startDate, "endDate:", endDate)
+  console.log("Customer IDs:", customerIds)
+  
   const { data: salesData, error } = await supabase
     .from("customer_sales_breakdown")
     .select("*")
@@ -229,6 +235,11 @@ async function getManualSalesBreakdownBatch(
     .gte("sale_date", startDate)
     .lte("sale_date", endDate)
     .order("customer_id, sale_date")
+    
+  console.log("Manual sales data found:", salesData?.length || 0, "records")
+  if (salesData?.length) {
+    console.log("Sample sales data:", salesData[0])
+  }
 
   if (error) {
     console.error("Sales breakdown error:", error)
@@ -291,7 +302,7 @@ async function getPaymentBreakdownBatch(
     .select("*")
     .in("customer_id", customerIds)
     .gte("payment_date", startDate)
-    .lte("payment_date", endDate)
+    .lt("payment_date", new Date(new Date(endDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
     .order("customer_id, payment_date")
 
   if (error) {

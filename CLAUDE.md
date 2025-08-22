@@ -444,3 +444,4 @@ Complete Supabase database with 16 tables:
 ## Deployment Notes
 
 - Remember to use MCP servers as per your need.
+- IMPORTANT - All Linear issues have to be created and updated in the Milk Subs - Dairy Management System Project in Linear. URL is https://linear.app/dishank/project/milk-subs-dairy-business-management-system-638a16f66b40
