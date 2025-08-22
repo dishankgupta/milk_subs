@@ -336,6 +336,7 @@ Complete Supabase database with 16 tables:
 - **Opening Balance System Fix**: Complete resolution of opening balance data integrity issue with immutable historical tracking (August 21, 2025)
 - **Outstanding Dashboard Recovery**: Fixed missing outstanding customers by including 'sent' invoice status in calculations
 - **Invoice Line Items Population Fix**: Resolved empty invoice_line_items table by fixing schema mismatch and missing required fields in insert operations (August 22, 2025)
+- **Outstanding Report Timezone Fix**: Complete resolution of timezone date issues in outstanding reports print API causing incorrect period dates (August 22, 2025)
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 

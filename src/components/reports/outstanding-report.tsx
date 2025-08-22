@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { 
@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { formatCurrency, cn } from "@/lib/utils"
+import { formatCurrency, cn, formatDateForAPI } from "@/lib/utils"
 import { useSorting } from "@/hooks/useSorting"
 import { generateOutstandingReport } from "@/lib/actions/outstanding-reports"
 import { outstandingReportSchema, type OutstandingReportFormData } from "@/lib/validations"
@@ -51,11 +51,21 @@ export function OutstandingReport() {
   const form = useForm<OutstandingReportFormData>({
     resolver: zodResolver(outstandingReportSchema),
     defaultValues: {
-      start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      end_date: new Date(),
+      start_date: new Date(2025, 7, 1), // Fixed date to prevent hydration issues
+      end_date: new Date(2025, 7, 22),
       customer_selection: "with_outstanding"
     }
   })
+
+  // Set current dates after component mounts to avoid hydration issues
+  useEffect(() => {
+    const now = new Date()
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    
+    form.setValue('start_date', currentMonthStart)
+    form.setValue('end_date', currentDate)
+  }, [form])
 
   const generateReport = async (data: OutstandingReportFormData) => {
     setIsLoading(true)
@@ -168,8 +178,8 @@ export function OutstandingReport() {
     
     const params = new URLSearchParams({
       type: printType,
-      start_date: form.getValues("start_date").toISOString().split('T')[0],
-      end_date: form.getValues("end_date").toISOString().split('T')[0],
+      start_date: formatDateForAPI(form.getValues("start_date")),
+      end_date: formatDateForAPI(form.getValues("end_date")),
       customer_selection: form.getValues("customer_selection"),
     })
 

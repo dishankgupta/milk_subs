@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { generateOutstandingReport } from '@/lib/actions/outstanding-reports'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, parseLocalDate } from '@/lib/utils'
 import type { OutstandingCustomerData, OutstandingReportSummary } from '@/lib/types/outstanding-reports'
 
 export async function GET(request: NextRequest) {
@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
     }
 
     const reportData = await generateOutstandingReport({
-      start_date: new Date(startDate),
-      end_date: new Date(endDate),
+      start_date: parseLocalDate(startDate),
+      end_date: parseLocalDate(endDate),
       customer_selection: customerSelection as 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected',
       selected_customer_ids: selectedCustomerIds
     })
@@ -62,7 +62,7 @@ function generateSummaryHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Outstanding Amounts Summary - ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}</title>
+  <title>Outstanding Amounts Summary - ${format(parseLocalDate(startDate), 'dd/MM/yyyy')} to ${format(parseLocalDate(endDate), 'dd/MM/yyyy')}</title>
   <style>
     ${getCommonPrintStyles()}
     
@@ -112,7 +112,7 @@ function generateSummaryHTML(
   ${getPrintHeader('Outstanding Amounts Summary Report')}
   
   <div class="report-period">
-    <strong>Report Period:</strong> ${format(new Date(startDate), 'dd MMMM yyyy')} to ${format(new Date(endDate), 'dd MMMM yyyy')}<br>
+    <strong>Report Period:</strong> ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}<br>
     <strong>Generated On:</strong> ${format(new Date(), 'dd MMMM yyyy HH:mm')}
   </div>
 
@@ -214,13 +214,13 @@ function generateCustomerStatementsHTML(
         </div>
         <div class="statement-period">
           <p><strong>Statement Period:</strong><br>
-          ${format(new Date(startDate), 'dd MMM yyyy')} to ${format(new Date(endDate), 'dd MMM yyyy')}</p>
+          ${format(parseLocalDate(startDate), 'dd MMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMM yyyy')}</p>
         </div>
       </div>
 
       <div class="balance-summary">
         <div class="balance-row">
-          <span>Opening Balance (as of ${format(new Date(startDate), 'dd/MM/yyyy')}):</span>
+          <span>Opening Balance (as of ${format(parseLocalDate(startDate), 'dd/MM/yyyy')}):</span>
           <span class="amount">${formatCurrency(customerData.opening_balance)}</span>
         </div>
       </div>

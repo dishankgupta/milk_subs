@@ -454,7 +454,7 @@ export async function getBulkInvoicePreview(params: {
   }
 
   // Convert the optimized result to the expected format
-  const previewItems: BulkInvoicePreviewItem[] = (previewData || []).map((row: any) => ({
+  const previewItems: BulkInvoicePreviewItem[] = (previewData || []).map((row: Record<string, unknown>) => ({
     customerId: row.customer_id,
     customerName: row.customer_name,
     subscriptionAmount: Number(row.unbilled_delivery_amount || 0),
