@@ -409,6 +409,37 @@ Complete Supabase database with 16 tables:
 - Database constraints: Proper foreign key relationships
 - Authentication: Protected routes with middleware
 
+## Database Operations Guidelines
+
+**CRITICAL: To optimize token usage and avoid context consumption:**
+
+### Database Query Strategy
+- **ALWAYS use Task tool with general-purpose agent** for any database schema exploration, table discovery, or structural analysis
+- **NEVER use `mcp__supabase__list_tables` directly** - delegate to Task tool to preserve context
+- **Reference CLAUDE.md schema documentation first** before making any live database calls
+- **Use targeted SQL queries** with `mcp__supabase__execute_sql` for specific data operations only
+
+### Schema Reference (Quick Access)
+**16 Tables Overview:**
+- **Core**: customers, products, routes, base_subscriptions, modifications, daily_orders, deliveries, payments, product_pricing_history, sales
+- **Invoice System**: invoice_metadata, invoice_line_items, invoice_payments, unapplied_payments, opening_balance_payments, gst_calculations
+- **Functions**: calculate_customer_outstanding(), update_invoice_status(), getEffectiveOpeningBalance()
+- **Views**: customer_outstanding_summary
+
+### When to Use Live Database Calls
+- ✅ Specific data queries (`SELECT * FROM customers WHERE...`)
+- ✅ Data modifications (`INSERT`, `UPDATE`, `DELETE`)
+- ✅ Function calls (`SELECT calculate_customer_outstanding(...)`)
+- ❌ Schema exploration (use Task tool instead)
+- ❌ Table structure discovery (use CLAUDE.md reference above)
+- ❌ Column listing (reference existing code patterns)
+
+### Context Preservation Rules
+1. **Schema Discovery**: Always delegate to Task tool
+2. **Data Operations**: Use direct MCP calls for efficiency
+3. **Code References**: Use existing server actions as schema reference
+4. **Documentation**: This CLAUDE.md file contains complete schema information
+
 ## Deployment Notes
 
 - Remember to use MCP servers as per your need.
