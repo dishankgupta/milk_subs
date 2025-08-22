@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
-import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
+import { calculateCustomerOutstandingAmount } from '@/lib/actions/outstanding'
 import { formatCurrency } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
@@ -10,33 +10,47 @@ export async function GET(request: NextRequest) {
     
     const supabase = await createClient()
     
-    // Get customers with outstanding amounts
+    // Get all customers first, then calculate outstanding amounts
     const { data: customers, error } = await supabase
       .from('customers')
       .select('*')
-      .gt('outstanding_amount', 0)
-      .order('outstanding_amount', { ascending: false })
-
-    if (error) {
-      throw error
+      .order('billing_name')
+      
+    if (error || !customers) {
+      throw new Error('Failed to fetch customers')
     }
-
-    if (!customers) {
-      return new Response('No customers found', { status: 404 })
+    
+    // Calculate outstanding amounts for each customer
+    const customersWithOutstanding = []
+    for (const customer of customers) {
+      try {
+        const outstandingAmount = await calculateCustomerOutstandingAmount(customer.id)
+        if (outstandingAmount > 0) {
+          customersWithOutstanding.push({
+            ...customer,
+            outstanding_amount: outstandingAmount
+          })
+        }
+      } catch (error) {
+        console.error(`Failed to calculate outstanding for customer ${customer.id}:`, error)
+      }
     }
+    
+    // Sort by outstanding amount (highest first)
+    customersWithOutstanding.sort((a, b) => b.outstanding_amount - a.outstanding_amount)
 
     // Filter by priority if specified
-    let filteredCustomers = customers
+    let filteredCustomers = customersWithOutstanding
     if (priorityFilter) {
       switch (priorityFilter) {
         case 'high':
-          filteredCustomers = customers.filter(c => c.outstanding_amount >= 5000)
+          filteredCustomers = customersWithOutstanding.filter(c => c.outstanding_amount >= 5000)
           break
         case 'medium':
-          filteredCustomers = customers.filter(c => c.outstanding_amount >= 1000 && c.outstanding_amount < 5000)
+          filteredCustomers = customersWithOutstanding.filter(c => c.outstanding_amount >= 1000 && c.outstanding_amount < 5000)
           break
         case 'low':
-          filteredCustomers = customers.filter(c => c.outstanding_amount > 0 && c.outstanding_amount < 1000)
+          filteredCustomers = customersWithOutstanding.filter(c => c.outstanding_amount > 0 && c.outstanding_amount < 1000)
           break
       }
     }
@@ -47,9 +61,9 @@ export async function GET(request: NextRequest) {
     
     // Priority breakdown
     const ranges = {
-      high: customers.filter(c => c.outstanding_amount >= 5000),
-      medium: customers.filter(c => c.outstanding_amount >= 1000 && c.outstanding_amount < 5000),
-      low: customers.filter(c => c.outstanding_amount > 0 && c.outstanding_amount < 1000)
+      high: customersWithOutstanding.filter(c => c.outstanding_amount >= 5000),
+      medium: customersWithOutstanding.filter(c => c.outstanding_amount >= 1000 && c.outstanding_amount < 5000),
+      low: customersWithOutstanding.filter(c => c.outstanding_amount > 0 && c.outstanding_amount < 1000)
     }
 
     const priorityName = priorityFilter ? 

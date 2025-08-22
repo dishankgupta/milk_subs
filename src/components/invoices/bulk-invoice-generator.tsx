@@ -75,7 +75,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
     defaultValues: {
       period_start: undefined,
       period_end: undefined,
-      customer_selection: "with_outstanding",
+      customer_selection: "with_unbilled_transactions",
       selected_customer_ids: [],
       output_folder: ""
     }
@@ -123,16 +123,17 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
       // Auto-select customers based on selection type
       if (formData.customer_selection === "all") {
         setSelectedCustomers(new Set(preview.map(item => item.customerId)))
-      } else if (formData.customer_selection === "with_outstanding") {
+      } else if (formData.customer_selection === "with_unbilled_deliveries") {
+        setSelectedCustomers(new Set(
+          preview.filter(item => item.subscriptionAmount > 0).map(item => item.customerId)
+        ))
+      } else if (formData.customer_selection === "with_unbilled_credit_sales") {
+        setSelectedCustomers(new Set(
+          preview.filter(item => item.creditSalesAmount > 0).map(item => item.customerId)
+        ))
+      } else if (formData.customer_selection === "with_unbilled_transactions") {
         setSelectedCustomers(new Set(
           preview.filter(item => item.totalAmount > 0).map(item => item.customerId)
-        ))
-      } else if (formData.customer_selection === "with_subscription_and_outstanding") {
-        setSelectedCustomers(new Set(
-          preview.filter(item => 
-            item.subscriptionAmount > 0 || 
-            (item._customerOutstanding || 0) > 0
-          ).map(item => item.customerId)
         ))
       }
     } catch (error) {
@@ -409,7 +410,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
             <RadioGroup
               value={form.watch("customer_selection")}
               onValueChange={(value) => {
-                form.setValue("customer_selection", value as "all" | "with_outstanding" | "with_subscription_and_outstanding" | "selected")
+                form.setValue("customer_selection", value as "all" | "with_unbilled_deliveries" | "with_unbilled_credit_sales" | "with_unbilled_transactions" | "selected")
                 setPreviewData([])
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-3"
@@ -419,12 +420,16 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                 <Label htmlFor="all">All Customers</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="with_outstanding" id="with_outstanding" />
-                <Label htmlFor="with_outstanding">Customers with Outstanding Amounts</Label>
+                <RadioGroupItem value="with_unbilled_deliveries" id="with_unbilled_deliveries" />
+                <Label htmlFor="with_unbilled_deliveries">Customers with Unbilled Deliveries</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="with_subscription_and_outstanding" id="with_subscription_and_outstanding" />
-                <Label htmlFor="with_subscription_and_outstanding">Customers with Subscription Dues &gt; 0 OR Outstanding &gt; 0</Label>
+                <RadioGroupItem value="with_unbilled_credit_sales" id="with_unbilled_credit_sales" />
+                <Label htmlFor="with_unbilled_credit_sales">Customers with Unbilled Credit Sales</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="with_unbilled_transactions" id="with_unbilled_transactions" />
+                <Label htmlFor="with_unbilled_transactions">Customers with Any Unbilled Transactions</Label>
               </div>
             </RadioGroup>
           </div>

@@ -1,6 +1,7 @@
 import { getCustomer } from "@/lib/actions/customers"
 import { getCustomerSubscriptions } from "@/lib/actions/subscriptions"
 import { getCustomerPayments } from "@/lib/actions/payments"
+import { getCustomerOutstanding, calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,10 +16,11 @@ interface CustomerDetailPageProps {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { id } = await params
-  const [customer, subscriptions, payments] = await Promise.all([
+  const [customer, subscriptions, payments, outstandingData] = await Promise.all([
     getCustomer(id),
     getCustomerSubscriptions(id),
-    getCustomerPayments(id)
+    getCustomerPayments(id),
+    getCustomerOutstanding(id).catch(() => ({ totalOutstanding: 0, unpaidInvoices: [] }))
   ])
 
   if (!customer) {
@@ -156,10 +158,31 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
               <p>{customer.billing_cycle_day}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Outstanding Amount</p>
-              <p className={`text-lg font-semibold ${customer.outstanding_amount > 0 ? "text-red-600" : "text-green-600"}`}>
-                {formatCurrency(customer.outstanding_amount)}
+              <p className="text-sm font-medium text-muted-foreground">Opening Balance</p>
+              <p className={`font-medium ${customer.opening_balance > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                {formatCurrency(customer.opening_balance)}
               </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Outstanding Amount</p>
+              <div className="flex items-center gap-2">
+                <p className={`text-lg font-semibold ${outstandingData.totalOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                  {formatCurrency(outstandingData.totalOutstanding)}
+                </p>
+                {outstandingData.unpaidInvoices && outstandingData.unpaidInvoices.length > 0 && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/dashboard/outstanding/${customer.id}`}>
+                      <Eye className="h-4 w-4 mr-1" />
+                      View Details
+                    </Link>
+                  </Button>
+                )}
+              </div>
+              {outstandingData.unpaidInvoices && outstandingData.unpaidInvoices.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  From {outstandingData.unpaidInvoices.length} unpaid invoice{outstandingData.unpaidInvoices.length !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

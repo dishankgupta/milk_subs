@@ -25,23 +25,23 @@ export function CustomerOutstanding({
   const [totalOutstanding, setTotalOutstanding] = useState(0)
   const [breakdown, setBreakdown] = useState({
     opening_balance: 0,
-    current_outstanding: 0,
-    total: 0
+    invoice_outstanding: 0,
+    total_outstanding: 0
   })
 
   useEffect(() => {
     async function loadOutstanding() {
       try {
         const result = await calculateTotalOutstanding(customer.id)
-        setTotalOutstanding(result.total)
+        setTotalOutstanding(result.total_outstanding)
         setBreakdown(result)
       } catch (error) {
         console.error("Failed to calculate total outstanding:", error)
-        setTotalOutstanding((customer.outstanding_amount || 0) + (customer.opening_balance || 0))
+        setTotalOutstanding(customer.opening_balance || 0)
       }
     }
     loadOutstanding()
-  }, [customer.id, customer.outstanding_amount, customer.opening_balance])
+  }, [customer.id, customer.opening_balance])
 
   const hasOutstanding = totalOutstanding > 0
 
@@ -62,9 +62,9 @@ export function CustomerOutstanding({
           </div>
           
           <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-            <span className="text-sm font-medium">Current Outstanding:</span>
+            <span className="text-sm font-medium">Invoice Outstanding:</span>
             <span className="font-semibold text-blue-600">
-              {formatCurrency(customer.outstanding_amount || 0)}
+              {formatCurrency(breakdown.invoice_outstanding)}
             </span>
           </div>
           
@@ -115,9 +115,9 @@ export function CustomerOutstanding({
         {/* Calculation Formula */}
         <div className="text-xs text-gray-500 border-t pt-3">
           <div className="font-medium mb-1">Calculation:</div>
-          <div>Opening Balance + Current Outstanding = Total Due</div>
+          <div>Opening Balance + Invoice Outstanding = Total Due</div>
           <div className="font-mono">
-            {formatCurrency(customer.opening_balance || 0)} + {formatCurrency(customer.outstanding_amount || 0)} = {formatCurrency(totalOutstanding)}
+            {formatCurrency(customer.opening_balance || 0)} + {formatCurrency(breakdown.invoice_outstanding)} = {formatCurrency(totalOutstanding)}
           </div>
         </div>
       </CardContent>

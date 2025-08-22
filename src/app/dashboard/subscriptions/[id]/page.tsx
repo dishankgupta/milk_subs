@@ -140,7 +140,7 @@ export default async function SubscriptionDetailPage({
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Outstanding Amount</label>
-              <p className="text-sm">{formatCurrency(subscription.customer?.outstanding_amount || 0)}</p>
+              <p className="text-sm text-blue-600">View in Outstanding Section</p>
             </div>
           </CardContent>
         </Card>

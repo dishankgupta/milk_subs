@@ -112,9 +112,9 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
                     <span className="text-sm">{payment.customer.phone_primary}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Outstanding Amount:</span>
-                    <span className={`font-medium ${payment.customer.outstanding_amount > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {formatCurrency(payment.customer.outstanding_amount)}
+                    <span className="text-muted-foreground">Outstanding:</span>
+                    <span className="font-medium text-blue-600">
+                      View in Outstanding Section
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

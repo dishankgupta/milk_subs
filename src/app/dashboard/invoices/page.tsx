@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getInvoiceStats } from "@/lib/actions/invoices"
 import { InvoiceTabsContainer } from "@/components/invoices/invoice-tabs-container"
+import { toast } from "sonner"
 
 interface InvoiceStats {
   readyForGeneration: number
@@ -27,6 +28,7 @@ export default function InvoicesPage() {
       setStats(newStats)
     } catch (error) {
       console.error("Error loading invoice stats:", error)
+      toast.error(`Failed to load invoice statistics: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }

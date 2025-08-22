@@ -41,19 +41,33 @@ The project follows Next.js App Router structure:
 
 ## Database Schema
 
-Complete Supabase database with 12 tables:
-- `customers` - Customer profiles with billing/contact info, routes, payment details, opening balance
+Complete Supabase database with 16 tables:
+
+### Core Business Tables
+- `customers` - Customer profiles with billing/contact info, routes, and opening balance (outstanding_amount removed)
 - `products` - Extended product catalog with GST rates (Cow/Buffalo Milk, Malai Paneer, Buffalo/Cow Ghee)
 - `routes` - Route 1 and Route 2 with personnel management
 - `base_subscriptions` - Daily/Pattern subscription types with 2-day cycle support
 - `modifications` - Temporary subscription changes (skip/increase/decrease)
 - `daily_orders` - Generated orders with pricing and delivery info
 - `deliveries` - Actual vs planned delivery tracking
-- `payments` - Customer payment history and outstanding amounts
+- `payments` - Enhanced payment history with allocation tracking and status management
 - `product_pricing_history` - Price change audit trail
 - `sales` - Manual sales tracking (Cash/Credit) with GST compliance
-- `invoice_metadata` - Invoice generation tracking with financial year numbering
+
+### Invoice & Outstanding Management Tables
+- `invoice_metadata` - Enhanced invoice generation with status tracking, payment tracking, and financial year numbering
+- `invoice_line_items` - Detailed line items for each invoice (subscriptions, manual sales, adjustments)
+- `invoice_payments` - Payment allocation tracking for invoice-to-payment mapping
+- `unapplied_payments` - Payments not yet allocated to specific invoices
+- `opening_balance_payments` - **NEW** - Tracks payments allocated to opening balance (immutable historical data)
 - `gst_calculations` - GST breakdowns for compliance reporting
+
+### Database Functions & Views
+- `calculate_customer_outstanding()` - **ENHANCED** - Function to calculate outstanding using immutable opening balance logic
+- `update_invoice_status()` - Function to automatically update invoice status based on payments
+- `customer_outstanding_summary` - **UPDATED** - Performance view with corrected invoice status filtering ('sent' included)
+- `getEffectiveOpeningBalance()` - **NEW** - Function to calculate remaining opening balance after payments
 
 ## Current Implementation Status
 
@@ -127,6 +141,24 @@ Complete Supabase database with 12 tables:
 - **Customer Integration**: Enhanced outstanding display with detailed sales history
 - **Product Management**: Complete GST configuration with preview calculations
 
+### ✅ Phase 8: Outstanding System Rework Complete
+- **Database Architecture Overhaul**: Complete outstanding system redesign with invoice-based calculations
+- **New Table Structure**: Added invoice_line_items, invoice_payments, unapplied_payments tables
+- **Enhanced Payment Allocation**: Advanced payment-to-invoice allocation with auto-allocation modes
+- **Outstanding Dashboard**: Comprehensive outstanding management section with real-time calculations
+- **Invoice Status Management**: Automatic invoice status updates based on payment allocation
+- **Customer Outstanding Detail**: Detailed invoice breakdown with payment history integration
+- **Professional Statements**: Enhanced customer statement printing with invoice-based data
+
+### ✅ Phase 9: Invoice Generation System Fix Complete
+- **Critical Database Query Fixes**: Resolved broken outstanding_amount field references in getInvoiceStats()
+- **Transaction-Based Business Logic**: Implemented correct workflow using unbilled transactions instead of circular outstanding logic
+- **Enhanced Customer Selection**: New selection options (unbilled deliveries, credit sales, any transactions)
+- **Helper Function Implementation**: Created getUnbilledDeliveryAmount and getUnbilledCreditSalesAmount for accurate calculations
+- **Data Integrity Improvements**: Fixed invoice deletion to properly clean up invoice_line_items table
+- **UI/UX Enhancement**: Updated customer selection interface with clear, descriptive options
+- **Error Handling**: Added comprehensive error handling with toast notifications for better user feedback
+
 ## Key Features Implemented
 
 ### Customer Management (`/dashboard/customers`)
@@ -169,11 +201,20 @@ Complete Supabase database with 12 tables:
 
 ### Payment Management (`/dashboard/payments`)
 - **Payment List**: Searchable table with filters (customer, method, date range) + **sortable columns**
-- **Add Payment**: Complete form with validation and customer pre-selection (`/dashboard/payments/new`)
+- **Add Payment**: Enhanced form with invoice allocation interface (`/dashboard/payments/new`)
 - **Payment Details**: Comprehensive payment view with customer info (`/dashboard/payments/[id]`)
 - **Edit Payment**: Pre-populated form for payment updates (`/dashboard/payments/[id]/edit`)
-- **Outstanding Tracking**: Real-time outstanding amount calculations and updates
+- **Invoice Allocation**: Advanced payment allocation to specific invoices with auto-allocation modes
+- **Unapplied Payments**: Management of payments not yet allocated to invoices
 - **Customer Integration**: Payment history sections on customer detail pages
+
+### Outstanding Management (`/dashboard/outstanding`)
+- **Outstanding Dashboard**: Comprehensive overview with summary cards and advanced filtering
+- **Customer Outstanding Detail**: Invoice-based outstanding breakdown with unpaid invoice tracking (`/dashboard/outstanding/[customer_id]`)
+- **Outstanding Reports**: Enhanced reports with invoice-based calculations (`/dashboard/outstanding/reports`)
+- **Payment Integration**: Quick payment recording with automatic customer pre-selection
+- **Print Customer Statements**: Professional PDF statements with PureDairy branding
+- **Invoice Status Tracking**: Real-time invoice status updates (paid, partially_paid, overdue)
 
 ### Delivery Management (`/dashboard/deliveries`)
 - **Delivery List**: Searchable card-based interface with filters (date, route, completion status) + **custom sort controls with variance sorting**
@@ -204,14 +245,17 @@ Complete Supabase database with 12 tables:
 - **Customer Integration**: Sales history sections on customer detail pages
 
 ### Invoice Management (`/dashboard/invoices`)
-- **Invoice Generation**: Combined subscription + manual sales invoicing
+- **Invoice Generation**: ✅ **FIXED** - Combined subscription + manual sales invoicing with transaction-based logic
 - **Bulk Processing**: ✅ **ENHANCED** - Real-time progress updates with EventSource, cancellation support, and improved user feedback during invoice generation
 - **Invoice Management**: ✅ **NEW** - Date filtering by invoice generation date with intuitive range picker, bulk selection with checkboxes, and bulk delete functionality with comprehensive safety warnings
+- **Customer Selection**: ✅ **IMPROVED** - Transaction-based selection (unbilled deliveries, credit sales, any transactions) instead of circular outstanding logic
+- **Preview System**: ✅ **RESTORED** - Invoice preview now loads correctly with accurate customer statistics and selection filters
 - **Financial Year Management**: Automatic invoice numbering (YYYYYYYYNNNNN format)
 - **PDF Storage**: Organized file structure with dated subfolders
 - **Professional Layouts**: PureDairy branding with GST-compliant formatting
 - **Robust PDF Generation**: Automatic retry mechanism with up to 3 attempts for transient failures
 - **Enhanced Stability**: Chrome browser integration with proper timeout handling and error recovery
+- **Data Integrity**: Complete invoice deletion with proper cleanup of invoice_line_items for transaction tracking accuracy
 
 ### Outstanding Reports System (`/dashboard/reports/outstanding`)
 - **Triple-Level Expandable Reports**: Customer → Transaction Type → Individual Details
@@ -242,7 +286,7 @@ Complete Supabase database with 12 tables:
 ## Development Notes
 
 - Application currently running at localhost:3000 with Turbopack for optimal development
-- Database: 12 tables with comprehensive relationships and RLS policies
+- Database: 16 tables with comprehensive relationships and RLS policies
 - Authentication: Admin-only access with Supabase Auth and SSR support
 - All core business features are fully functional and production-ready
 - Complete dairy business management system with subscription and manual sales capabilities
@@ -275,9 +319,14 @@ Complete Supabase database with 12 tables:
 - **Invoice Generation**: Professional PDF generation with financial year numbering and bulk processing
 - **Bulk Invoice Enhancement**: Real-time progress updates, cancellation support, and improved user feedback during generation
 - **Invoice Management Enhancement**: Date filtering and bulk delete functionality with comprehensive safety features
-- **Outstanding Reports**: Triple-level expandable reports with comprehensive data integration
-- **System Stability**: Resolved all PDF generation errors with robust retry mechanisms
-- **Enhanced UX**: Improved navigation structure and user experience throughout
+- **Outstanding System Rework**: Complete overhaul of outstanding calculations with invoice-based tracking (August 20, 2025)
+- **Payment Allocation System**: Advanced payment-to-invoice allocation with auto-allocation modes and unapplied payment management
+- **Outstanding Dashboard**: New comprehensive section with real-time calculations and customer detail views
+- **Database Architecture Enhancement**: Added 3 new tables and enhanced existing tables for proper invoice-payment tracking
+- **System Stability**: Resolved all PDF generation errors with robust retry mechanisms and outstanding calculation accuracy
+- **Invoice System Fix**: Complete resolution of invoice generation blockage with transaction-based logic (August 21, 2025)
+- **Opening Balance System Fix**: Complete resolution of opening balance data integrity issue with immutable historical tracking (August 21, 2025)
+- **Outstanding Dashboard Recovery**: Fixed missing outstanding customers by including 'sent' invoice status in calculations
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
@@ -318,11 +367,12 @@ Complete Supabase database with 12 tables:
    - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
    - `/src/lib/actions/orders.ts` - Order generation and management operations
    - `/src/lib/actions/modifications.ts` - Modification CRUD operations
-   - `/src/lib/actions/payments.ts` - Payment CRUD operations and outstanding amount management
+   - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and unapplied payment management
    - `/src/lib/actions/deliveries.ts` - Individual and bulk delivery confirmation operations
    - `/src/lib/actions/reports.ts` - Production and delivery report generation
    - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations
-   - `/src/lib/actions/invoices.ts` - Invoice generation and bulk processing operations
+   - `/src/lib/actions/invoices.ts` - Invoice generation, bulk processing, and line item management
+   - `/src/lib/actions/outstanding.ts` - Outstanding calculations, invoice-based tracking, and payment allocation
 2. **Validation**: Zod schemas in `/src/lib/validations.ts` (includes sales and invoice schemas)
 3. **Types**: TypeScript interfaces in `/src/lib/types.ts` (extended for sales system)
 4. **Utilities**: Helper functions for business logic

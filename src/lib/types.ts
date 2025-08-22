@@ -10,7 +10,6 @@ export interface Customer {
   delivery_time: "Morning" | "Evening"
   payment_method: "Monthly" | "Prepaid"
   billing_cycle_day: number
-  outstanding_amount: number
   opening_balance: number
   status: "Active" | "Inactive"
   created_at: string

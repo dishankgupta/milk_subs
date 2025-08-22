@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { format, parseISO } from "date-fns"
+import { calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
 import type { 
   OutstandingReportConfiguration, 
   OutstandingCustomerData,
@@ -32,9 +33,9 @@ export async function generateOutstandingReport(
     `)
     .order("billing_name")
 
-  if (config.customer_selection === 'with_outstanding') {
-    customersQuery = customersQuery.gt("outstanding_amount", 0)
-  } else if (config.customer_selection === 'selected' && config.selected_customer_ids) {
+  // Note: We'll filter customers with outstanding after calculating their actual outstanding amounts
+  // since outstanding_amount field is deprecated
+  if (config.customer_selection === 'selected' && config.selected_customer_ids) {
     customersQuery = customersQuery.in("id", config.selected_customer_ids)
   }
   // Note: 'with_subscription_and_outstanding' filtering will be applied after data processing
@@ -128,6 +129,38 @@ export async function generateOutstandingReport(
     }
   }
 
+  // For 'with_outstanding' filter, recalculate summary
+  if (config.customer_selection === 'with_outstanding') {
+    const recalculatedSummary: OutstandingReportSummary = {
+      total_customers: filteredCustomersData.length,
+      customers_with_outstanding: filteredCustomersData.length, // All filtered customers have outstanding
+      total_opening_balance: 0,
+      total_subscription_amount: 0,
+      total_manual_sales_amount: 0,
+      total_payments_amount: 0,
+      total_outstanding_amount: 0
+    }
+    
+    for (const customerData of filteredCustomersData) {
+      recalculatedSummary.total_opening_balance += customerData.opening_balance
+      recalculatedSummary.total_subscription_amount += customerData.subscription_breakdown.reduce(
+        (sum, month) => sum + month.total_amount, 0
+      )
+      recalculatedSummary.total_manual_sales_amount += customerData.manual_sales_breakdown.reduce(
+        (sum, sales) => sum + sales.total_amount, 0
+      )
+      recalculatedSummary.total_payments_amount += customerData.payment_breakdown.reduce(
+        (sum, payments) => sum + payments.total_amount, 0
+      )
+      recalculatedSummary.total_outstanding_amount += customerData.total_outstanding
+    }
+    
+    return {
+      customers: filteredCustomersData,
+      summary: recalculatedSummary
+    }
+  }
+  
   return {
     customers: filteredCustomersData,
     summary
@@ -372,15 +405,13 @@ async function getPaymentBreakdown(
 }
 
 async function calculateOutstandingAsOf(customerId: string, endDate: string): Promise<number> {
-  const supabase = await createClient()
-  
-  // For now, use the current outstanding_amount from customer record
-  // In a more complex implementation, this would calculate based on all transactions up to endDate
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("outstanding_amount")
-    .eq("id", customerId)
-    .single()
-  
-  return Number(customer?.outstanding_amount || 0)
+  // Use the proper invoice-based outstanding calculation
+  // Note: This calculates current outstanding, not as-of a specific date
+  // For a true as-of calculation, we'd need to calculate based on transactions up to endDate
+  try {
+    return await calculateCustomerOutstandingAmount(customerId)
+  } catch (error) {
+    console.error(`Failed to calculate outstanding for customer ${customerId}:`, error)
+    return 0
+  }
 }

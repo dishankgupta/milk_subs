@@ -16,6 +16,7 @@ import {
   CreditCard, 
   ShoppingCart,
   Receipt,
+  DollarSign,
   Settings, 
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
   { name: 'Sales', href: '/dashboard/sales', icon: ShoppingCart },
   { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt },
+  { name: 'Outstanding', href: '/dashboard/outstanding', icon: DollarSign },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 

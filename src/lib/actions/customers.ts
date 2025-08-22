@@ -4,33 +4,66 @@ import { createClient } from "@/lib/supabase/server"
 import { Customer, Route } from "@/lib/types"
 import { CustomerFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
+import { calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
 
 export async function getCustomers(options?: { hasOutstanding?: boolean }): Promise<{ customers: Customer[], total: number }> {
   const supabase = await createClient()
   
-  let query = supabase
-    .from("customers")
-    .select(`
-      *,
-      route:routes(*)
-    `)
-    .order("billing_name")
-
-  // Filter by outstanding amounts if requested
   if (options?.hasOutstanding) {
-    query = query.gt("outstanding_amount", 0)
-  }
+    // Use the new outstanding summary view for filtering customers with outstanding amounts
+    const { data, error } = await supabase
+      .from("customer_outstanding_summary")
+      .select(`
+        customer_id,
+        billing_name,
+        contact_person,
+        route_name,
+        opening_balance,
+        total_outstanding
+      `)
+      .order("billing_name")
+    
+    if (error) {
+      console.error("Error fetching customers with outstanding:", error)
+      throw new Error("Failed to fetch customers")
+    }
+    
+    // Transform to match Customer interface
+    const customers = await Promise.all((data || []).map(async (summary) => {
+      const { data: customer } = await supabase
+        .from("customers")
+        .select(`
+          *,
+          route:routes(*)
+        `)
+        .eq("id", summary.customer_id)
+        .single()
+      return customer
+    }))
+    
+    return {
+      customers: customers.filter(c => c !== null),
+      total: customers.length
+    }
+  } else {
+    // Regular query for all customers
+    const { data, error } = await supabase
+      .from("customers")
+      .select(`
+        *,
+        route:routes(*)
+      `)
+      .order("billing_name")
 
-  const { data, error } = await query
+    if (error) {
+      console.error("Error fetching customers:", error)
+      throw new Error("Failed to fetch customers")
+    }
 
-  if (error) {
-    console.error("Error fetching customers:", error)
-    throw new Error("Failed to fetch customers")
-  }
-
-  return { 
-    customers: data || [], 
-    total: data?.length || 0 
+    return { 
+      customers: data || [], 
+      total: data?.length || 0 
+    }
   }
 }
 
@@ -81,7 +114,7 @@ export async function createCustomer(customerData: CustomerFormData): Promise<{ 
       delivery_time: customerData.delivery_time,
       payment_method: customerData.payment_method,
       billing_cycle_day: customerData.billing_cycle_day,
-      outstanding_amount: customerData.outstanding_amount,
+      opening_balance: customerData.opening_balance || 0,
       status: customerData.status,
     })
     .select()
@@ -124,7 +157,7 @@ export async function updateCustomer(id: string, customerData: CustomerFormData)
       delivery_time: customerData.delivery_time,
       payment_method: customerData.payment_method,
       billing_cycle_day: customerData.billing_cycle_day,
-      outstanding_amount: customerData.outstanding_amount,
+      opening_balance: customerData.opening_balance || 0,
       status: customerData.status,
       updated_at: new Date().toISOString(),
     })
@@ -205,60 +238,16 @@ export async function searchCustomers(query: string): Promise<Customer[]> {
   return data || []
 }
 
-// Sales management integration
-export async function updateCustomerOutstandingWithSales(
-  customerId: string, 
-  amount: number, 
-  type: 'credit_sale' | 'payment'
-) {
-  const supabase = await createClient()
-
-  // Get current customer data
-  const { data: customer, error: fetchError } = await supabase
-    .from("customers")
-    .select("outstanding_amount")
-    .eq("id", customerId)
-    .single()
-
-  if (fetchError) {
-    throw new Error("Customer not found")
-  }
-
-  const currentOutstanding = Number(customer.outstanding_amount) || 0
-  let newOutstanding: number
-
-  if (type === 'credit_sale') {
-    // Credit sale increases outstanding amount
-    newOutstanding = currentOutstanding + amount
-  } else {
-    // Payment decreases outstanding amount
-    newOutstanding = Math.max(0, currentOutstanding - amount)
-  }
-
-  const { error: updateError } = await supabase
-    .from("customers")
-    .update({
-      outstanding_amount: newOutstanding,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", customerId)
-
-  if (updateError) {
-    throw new Error("Failed to update customer outstanding amount")
-  }
-
-  revalidatePath("/dashboard/customers")
-  revalidatePath(`/dashboard/customers/${customerId}`)
-  
-  return newOutstanding
-}
+// Note: Sales management integration now uses invoice-based outstanding calculation
+// Outstanding amounts are automatically calculated from unpaid invoices + opening balance
+// No direct manipulation of outstanding amounts is needed
 
 export async function calculateTotalOutstanding(customerId: string) {
   const supabase = await createClient()
 
   const { data: customer, error } = await supabase
     .from("customers")
-    .select("outstanding_amount, opening_balance")
+    .select("opening_balance")
     .eq("id", customerId)
     .single()
 
@@ -266,13 +255,16 @@ export async function calculateTotalOutstanding(customerId: string) {
     throw new Error("Customer not found")
   }
 
+  // Use the new outstanding calculation function
+  const totalOutstanding = await calculateCustomerOutstandingAmount(customerId)
   const openingBalance = Number(customer.opening_balance) || 0
-  const currentOutstanding = Number(customer.outstanding_amount) || 0
-  const total = openingBalance + currentOutstanding
+  
+  // Calculate invoice-based outstanding (total - opening balance)
+  const invoiceOutstanding = totalOutstanding - openingBalance
 
   return {
     opening_balance: openingBalance,
-    current_outstanding: currentOutstanding,
-    total: total
+    invoice_outstanding: Math.max(0, invoiceOutstanding),
+    total_outstanding: totalOutstanding
   }
 }

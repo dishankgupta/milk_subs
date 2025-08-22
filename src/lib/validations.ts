@@ -11,7 +11,7 @@ export const customerSchema = z.object({
   delivery_time: z.enum(["Morning", "Evening"], { message: "Please select delivery time" }),
   payment_method: z.enum(["Monthly", "Prepaid"], { message: "Please select payment method" }),
   billing_cycle_day: z.number().min(1, "Billing cycle day must be between 1 and 31").max(31, "Billing cycle day must be between 1 and 31"),
-  outstanding_amount: z.number().min(0, "Outstanding amount cannot be negative"),
+  opening_balance: z.number().min(0, "Opening balance cannot be negative").default(0),
   status: z.enum(["Active", "Inactive"]),
 })
 
@@ -212,7 +212,7 @@ export type OutstandingReportFormData = z.infer<typeof outstandingReportSchema>
 export const bulkInvoiceSchema = z.object({
   period_start: z.date(),
   period_end: z.date(),
-  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'selected']),
+  customer_selection: z.enum(['all', 'with_unbilled_deliveries', 'with_unbilled_credit_sales', 'with_unbilled_transactions', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional(),
   output_folder: z.string().min(1, "Output folder is required")
 }).refine((data) => {

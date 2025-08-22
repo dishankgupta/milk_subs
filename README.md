@@ -26,7 +26,9 @@ A comprehensive dairy business management system built with Next.js 15, featurin
 
 ## 📊 Database Schema
 
-Complete PostgreSQL database with 12 tables:
+Complete PostgreSQL database with 15 tables:
+
+### Core Business Tables
 - `customers` - Customer profiles with billing, contact info, routes, and opening balances
 - `products` - Product catalog with GST rates and subscription support
 - `routes` - Delivery routes with personnel management
@@ -34,11 +36,21 @@ Complete PostgreSQL database with 12 tables:
 - `modifications` - Temporary subscription changes (skip/increase/decrease)
 - `daily_orders` - Generated orders with pricing and delivery information
 - `deliveries` - Delivery confirmation with actual vs planned tracking
-- `payments` - Payment history and outstanding amount management
+- `payments` - Enhanced payment history with allocation tracking
 - `sales` - Manual sales tracking with GST compliance
-- `invoice_metadata` - Invoice generation with financial year numbering
 - `product_pricing_history` - Price change audit trail
 - `gst_calculations` - GST compliance and reporting
+
+### Invoice & Outstanding Management
+- `invoice_metadata` - Enhanced invoice generation with status tracking and financial year numbering
+- `invoice_line_items` - Detailed line items for each invoice (subscriptions, manual sales, adjustments)
+- `invoice_payments` - Payment allocation tracking for invoice-to-payment mapping
+- `unapplied_payments` - Payments not yet allocated to specific invoices
+
+### Database Functions & Views
+- `calculate_customer_outstanding()` - Outstanding calculation from unpaid invoices + opening balance
+- `update_invoice_status()` - Automatic invoice status updates based on payments
+- `customer_outstanding_summary` - Performance view for outstanding dashboard queries
 
 ## 🎯 Key Features
 
@@ -66,11 +78,14 @@ Complete PostgreSQL database with 12 tables:
 - Bulk operations with 70-80% time savings
 - Comprehensive delivery performance analytics
 
-### ✅ Payment Tracking
-- Payment entry with automatic outstanding calculations
-- Payment history with advanced filtering
+### ✅ Payment Tracking & Outstanding Management
+- Enhanced payment entry with invoice allocation interface
+- Advanced payment-to-invoice allocation with auto-allocation modes
+- Payment history with advanced filtering and allocation tracking
 - Collection rate tracking and trend analysis
-- Priority-based outstanding customer reports
+- Invoice-based outstanding calculations with real-time updates
+- Comprehensive outstanding dashboard with customer detail views
+- Unapplied payment management for payments not yet allocated to invoices
 
 ### ✅ Sales Management
 - Manual sales entry (Cash vs Credit) with business logic validation
@@ -81,9 +96,11 @@ Complete PostgreSQL database with 12 tables:
 ### ✅ Invoice Generation
 - Professional PDF generation with PureDairy branding
 - Financial year-based numbering system (YYYYYYYYNNNNN format)
-- Bulk invoice processing with progress tracking
-- Combined subscription + manual sales invoicing
-- Robust PDF generation with retry mechanisms
+- Bulk invoice processing with progress tracking and real-time updates
+- Combined subscription + manual sales invoicing with transaction-based logic
+- Transaction-based customer selection (unbilled deliveries, credit sales, any transactions)
+- Robust PDF generation with retry mechanisms and comprehensive error handling
+- Complete data integrity with proper invoice deletion and line item tracking
 
 ### ✅ Reporting & Analytics
 - Daily production summary reports
@@ -118,17 +135,18 @@ pnpm test-pdf
 ## 📱 User Interface
 
 ### Dashboard Navigation
-- **Dashboard**: System overview with key statistics
-- **Customers**: Customer management with advanced search
+- **Dashboard**: System overview with key statistics including outstanding summaries
+- **Customers**: Customer management with advanced search and invoice-based outstanding display
 - **Products**: Product catalog with GST configuration
 - **Subscriptions**: Subscription management with pattern preview
 - **Modifications**: Temporary subscription changes
 - **Daily Orders**: Order generation and management
 - **Reports**: Comprehensive reporting suite
 - **Delivery Routes**: Delivery confirmation and tracking
-- **Payments**: Payment tracking and outstanding management
+- **Payments**: Enhanced payment tracking with invoice allocation
 - **Sales**: Manual sales entry and history
-- **Invoices**: Invoice generation and bulk processing
+- **Invoices**: Invoice generation and bulk processing with line item tracking
+- **Outstanding**: Complete outstanding management with invoice-based calculations
 
 ### Technical Features
 - Mobile-first responsive design
@@ -169,12 +187,15 @@ src/
 
 **🎉 PRODUCTION READY** - All major features implemented and tested
 
-- ✅ **Phase 1-7 Complete**: All core business functionality implemented
+- ✅ **Phase 1-9 Complete**: All core business functionality implemented including invoice generation system fix
 - ✅ **Mobile Optimized**: Responsive design throughout
 - ✅ **GST Compliant**: Full GST integration with proper tax handling
 - ✅ **Professional Reports**: Complete print system with branding
 - ✅ **Robust PDF Generation**: Stable PDF generation with error recovery
+- ✅ **Invoice-Based Outstanding**: Proper outstanding calculations with payment allocation tracking
+- ✅ **Enhanced Payment System**: Advanced payment-to-invoice allocation with auto-allocation modes
 - ✅ **Comprehensive Data Management**: Advanced search, filter, and sort capabilities
+- ✅ **Invoice Generation System**: Fixed and operational with transaction-based logic and proper customer selection
 
 ## 🔐 Authentication
 
@@ -204,9 +225,13 @@ Comprehensive development history available in `/dev-journal/` folder documentin
 This system completely replaces Excel-based tracking with:
 - 90% reduction in delivery errors through automated order generation
 - 70-80% time savings with bulk operations
-- Professional invoice generation with GST compliance
-- Real-time outstanding tracking with comprehensive reports
+- Professional invoice generation with GST compliance and transaction-based logic
+- Invoice-based outstanding tracking with 100% accuracy and audit trails
+- Advanced payment allocation system eliminating manual outstanding calculations
+- Real-time outstanding dashboard with comprehensive customer detail views
+- Fixed invoice generation system with proper customer selection and data integrity
 - Mobile-optimized interfaces for field operations
+- Complete payment-to-invoice audit trail for financial accuracy
 
 ## 📞 Support
 

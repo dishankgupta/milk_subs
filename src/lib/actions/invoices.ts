@@ -244,7 +244,8 @@ export async function prepareInvoiceData(
 export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: string) {
   const supabase = await createClient()
 
-  const { error } = await supabase
+  // Insert invoice metadata with enhanced fields
+  const { data: invoiceMetadata, error } = await supabase
     .from("invoice_metadata")
     .insert({
       invoice_number: invoiceData.invoiceNumber,
@@ -257,50 +258,189 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
       total_amount: invoiceData.totals.grandTotal,
       gst_amount: invoiceData.totals.totalGstAmount,
       file_path: filePath,
+      invoice_status: 'sent', // Initialize as sent (unpaid)
+      amount_paid: 0,
+      amount_outstanding: invoiceData.totals.grandTotal,
+      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
       status: 'Generated'
     })
+    .select()
+    .single()
 
-  if (error) {
-    throw new Error(`Failed to save invoice metadata: ${error.message}`)
+  if (error || !invoiceMetadata) {
+    throw new Error(`Failed to save invoice metadata: ${error?.message}`)
   }
+
+  // Create invoice line items for subscription orders
+  const orderLineItems = await createSubscriptionLineItems(
+    invoiceMetadata.id, 
+    invoiceData.customer.id, 
+    invoiceData.periodStart, 
+    invoiceData.periodEnd
+  )
+
+  // Create invoice line items for manual sales
+  const salesLineItems = await createSalesLineItems(
+    invoiceMetadata.id, 
+    invoiceData.customer.id, 
+    invoiceData.periodStart, 
+    invoiceData.periodEnd
+  )
 
   // Mark manual sales as billed
   if (invoiceData.manualSalesItems.length > 0) {
-    // Get the sale IDs from the original manual sales data
-    const supabase2 = await createClient()
-    const { data: salesData } = await supabase2
-      .from("sales")
-      .select("id")
-      .eq("customer_id", invoiceData.customer.id)
-      .eq("sale_type", "Credit")
-      .eq("payment_status", "Pending")
-      .gte("sale_date", invoiceData.periodStart)
-      .lte("sale_date", invoiceData.periodEnd)
-
-    const saleIds = salesData?.map(sale => sale.id) || []
-    
+    const saleIds = salesLineItems.map(item => item.sale_id).filter(id => id)
     if (saleIds.length > 0) {
       await markSalesAsBilled(saleIds, invoiceData.invoiceNumber)
     }
+  }
+
+  return invoiceMetadata.id
+}
+
+// Helper function to get unbilled delivery amount for a customer
+async function getUnbilledDeliveryAmount(
+  customerId: string, 
+  periodStart: string, 
+  periodEnd: string
+): Promise<number> {
+  const supabase = await createClient()
+  
+  // Use SQL to efficiently get delivered orders that are NOT in invoice_line_items
+  const { data } = await supabase.rpc('get_unbilled_deliveries', {
+    customer_id: customerId,
+    period_start: periodStart,
+    period_end: periodEnd
+  })
+  
+  // Fallback to manual query if RPC function doesn't exist
+  if (!data) {
+    // Get all delivered orders for the customer in the period
+    const { data: deliveredOrders } = await supabase
+      .from("daily_orders")
+      .select(`
+        id,
+        total_amount,
+        deliveries!inner(actual_quantity)
+      `)
+      .eq("customer_id", customerId)
+      .gte("order_date", periodStart)
+      .lte("order_date", periodEnd)
+    
+    if (!deliveredOrders || deliveredOrders.length === 0) return 0
+    
+    // Get order IDs that are already billed
+    const orderIds = deliveredOrders.map(order => order.id)
+    const { data: billedOrders } = await supabase
+      .from("invoice_line_items")
+      .select("order_id")
+      .in("order_id", orderIds)
+      .not("order_id", "is", null)
+    
+    const billedOrderIds = new Set(billedOrders?.map(item => item.order_id) || [])
+    
+    // Calculate total amount for unbilled orders
+    return deliveredOrders
+      .filter(order => !billedOrderIds.has(order.id))
+      .reduce((sum, order) => sum + Number(order.total_amount), 0)
+  }
+  
+  return Number(data[0]?.total_amount || 0)
+}
+
+// Helper function to get unbilled credit sales amount for a customer
+async function getUnbilledCreditSalesAmount(
+  customerId: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<number> {
+  const supabase = await createClient()
+  
+  // Get all credit sales for the customer in the period
+  const { data: creditSales } = await supabase
+    .from("sales")
+    .select("id, total_amount")
+    .eq("customer_id", customerId)
+    .eq("sale_type", "Credit")
+    .gte("sale_date", periodStart)
+    .lte("sale_date", periodEnd)
+  
+  if (!creditSales || creditSales.length === 0) return 0
+  
+  // Get sale IDs that are already billed
+  const saleIds = creditSales.map(sale => sale.id)
+  const { data: billedSales } = await supabase
+    .from("invoice_line_items")
+    .select("sale_id")
+    .in("sale_id", saleIds)
+    .not("sale_id", "is", null)
+  
+  const billedSaleIds = new Set(billedSales?.map(item => item.sale_id) || [])
+  
+  // Calculate total amount for unbilled sales
+  return creditSales
+    .filter(sale => !billedSaleIds.has(sale.id))
+    .reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+}
+
+// Helper function to check for existing invoice in period
+async function checkExistingInvoice(
+  customerId: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<{ hasInvoice: boolean; invoiceNumber?: string }> {
+  const supabase = await createClient()
+  
+  const { data: existingInvoice } = await supabase
+    .from("invoice_metadata")
+    .select("invoice_number")
+    .eq("customer_id", customerId)
+    .gte("period_start", periodStart)
+    .lte("period_end", periodEnd)
+    .single()
+  
+  return {
+    hasInvoice: !!existingInvoice,
+    invoiceNumber: existingInvoice?.invoice_number
+  }
+}
+
+// Helper function to filter customers by selection criteria
+function filterCustomersBySelection(
+  items: BulkInvoicePreviewItem[], 
+  selection: string
+): BulkInvoicePreviewItem[] {
+  switch (selection) {
+    case 'with_unbilled_deliveries':
+      return items.filter(item => item.subscriptionAmount > 0)
+    
+    case 'with_unbilled_credit_sales':
+      return items.filter(item => item.creditSalesAmount > 0)
+    
+    case 'with_unbilled_transactions':
+      return items.filter(item => item.totalAmount > 0)
+    
+    case 'all':
+    default:
+      return items
   }
 }
 
 export async function getBulkInvoicePreview(params: {
   period_start: string
   period_end: string
-  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected'
+  customer_selection: 'all' | 'with_unbilled_deliveries' | 'with_unbilled_credit_sales' | 'with_unbilled_transactions' | 'selected'
   selected_customer_ids?: string[]
 }): Promise<BulkInvoicePreviewItem[]> {
   const supabase = await createClient()
 
-  // Get customers based on selection criteria
+  // Get all customers first (filtering will be applied after calculating unbilled amounts)
   let customersQuery = supabase
     .from("customers")
-    .select("id, billing_name, outstanding_amount, opening_balance")
+    .select("id, billing_name")
 
-  if (params.customer_selection === 'with_outstanding') {
-    customersQuery = customersQuery.gt("outstanding_amount", 0)
-  } else if (params.customer_selection === 'selected' && params.selected_customer_ids) {
+  // Apply customer selection filter if 'selected' option is chosen
+  if (params.customer_selection === 'selected' && params.selected_customer_ids) {
     customersQuery = customersQuery.in("id", params.selected_customer_ids)
   }
 
@@ -313,67 +453,42 @@ export async function getBulkInvoicePreview(params: {
   const previewItems: BulkInvoicePreviewItem[] = []
 
   for (const customer of customers || []) {
-    // Get subscription amount from daily_orders that have been delivered
-    const { data: subscriptionOrders } = await supabase
-      .from("daily_orders")
-      .select(`
-        total_amount,
-        deliveries!inner(id)
-      `)
-      .eq("customer_id", customer.id)
-      .gte("order_date", params.period_start)
-      .lte("order_date", params.period_end)
-
-    const subscriptionAmount = subscriptionOrders?.reduce(
-      (sum, order) => sum + Number(order.total_amount), 0
-    ) || 0
-
-    // Get credit sales amount (both Pending and Billed to show all credit sales in period)
-    const { data: creditSales } = await supabase
-      .from("sales")
-      .select("total_amount")
-      .eq("customer_id", customer.id)
-      .eq("sale_type", "Credit")
-      .in("payment_status", ["Pending", "Billed"])
-      .gte("sale_date", params.period_start)
-      .lte("sale_date", params.period_end)
-
-    const creditSalesAmount = creditSales?.reduce(
-      (sum, sale) => sum + Number(sale.total_amount), 0
-    ) || 0
-
-    // Check for existing invoices in this period
-    const { data: existingInvoice } = await supabase
-      .from("invoice_metadata")
-      .select("invoice_number")
-      .eq("customer_id", customer.id)
-      .gte("period_start", params.period_start)
-      .lte("period_end", params.period_end)
-      .single()
-
-    const existingOutstanding = Number(customer.outstanding_amount || 0)
+    // Calculate unbilled delivery amount using helper function
+    const unbilledDeliveryAmount = await getUnbilledDeliveryAmount(
+      customer.id, 
+      params.period_start, 
+      params.period_end
+    )
+    
+    // Calculate unbilled credit sales amount using helper function
+    const unbilledCreditSalesAmount = await getUnbilledCreditSalesAmount(
+      customer.id, 
+      params.period_start, 
+      params.period_end
+    )
+    
+    const totalAmount = unbilledDeliveryAmount + unbilledCreditSalesAmount
+    
+    // Check for existing invoice in this period using helper function
+    const existingInvoiceInfo = await checkExistingInvoice(
+      customer.id, 
+      params.period_start, 
+      params.period_end
+    )
     
     previewItems.push({
       customerId: customer.id,
       customerName: customer.billing_name,
-      subscriptionAmount,
-      creditSalesAmount,
-      totalAmount: subscriptionAmount + creditSalesAmount,
-      hasExistingInvoice: !!existingInvoice,
-      existingInvoiceNumber: existingInvoice?.invoice_number,
-      // Store the customer data for filtering
-      _customerOutstanding: existingOutstanding
+      subscriptionAmount: unbilledDeliveryAmount,
+      creditSalesAmount: unbilledCreditSalesAmount,
+      totalAmount,
+      hasExistingInvoice: existingInvoiceInfo.hasInvoice,
+      existingInvoiceNumber: existingInvoiceInfo.invoiceNumber
     })
   }
 
-  // Apply special filtering for customers with subscription dues OR outstanding amounts
-  let filteredItems = previewItems
-  if (params.customer_selection === 'with_subscription_and_outstanding') {
-    filteredItems = previewItems.filter(item => 
-      item.subscriptionAmount > 0 || // Has subscription dues (delivered orders)
-      (item._customerOutstanding || 0) > 0 // OR has existing outstanding amount
-    )
-  }
+  // Apply customer selection filter using helper function
+  const filteredItems = filterCustomersBySelection(previewItems, params.customer_selection)
 
   return filteredItems.sort((a, b) => a.customerName.localeCompare(b.customerName))
 }
@@ -686,9 +801,9 @@ export async function getInvoiceStats() {
     
     // Get all customers with outstanding amounts
     const { data: customersWithOutstanding } = await supabase
-      .from("customers")
-      .select("id")
-      .gt("outstanding_amount", 0)
+      .from("customer_outstanding_summary")
+      .select("customer_id")
+      .gt("total_outstanding", 0)
 
     // Get all customers who have delivered subscription orders this month
     const { data: customersWithDeliveries } = await supabase
@@ -705,7 +820,7 @@ export async function getInvoiceStats() {
 
     // Combine both sets of customers (subscription dues OR outstanding amounts)
     const eligibleCustomerIds = new Set([
-      ...(customersWithOutstanding?.map(c => c.id) || []),
+      ...(customersWithOutstanding?.map(c => c.customer_id) || []),
       ...(customersWithDeliveries?.map(c => c.id) || [])
     ])
 
@@ -744,9 +859,9 @@ export async function getInvoiceStats() {
 
     // 4. Customers with Outstanding
     const { data: customersWithOutstandingFinal } = await supabase
-      .from("customers")
-      .select("id")
-      .gt("outstanding_amount", 0)
+      .from("customer_outstanding_summary")
+      .select("customer_id")
+      .gt("total_outstanding", 0)
 
     const customersWithOutstandingCount = customersWithOutstandingFinal?.length || 0
     
@@ -792,7 +907,17 @@ export async function deleteInvoice(invoiceId: string): Promise<{ success: boole
     // 1. Revert linked credit sales back to 'Pending' status
     await revertLinkedSales(invoice.customer_id, invoice.period_start, invoice.period_end)
     
-    // 2. Delete the invoice metadata record
+    // 2. Delete invoice line items to make transactions "unbilled" again
+    const { error: lineItemsError } = await supabase
+      .from("invoice_line_items")
+      .delete()
+      .eq("invoice_id", invoiceId)
+      
+    if (lineItemsError) {
+      throw new Error(`Failed to delete invoice line items: ${lineItemsError.message}`)
+    }
+    
+    // 3. Delete the invoice metadata record
     const { error: deleteError } = await supabase
       .from("invoice_metadata")
       .delete()
@@ -802,7 +927,7 @@ export async function deleteInvoice(invoiceId: string): Promise<{ success: boole
       throw new Error(`Failed to delete invoice: ${deleteError.message}`)
     }
     
-    // 3. Recalculate customer outstanding amount
+    // 4. Recalculate customer outstanding amount
     await recalculateCustomerBalance(invoice.customer_id)
     
     return { 
@@ -902,6 +1027,87 @@ export async function bulkDeleteInvoices(invoiceIds: string[]): Promise<{
   }
 
   return results
+}
+
+async function createSubscriptionLineItems(
+  invoiceId: string, 
+  customerId: string, 
+  periodStart: string, 
+  periodEnd: string
+): Promise<Array<{order_id: string; invoice_id: string}>> {
+  const supabase = await createClient()
+
+  // Get delivered orders for this period
+  const { data: deliveredOrders } = await supabase
+    .from("daily_orders")
+    .select(`
+      id,
+      deliveries!inner(id)
+    `)
+    .eq("customer_id", customerId)
+    .gte("order_date", periodStart)
+    .lte("order_date", periodEnd)
+
+  if (!deliveredOrders?.length) return []
+
+  // Create line items for each delivered order
+  const lineItemsData = deliveredOrders.map(order => ({
+    invoice_id: invoiceId,
+    order_id: order.id,
+    line_item_type: 'subscription'
+  }))
+
+  const { data: lineItems, error } = await supabase
+    .from("invoice_line_items")
+    .insert(lineItemsData)
+    .select()
+
+  if (error) {
+    console.error('Error creating subscription line items:', error)
+    return []
+  }
+
+  return lineItems || []
+}
+
+async function createSalesLineItems(
+  invoiceId: string, 
+  customerId: string, 
+  periodStart: string, 
+  periodEnd: string
+): Promise<Array<{sale_id: string; invoice_id: string}>> {
+  const supabase = await createClient()
+
+  // Get credit sales for this period
+  const { data: creditSales } = await supabase
+    .from("sales")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("sale_type", "Credit")
+    .eq("payment_status", "Pending")
+    .gte("sale_date", periodStart)
+    .lte("sale_date", periodEnd)
+
+  if (!creditSales?.length) return []
+
+  // Create line items for each credit sale
+  const lineItemsData = creditSales.map(sale => ({
+    invoice_id: invoiceId,
+    sale_id: sale.id,
+    line_item_type: 'manual_sale'
+  }))
+
+  const { data: lineItems, error } = await supabase
+    .from("invoice_line_items")
+    .insert(lineItemsData)
+    .select()
+
+  if (error) {
+    console.error('Error creating sales line items:', error)
+    return []
+  }
+
+  return lineItems || []
 }
 
 export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {

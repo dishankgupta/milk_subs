@@ -348,9 +348,9 @@ export function OutstandingReport() {
                 </TableHeader>
                 <TableBody>
                   {reportData.customers.map((customerData) => (
-                    <>
+                    <React.Fragment key={customerData.customer.id}>
                       {/* Level 1: Customer Summary Row */}
-                      <TableRow key={customerData.customer.id} className="hover:bg-gray-50">
+                      <TableRow className="hover:bg-gray-50">
                         <TableCell>
                           <Checkbox
                             checked={selectedCustomers.has(customerData.customer.id)}
@@ -405,7 +405,7 @@ export function OutstandingReport() {
 
                       {/* Level 2: Expanded Customer Details */}
                       {expandedCustomers.has(customerData.customer.id) && (
-                        <TableRow>
+                        <TableRow key={`${customerData.customer.id}-expanded`}>
                           <TableCell colSpan={8} className="p-0">
                             <div className="bg-gray-50 p-4 space-y-4">
                               {/* Opening Balance */}
@@ -470,7 +470,7 @@ export function OutstandingReport() {
                                             <CollapsibleContent className="mt-2 space-y-1">
                                               {/* Level 3: Product Details */}
                                               {month.product_details.map((product, index) => (
-                                                <div key={index} className="bg-blue-50 p-2 rounded text-sm">
+                                                <div key={`product-${customerData.customer.id}-${month.month}-${index}`} className="bg-blue-50 p-2 rounded text-sm">
                                                   <div className="flex justify-between">
                                                     <span>
                                                       • {product.product_name}: {product.quantity} {product.unit_of_measure}
@@ -521,9 +521,9 @@ export function OutstandingReport() {
                                     <CollapsibleContent className="mt-2">
                                       <div className="ml-4 border-l-2 border-gray-200 pl-4 space-y-2">
                                         {customerData.manual_sales_breakdown.map((salesGroup, index) => (
-                                          <div key={index}>
+                                          <div key={`salesgroup-${index}`}>
                                             {salesGroup.sale_details.map((sale) => (
-                                              <div key={sale.sale_id} className="bg-orange-50 p-2 rounded text-sm">
+                                              <div key={`sale-${sale.sale_id}`} className="bg-orange-50 p-2 rounded text-sm">
                                                 <div className="flex justify-between">
                                                   <span>
                                                     • {sale.product_name}: {sale.quantity} {sale.unit_of_measure}
@@ -575,9 +575,9 @@ export function OutstandingReport() {
                                     <CollapsibleContent className="mt-2">
                                       <div className="ml-4 border-l-2 border-gray-200 pl-4 space-y-2">
                                         {customerData.payment_breakdown.map((paymentGroup, index) => (
-                                          <div key={index}>
+                                          <div key={`paymentgroup-${index}`}>
                                             {paymentGroup.payment_details.map((payment) => (
-                                              <div key={payment.payment_id} className="bg-green-50 p-2 rounded text-sm">
+                                              <div key={`payment-${payment.payment_id}`} className="bg-green-50 p-2 rounded text-sm">
                                                 <div className="flex justify-between">
                                                   <span>
                                                     • Payment ({payment.payment_method})
@@ -613,7 +613,7 @@ export function OutstandingReport() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>

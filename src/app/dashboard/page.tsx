@@ -1,20 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
+import { getOutstandingDashboard } from '@/lib/actions/outstanding'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  // Get basic stats
+  // Get basic stats and outstanding summary
   const [
     { count: totalCustomers },
     { count: activeCustomers },
     { data: products },
-    { data: routes }
+    { data: routes },
+    outstandingData
   ] = await Promise.all([
     supabase.from('customers').select('*', { count: 'exact', head: true }),
     supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
     supabase.from('products').select('*'),
-    supabase.from('routes').select('*')
+    supabase.from('routes').select('*'),
+    getOutstandingDashboard()
   ])
 
   return (
@@ -25,7 +28,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -85,6 +88,38 @@ export default async function DashboardPage() {
               <dl>
                 <dt className="text-sm font-medium text-gray-500 truncate">Routes</dt>
                 <dd className="text-lg font-medium text-gray-900">{routes?.length || 0}</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
+                <span className="text-white text-sm font-medium">₹</span>
+              </div>
+            </div>
+            <div className="ml-5 w-0 flex-1">
+              <dl>
+                <dt className="text-sm font-medium text-gray-500 truncate">Total Outstanding</dt>
+                <dd className="text-lg font-medium text-gray-900">{formatCurrency(outstandingData.totalOutstanding)}</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                <span className="text-white text-sm font-medium">!</span>
+              </div>
+            </div>
+            <div className="ml-5 w-0 flex-1">
+              <dl>
+                <dt className="text-sm font-medium text-gray-500 truncate">Overdue Invoices</dt>
+                <dd className="text-lg font-medium text-gray-900">{outstandingData.overdueInvoices}</dd>
               </dl>
             </div>
           </div>

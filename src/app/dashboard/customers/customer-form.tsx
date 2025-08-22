@@ -50,7 +50,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
       delivery_time: customer?.delivery_time || "Morning",
       payment_method: customer?.payment_method || "Monthly",
       billing_cycle_day: customer?.billing_cycle_day || 1,
-      outstanding_amount: customer?.outstanding_amount || 0,
+      opening_balance: customer?.opening_balance || 0,
       status: customer?.status || "Active",
     },
   })
@@ -295,10 +295,10 @@ export function CustomerForm({ customer }: CustomerFormProps) {
 
           <FormField
             control={form.control}
-            name="outstanding_amount"
+            name="opening_balance"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Outstanding Amount</FormLabel>
+                <FormLabel>Opening Balance</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -310,12 +310,13 @@ export function CustomerForm({ customer }: CustomerFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  Current outstanding balance in ₹
+                  Historical outstanding amount (if any)
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
         </div>
 
         <FormField

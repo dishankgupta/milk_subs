@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { saleSchema, type SaleFormData } from "@/lib/validations"
-import { updateCustomerOutstandingWithSales } from "@/lib/actions/customers"
+// Note: Outstanding amounts are now managed through invoice system, not direct manipulation
 import type { Sale } from "@/lib/types"
 import { z } from "zod"
 
@@ -50,14 +50,8 @@ export async function createSale(data: SaleFormData & {
     throw new Error(`Failed to create sale: ${error.message}`)
   }
 
-  // Update customer outstanding amount for credit sales
-  if (validatedData.sale_type === 'Credit' && validatedData.customer_id) {
-    await updateCustomerOutstandingWithSales(
-      validatedData.customer_id, 
-      validatedData.total_amount,
-      'credit_sale'
-    )
-  }
+  // Note: Outstanding amounts are now automatically handled through invoice generation
+  // Credit sales will be included in customer invoices and tracked through the invoice system
 
   revalidatePath("/dashboard/sales")
   revalidatePath("/dashboard/customers")
@@ -282,14 +276,8 @@ export async function deleteSale(saleId: string) {
     }
   }
 
-  // If it's a credit sale, reverse the outstanding amount
-  if (sale.sale_type === 'Credit' && sale.customer_id) {
-    await updateCustomerOutstandingWithSales(
-      sale.customer_id, 
-      -sale.total_amount, // Negative amount to reduce outstanding
-      'payment' // Use 'payment' type to reduce outstanding amount
-    )
-  }
+  // Note: Outstanding amounts are automatically updated through invoice system
+  // Deleting a credit sale will be reflected in future invoice calculations
 
   // Delete the sale
   const { error: deleteError } = await supabase
@@ -375,24 +363,8 @@ export async function updateSale(saleId: string, data: SaleFormData & {
     throw new Error(`Failed to update sale: ${updateError.message}`)
   }
 
-  // Handle outstanding amount changes for credit sales
-  if (existingSale.sale_type === 'Credit' && existingSale.customer_id) {
-    // Reverse the old amount
-    await updateCustomerOutstandingWithSales(
-      existingSale.customer_id, 
-      -existingSale.total_amount,
-      'payment'
-    )
-  }
-
-  if (validatedData.sale_type === 'Credit' && validatedData.customer_id) {
-    // Add the new amount
-    await updateCustomerOutstandingWithSales(
-      validatedData.customer_id, 
-      validatedData.total_amount,
-      'credit_sale'
-    )
-  }
+  // Note: Outstanding amounts are automatically updated through invoice system
+  // Sale changes will be reflected in future invoice calculations
 
   revalidatePath("/dashboard/sales")
   revalidatePath("/dashboard/customers")
