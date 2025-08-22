@@ -1,8 +1,6 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { format, parseISO } from "date-fns"
-import { calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
 import type { 
   OutstandingReportConfiguration, 
   OutstandingCustomerData,
@@ -14,7 +12,6 @@ import type {
   ManualSaleDetail,
   PaymentDetail
 } from "@/lib/types/outstanding-reports"
-import type { Customer } from "@/lib/types"
 
 export async function generateOutstandingReport(
   config: OutstandingReportConfiguration
@@ -23,33 +20,61 @@ export async function generateOutstandingReport(
   summary: OutstandingReportSummary
 }> {
   const supabase = await createClient()
+  const startDate = config.start_date.toISOString().split('T')[0]
+  const endDate = config.end_date.toISOString().split('T')[0]
   
-  // Get customers based on selection criteria
+  // Use the optimized master view for initial customer data
   let customersQuery = supabase
-    .from("customers")
-    .select(`
-      *,
-      route:routes(*)
-    `)
+    .from("outstanding_report_data")
+    .select("*")
     .order("billing_name")
 
-  // Note: We'll filter customers with outstanding after calculating their actual outstanding amounts
-  // since outstanding_amount field is deprecated
+  // Apply customer selection filters
   if (config.customer_selection === 'selected' && config.selected_customer_ids) {
-    customersQuery = customersQuery.in("id", config.selected_customer_ids)
+    customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
+  } else if (config.customer_selection === 'with_outstanding') {
+    customersQuery = customersQuery.gt("total_outstanding", 0)
   }
-  // Note: 'with_subscription_and_outstanding' filtering will be applied after data processing
-  // since it requires checking both subscription data and outstanding amounts
 
-  const { data: customers, error: customersError } = await customersQuery
+  const { data: customerSummaries, error: customersError } = await customersQuery
 
   if (customersError) {
-    throw new Error("Failed to fetch customers")
+    throw new Error("Failed to fetch customer summaries")
   }
 
+  if (!customerSummaries || customerSummaries.length === 0) {
+    return {
+      customers: [],
+      summary: {
+        total_customers: 0,
+        customers_with_outstanding: 0,
+        total_opening_balance: 0,
+        total_subscription_amount: 0,
+        total_manual_sales_amount: 0,
+        total_payments_amount: 0,
+        total_outstanding_amount: 0
+      }
+    }
+  }
+
+  // Get all customer IDs for batch processing
+  const customerIds = customerSummaries.map(c => c.customer_id)
+
+  // Batch fetch all detailed data in parallel
+  const [
+    subscriptionData,
+    salesData,
+    paymentData
+  ] = await Promise.all([
+    getSubscriptionBreakdownBatch(customerIds, startDate, endDate),
+    getManualSalesBreakdownBatch(customerIds, startDate, endDate),
+    getPaymentBreakdownBatch(customerIds, startDate, endDate)
+  ])
+
+  // Build customer data efficiently
   const customersData: OutstandingCustomerData[] = []
-  const summary: OutstandingReportSummary = {
-    total_customers: customers?.length || 0,
+  let summary: OutstandingReportSummary = {
+    total_customers: 0,
     customers_with_outstanding: 0,
     total_opening_balance: 0,
     total_subscription_amount: 0,
@@ -58,16 +83,275 @@ export async function generateOutstandingReport(
     total_outstanding_amount: 0
   }
 
-  for (const customer of customers || []) {
-    const customerData = await generateCustomerOutstandingData(
+  for (const customerSummary of customerSummaries) {
+    const customer = {
+      id: customerSummary.customer_id,
+      billing_name: customerSummary.billing_name,
+      contact_person: customerSummary.contact_person,
+      phone_primary: customerSummary.phone_primary,
+      address: customerSummary.address,
+      opening_balance: customerSummary.opening_balance,
+      route: customerSummary.route_name ? { name: customerSummary.route_name } : undefined
+    }
+
+    const subscriptionBreakdown = subscriptionData.get(customerSummary.customer_id) || []
+    const manualSalesBreakdown = salesData.get(customerSummary.customer_id) || []
+    const paymentBreakdown = paymentData.get(customerSummary.customer_id) || []
+
+    const customerData: OutstandingCustomerData = {
       customer,
-      config.start_date.toISOString().split('T')[0],
-      config.end_date.toISOString().split('T')[0]
-    )
-    
+      opening_balance: customerSummary.effective_opening_balance,
+      subscription_breakdown: subscriptionBreakdown,
+      manual_sales_breakdown: manualSalesBreakdown,
+      payment_breakdown: paymentBreakdown,
+      current_outstanding: customerSummary.invoice_outstanding,
+      total_outstanding: customerSummary.total_outstanding
+    }
+
     customersData.push(customerData)
-    
+
     // Update summary
+    if (customerData.total_outstanding > 0) {
+      summary.customers_with_outstanding++
+    }
+    
+    summary.total_opening_balance += customerData.opening_balance
+    summary.total_subscription_amount += subscriptionBreakdown.reduce(
+      (sum, month) => sum + month.total_amount, 0
+    )
+    summary.total_manual_sales_amount += manualSalesBreakdown.reduce(
+      (sum, sales) => sum + sales.total_amount, 0
+    )
+    summary.total_payments_amount += paymentBreakdown.reduce(
+      (sum, payments) => sum + payments.total_amount, 0
+    )
+    summary.total_outstanding_amount += customerData.total_outstanding
+  }
+
+  // Apply special filtering for customers with subscription dues AND outstanding amounts
+  let filteredCustomersData = customersData
+  if (config.customer_selection === 'with_subscription_and_outstanding') {
+    filteredCustomersData = customersData.filter(customerData => {
+      const hasSubscriptionDues = customerData.subscription_breakdown.some(month => month.total_amount > 0)
+      const hasOutstanding = customerData.total_outstanding > 0
+      return hasSubscriptionDues && hasOutstanding
+    })
+    
+    // Recalculate summary for filtered customers
+    summary = recalculateSummary(filteredCustomersData)
+  }
+
+  summary.total_customers = filteredCustomersData.length
+  
+  return {
+    customers: filteredCustomersData,
+    summary
+  }
+}
+
+// Batch processing functions for performance optimization
+
+async function getSubscriptionBreakdownBatch(
+  customerIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Map<string, MonthlySubscriptionBreakdown[]>> {
+  const supabase = await createClient()
+  
+  const { data: subscriptionData, error } = await supabase
+    .from("customer_subscription_breakdown")
+    .select("*")
+    .in("customer_id", customerIds)
+    .gte("month_key", startDate.substring(0, 7)) // Extract YYYY-MM from YYYY-MM-DD
+    .lte("month_key", endDate.substring(0, 7))   // Extract YYYY-MM from YYYY-MM-DD
+    .order("customer_id, month_key, product_name")
+
+  if (error) {
+    console.error("Subscription breakdown error:", error)
+    throw new Error("Failed to fetch subscription breakdown")
+  }
+
+  // Group by customer and month
+  const customerMap = new Map<string, MonthlySubscriptionBreakdown[]>()
+  
+  // Handle case where no subscription data exists
+  if (!subscriptionData || subscriptionData.length === 0) {
+    return customerMap
+  }
+  
+  for (const row of subscriptionData) {
+    if (!customerMap.has(row.customer_id)) {
+      customerMap.set(row.customer_id, [])
+    }
+    
+    const customerBreakdowns = customerMap.get(row.customer_id)!
+    let monthBreakdown = customerBreakdowns.find(mb => mb.month === row.month_key)
+    
+    if (!monthBreakdown) {
+      monthBreakdown = {
+        month: row.month_key,
+        month_display: row.month_display.trim(), // Remove extra spaces from month display
+        total_amount: 0,
+        product_details: []
+      }
+      customerBreakdowns.push(monthBreakdown)
+    }
+    
+    const productDetail: SubscriptionProductDetail = {
+      product_name: row.product_name,
+      product_code: row.product_code,
+      quantity: Number(row.total_quantity),
+      unit_price: Number(row.unit_price),
+      total_amount: Number(row.total_amount),
+      unit_of_measure: row.unit_of_measure,
+      delivery_days: Number(row.delivery_days),
+      daily_quantity: Number(row.daily_quantity)
+    }
+    
+    monthBreakdown.product_details.push(productDetail)
+    monthBreakdown.total_amount += Number(row.total_amount)
+  }
+  
+  return customerMap
+}
+
+async function getManualSalesBreakdownBatch(
+  customerIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Map<string, ManualSalesBreakdown[]>> {
+  const supabase = await createClient()
+  
+  const { data: salesData, error } = await supabase
+    .from("customer_sales_breakdown")
+    .select("*")
+    .in("customer_id", customerIds)
+    .gte("sale_date", startDate)
+    .lte("sale_date", endDate)
+    .order("customer_id, sale_date")
+
+  if (error) {
+    console.error("Sales breakdown error:", error)
+    throw new Error("Failed to fetch sales breakdown")
+  }
+
+  // Group by customer
+  const customerMap = new Map<string, ManualSalesBreakdown[]>()
+  
+  // Handle case where no sales data exists
+  if (!salesData || salesData.length === 0) {
+    return customerMap
+  }
+  
+  for (const row of salesData) {
+    if (!customerMap.has(row.customer_id)) {
+      customerMap.set(row.customer_id, [])
+    }
+    
+    const customerBreakdowns = customerMap.get(row.customer_id)!
+    let breakdown = customerBreakdowns[0]
+    
+    if (!breakdown) {
+      breakdown = {
+        total_amount: 0,
+        sale_details: []
+      }
+      customerBreakdowns.push(breakdown)
+    }
+    
+    const saleDetail: ManualSaleDetail = {
+      sale_id: row.sale_id,
+      product_name: row.product_name,
+      product_code: row.product_code,
+      quantity: Number(row.quantity),
+      unit_price: Number(row.unit_price),
+      total_amount: Number(row.total_amount),
+      gst_amount: Number(row.gst_amount),
+      unit_of_measure: row.unit_of_measure,
+      sale_date: row.sale_date,
+      notes: row.notes
+    }
+    
+    breakdown.sale_details.push(saleDetail)
+    breakdown.total_amount += Number(row.total_amount)
+  }
+  
+  return customerMap
+}
+
+async function getPaymentBreakdownBatch(
+  customerIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Map<string, PaymentBreakdown[]>> {
+  const supabase = await createClient()
+  
+  const { data: paymentData, error } = await supabase
+    .from("customer_payment_breakdown")
+    .select("*")
+    .in("customer_id", customerIds)
+    .gte("payment_date", startDate)
+    .lte("payment_date", endDate)
+    .order("customer_id, payment_date")
+
+  if (error) {
+    console.error("Payment breakdown error:", error)
+    throw new Error("Failed to fetch payment breakdown")
+  }
+
+  // Group by customer
+  const customerMap = new Map<string, PaymentBreakdown[]>()
+  
+  // Handle case where no payment data exists
+  if (!paymentData || paymentData.length === 0) {
+    return customerMap
+  }
+  
+  for (const row of paymentData) {
+    if (!customerMap.has(row.customer_id)) {
+      customerMap.set(row.customer_id, [])
+    }
+    
+    const customerBreakdowns = customerMap.get(row.customer_id)!
+    let breakdown = customerBreakdowns[0]
+    
+    if (!breakdown) {
+      breakdown = {
+        total_amount: 0,
+        payment_details: []
+      }
+      customerBreakdowns.push(breakdown)
+    }
+    
+    const paymentDetail: PaymentDetail = {
+      payment_id: row.payment_id,
+      amount: Number(row.amount),
+      payment_date: row.payment_date,
+      payment_method: row.payment_method,
+      notes: row.notes,
+      period_start: row.period_start,
+      period_end: row.period_end
+    }
+    
+    breakdown.payment_details.push(paymentDetail)
+    breakdown.total_amount += Number(row.amount)
+  }
+  
+  return customerMap
+}
+
+function recalculateSummary(customers: OutstandingCustomerData[]): OutstandingReportSummary {
+  const summary: OutstandingReportSummary = {
+    total_customers: customers.length,
+    customers_with_outstanding: 0,
+    total_opening_balance: 0,
+    total_subscription_amount: 0,
+    total_manual_sales_amount: 0,
+    total_payments_amount: 0,
+    total_outstanding_amount: 0
+  }
+  
+  for (const customerData of customers) {
     if (customerData.total_outstanding > 0) {
       summary.customers_with_outstanding++
     }
@@ -84,334 +368,8 @@ export async function generateOutstandingReport(
     )
     summary.total_outstanding_amount += customerData.total_outstanding
   }
-
-  // Apply special filtering for customers with subscription dues AND outstanding amounts
-  let filteredCustomersData = customersData
-  if (config.customer_selection === 'with_subscription_and_outstanding') {
-    filteredCustomersData = customersData.filter(customerData => {
-      const hasSubscriptionDues = customerData.subscription_breakdown.some(month => month.total_amount > 0)
-      const hasOutstanding = customerData.total_outstanding > 0
-      return hasSubscriptionDues && hasOutstanding
-    })
-    
-    // Recalculate summary for filtered customers
-    const filteredSummary: OutstandingReportSummary = {
-      total_customers: filteredCustomersData.length,
-      customers_with_outstanding: 0,
-      total_opening_balance: 0,
-      total_subscription_amount: 0,
-      total_manual_sales_amount: 0,
-      total_payments_amount: 0,
-      total_outstanding_amount: 0
-    }
-    
-    for (const customerData of filteredCustomersData) {
-      if (customerData.total_outstanding > 0) {
-        filteredSummary.customers_with_outstanding++
-      }
-      
-      filteredSummary.total_opening_balance += customerData.opening_balance
-      filteredSummary.total_subscription_amount += customerData.subscription_breakdown.reduce(
-        (sum, month) => sum + month.total_amount, 0
-      )
-      filteredSummary.total_manual_sales_amount += customerData.manual_sales_breakdown.reduce(
-        (sum, sales) => sum + sales.total_amount, 0
-      )
-      filteredSummary.total_payments_amount += customerData.payment_breakdown.reduce(
-        (sum, payments) => sum + payments.total_amount, 0
-      )
-      filteredSummary.total_outstanding_amount += customerData.total_outstanding
-    }
-    
-    return {
-      customers: filteredCustomersData,
-      summary: filteredSummary
-    }
-  }
-
-  // For 'with_outstanding' filter, recalculate summary
-  if (config.customer_selection === 'with_outstanding') {
-    const recalculatedSummary: OutstandingReportSummary = {
-      total_customers: filteredCustomersData.length,
-      customers_with_outstanding: filteredCustomersData.length, // All filtered customers have outstanding
-      total_opening_balance: 0,
-      total_subscription_amount: 0,
-      total_manual_sales_amount: 0,
-      total_payments_amount: 0,
-      total_outstanding_amount: 0
-    }
-    
-    for (const customerData of filteredCustomersData) {
-      recalculatedSummary.total_opening_balance += customerData.opening_balance
-      recalculatedSummary.total_subscription_amount += customerData.subscription_breakdown.reduce(
-        (sum, month) => sum + month.total_amount, 0
-      )
-      recalculatedSummary.total_manual_sales_amount += customerData.manual_sales_breakdown.reduce(
-        (sum, sales) => sum + sales.total_amount, 0
-      )
-      recalculatedSummary.total_payments_amount += customerData.payment_breakdown.reduce(
-        (sum, payments) => sum + payments.total_amount, 0
-      )
-      recalculatedSummary.total_outstanding_amount += customerData.total_outstanding
-    }
-    
-    return {
-      customers: filteredCustomersData,
-      summary: recalculatedSummary
-    }
-  }
   
-  return {
-    customers: filteredCustomersData,
-    summary
-  }
+  return summary
 }
 
-async function generateCustomerOutstandingData(
-  customer: Customer,
-  startDate: string,
-  endDate: string
-): Promise<OutstandingCustomerData> {
-  // Calculate opening balance as of start date
-  const openingBalance = await calculateOpeningBalance(customer.id, startDate)
-  
-  // Get subscription data grouped by month
-  const subscriptionBreakdown = await getSubscriptionBreakdown(customer.id, startDate, endDate)
-  
-  // Get manual sales breakdown
-  const manualSalesBreakdown = await getManualSalesBreakdown(customer.id, startDate, endDate)
-  
-  // Get payment breakdown
-  const paymentBreakdown = await getPaymentBreakdown(customer.id, startDate, endDate)
-  
-  // Calculate current outstanding (as of end date)
-  const currentOutstanding = await calculateOutstandingAsOf(customer.id, endDate)
-  
-  // Calculate total outstanding (opening + current)
-  const totalOutstanding = openingBalance + currentOutstanding
-
-  return {
-    customer,
-    opening_balance: openingBalance,
-    subscription_breakdown: subscriptionBreakdown,
-    manual_sales_breakdown: manualSalesBreakdown,
-    payment_breakdown: paymentBreakdown,
-    current_outstanding: currentOutstanding,
-    total_outstanding: totalOutstanding
-  }
-}
-
-async function calculateOpeningBalance(customerId: string, startDate: string): Promise<number> {
-  const supabase = await createClient()
-  
-  // Get customer's opening balance field
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("opening_balance")
-    .eq("id", customerId)
-    .single()
-  
-  // For more complex calculation, you could also calculate based on 
-  // transactions before startDate, but for now use the opening_balance field
-  return Number(customer?.opening_balance || 0)
-}
-
-async function getSubscriptionBreakdown(
-  customerId: string, 
-  startDate: string, 
-  endDate: string
-): Promise<MonthlySubscriptionBreakdown[]> {
-  const supabase = await createClient()
-  
-  // Get all daily orders for the customer in the date range
-  const { data: dailyOrders, error } = await supabase
-    .from("daily_orders")
-    .select(`
-      *,
-      product:products(*)
-    `)
-    .eq("customer_id", customerId)
-    .gte("order_date", startDate)
-    .lte("order_date", endDate)
-    .eq("status", "Generated")
-    .order("order_date")
-
-  if (error) {
-    throw new Error("Failed to fetch subscription data")
-  }
-
-  // Group by month
-  const monthlyData = new Map<string, {
-    orders: typeof dailyOrders
-    total_amount: number
-  }>()
-
-  dailyOrders?.forEach(order => {
-    const orderDate = parseISO(order.order_date)
-    const monthKey = format(orderDate, 'yyyy-MM')
-    
-    const existing = monthlyData.get(monthKey)
-    if (existing) {
-      existing.orders.push(order)
-      existing.total_amount += Number(order.total_amount)
-    } else {
-      monthlyData.set(monthKey, {
-        orders: [order],
-        total_amount: Number(order.total_amount)
-      })
-    }
-  })
-
-  // Convert to breakdown format
-  const breakdown: MonthlySubscriptionBreakdown[] = []
-  
-  for (const [monthKey, monthData] of monthlyData) {
-    // Group orders by product
-    const productMap = new Map<string, {
-      product: { id: string; name: string; code: string; current_price: number; unit_of_measure?: string; unit?: string }
-      quantity: number
-      total_amount: number
-      delivery_days: number
-    }>()
-    
-    monthData.orders.forEach(order => {
-      const existing = productMap.get(order.product.id)
-      if (existing) {
-        existing.quantity += Number(order.planned_quantity)
-        existing.total_amount += Number(order.total_amount)
-        existing.delivery_days += 1
-      } else {
-        productMap.set(order.product.id, {
-          product: order.product,
-          quantity: Number(order.planned_quantity),
-          total_amount: Number(order.total_amount),
-          delivery_days: 1
-        })
-      }
-    })
-    
-    const productDetails: SubscriptionProductDetail[] = []
-    for (const [productId, productData] of productMap) {
-      productDetails.push({
-        product_name: productData.product.name,
-        product_code: productData.product.code,
-        quantity: productData.quantity,
-        unit_price: Number(productData.product.current_price),
-        total_amount: productData.total_amount,
-        unit_of_measure: productData.product.unit_of_measure || productData.product.unit || 'unit',
-        delivery_days: productData.delivery_days,
-        daily_quantity: productData.quantity / productData.delivery_days
-      })
-    }
-    
-    breakdown.push({
-      month: monthKey,
-      month_display: format(parseISO(monthKey + '-01'), 'MMMM yyyy'),
-      total_amount: monthData.total_amount,
-      product_details: productDetails
-    })
-  }
-  
-  return breakdown.sort((a, b) => a.month.localeCompare(b.month))
-}
-
-async function getManualSalesBreakdown(
-  customerId: string,
-  startDate: string,
-  endDate: string
-): Promise<ManualSalesBreakdown[]> {
-  const supabase = await createClient()
-  
-  const { data: sales, error } = await supabase
-    .from("sales")
-    .select(`
-      *,
-      product:products(*)
-    `)
-    .eq("customer_id", customerId)
-    .eq("sale_type", "Credit")
-    .gte("sale_date", startDate)
-    .lte("sale_date", endDate)
-    .order("sale_date")
-
-  if (error) {
-    throw new Error("Failed to fetch manual sales data")
-  }
-
-  if (!sales || sales.length === 0) {
-    return []
-  }
-
-  const saleDetails: ManualSaleDetail[] = sales.map(sale => ({
-    sale_id: sale.id,
-    product_name: sale.product.name,
-    product_code: sale.product.code,
-    quantity: Number(sale.quantity),
-    unit_price: Number(sale.unit_price),
-    total_amount: Number(sale.total_amount),
-    gst_amount: Number(sale.gst_amount),
-    unit_of_measure: sale.product.unit_of_measure,
-    sale_date: sale.sale_date,
-    notes: sale.notes
-  }))
-
-  const totalAmount = saleDetails.reduce((sum, detail) => sum + detail.total_amount, 0)
-
-  return [{
-    total_amount: totalAmount,
-    sale_details: saleDetails
-  }]
-}
-
-async function getPaymentBreakdown(
-  customerId: string,
-  startDate: string,
-  endDate: string
-): Promise<PaymentBreakdown[]> {
-  const supabase = await createClient()
-  
-  const { data: payments, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("customer_id", customerId)
-    .gte("payment_date", startDate)
-    .lte("payment_date", endDate)
-    .order("payment_date")
-
-  if (error) {
-    throw new Error("Failed to fetch payment data")
-  }
-
-  if (!payments || payments.length === 0) {
-    return []
-  }
-
-  const paymentDetails: PaymentDetail[] = payments.map(payment => ({
-    payment_id: payment.id,
-    amount: Number(payment.amount),
-    payment_date: payment.payment_date,
-    payment_method: payment.payment_method || "Cash",
-    notes: payment.notes,
-    period_start: payment.period_start,
-    period_end: payment.period_end
-  }))
-
-  const totalAmount = paymentDetails.reduce((sum, detail) => sum + detail.amount, 0)
-
-  return [{
-    total_amount: totalAmount,
-    payment_details: paymentDetails
-  }]
-}
-
-async function calculateOutstandingAsOf(customerId: string, endDate: string): Promise<number> {
-  // Use the proper invoice-based outstanding calculation
-  // Note: This calculates current outstanding, not as-of a specific date
-  // For a true as-of calculation, we'd need to calculate based on transactions up to endDate
-  try {
-    return await calculateCustomerOutstandingAmount(customerId)
-  } catch (error) {
-    console.error(`Failed to calculate outstanding for customer ${customerId}:`, error)
-    return 0
-  }
-}
+// Old individual functions removed - replaced with batch processing for performance
