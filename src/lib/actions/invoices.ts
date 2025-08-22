@@ -434,6 +434,51 @@ export async function getBulkInvoicePreview(params: {
 }): Promise<BulkInvoicePreviewItem[]> {
   const supabase = await createClient()
 
+  // PERFORMANCE OPTIMIZATION: Single optimized query instead of N+1 problem
+  // Build a single SQL query that gets all required data in one call
+  let customerFilter = ''
+  if (params.customer_selection === 'selected' && params.selected_customer_ids?.length) {
+    const customerIdsList = params.selected_customer_ids.map(id => `'${id}'`).join(',')
+    customerFilter = `AND c.id IN (${customerIdsList})`
+  }
+
+  const { data: previewData, error } = await supabase.rpc('get_bulk_invoice_preview_optimized', {
+    period_start: params.period_start,
+    period_end: params.period_end,
+    customer_filter: customerFilter
+  })
+
+  if (error) {
+    console.warn('Optimized query failed, falling back to original method:', error)
+    return await getBulkInvoicePreviewFallback(params)
+  }
+
+  // Convert the optimized result to the expected format
+  const previewItems: BulkInvoicePreviewItem[] = (previewData || []).map((row: any) => ({
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    subscriptionAmount: Number(row.unbilled_delivery_amount || 0),
+    creditSalesAmount: Number(row.unbilled_credit_sales_amount || 0),
+    totalAmount: Number(row.total_unbilled_amount || 0),
+    hasExistingInvoice: row.has_existing_invoice || false,
+    existingInvoiceNumber: row.existing_invoice_number
+  }))
+
+  // Apply customer selection filter using helper function
+  const filteredItems = filterCustomersBySelection(previewItems, params.customer_selection)
+
+  return filteredItems.sort((a, b) => a.customerName.localeCompare(b.customerName))
+}
+
+// Fallback to original N+1 query method if optimized query doesn't exist
+async function getBulkInvoicePreviewFallback(params: {
+  period_start: string
+  period_end: string
+  customer_selection: 'all' | 'with_unbilled_deliveries' | 'with_unbilled_credit_sales' | 'with_unbilled_transactions' | 'selected'
+  selected_customer_ids?: string[]
+}): Promise<BulkInvoicePreviewItem[]> {
+  const supabase = await createClient()
+
   // Get all customers first (filtering will be applied after calculating unbilled amounts)
   let customersQuery = supabase
     .from("customers")
@@ -964,36 +1009,16 @@ async function revertLinkedSales(customerId: string, periodStart: string, period
 }
 
 async function recalculateCustomerBalance(customerId: string) {
-  const supabase = await createClient()
+  // Note: Customer outstanding is now calculated dynamically through the invoice system
+  // No need to update a stored outstanding_amount field as it was removed
+  // Outstanding amounts are calculated via:
+  // 1. Opening balance (customers.opening_balance)
+  // 2. Unpaid invoices (invoice_metadata where invoice_status != 'paid')
+  // 3. Unbilled transactions (deliveries/sales not in invoice_line_items)
   
-  // Get current outstanding from credit sales that are still pending
-  const { data: pendingSales } = await supabase
-    .from("sales")
-    .select("total_amount")
-    .eq("customer_id", customerId)
-    .eq("sale_type", "Credit")
-    .eq("payment_status", "Pending")
-    
-  // Get customer's opening balance
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("opening_balance")
-    .eq("id", customerId)
-    .single()
-    
-  const openingBalance = Number(customer?.opening_balance || 0)
-  const pendingAmount = pendingSales?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
-  const newOutstandingAmount = openingBalance + pendingAmount
-  
-  // Update customer's outstanding amount
-  const { error } = await supabase
-    .from("customers")
-    .update({ outstanding_amount: newOutstandingAmount })
-    .eq("id", customerId)
-    
-  if (error) {
-    throw new Error(`Failed to recalculate customer balance: ${error.message}`)
-  }
+  // This function is kept for compatibility but does nothing
+  // Outstanding calculations happen in real-time via database views and functions
+  console.log(`Customer balance recalculation skipped for ${customerId} - using dynamic calculation system`)
 }
 
 export async function bulkDeleteInvoices(invoiceIds: string[]): Promise<{
@@ -1037,11 +1062,19 @@ async function createSubscriptionLineItems(
 ): Promise<Array<{order_id: string; invoice_id: string}>> {
   const supabase = await createClient()
 
-  // Get delivered orders for this period
+  // Get delivered orders for this period with ALL required data
   const { data: deliveredOrders } = await supabase
     .from("daily_orders")
     .select(`
       id,
+      planned_quantity,
+      unit_price,
+      total_amount,
+      product:products(
+        id,
+        name,
+        gst_rate
+      ),
       deliveries!inner(id)
     `)
     .eq("customer_id", customerId)
@@ -1050,11 +1083,18 @@ async function createSubscriptionLineItems(
 
   if (!deliveredOrders?.length) return []
 
-  // Create line items for each delivered order
+  // Create line items for each delivered order with ALL required fields
   const lineItemsData = deliveredOrders.map(order => ({
     invoice_id: invoiceId,
     order_id: order.id,
-    line_item_type: 'subscription'
+    line_item_type: 'subscription',
+    product_id: order.product.id,
+    product_name: order.product.name,
+    quantity: Number(order.planned_quantity),
+    unit_price: Number(order.unit_price),
+    line_total: Number(order.total_amount),
+    gst_rate: Number(order.product.gst_rate || 0),
+    gst_amount: 0 // Subscriptions typically don't have GST
   }))
 
   const { data: lineItems, error } = await supabase
@@ -1078,10 +1118,21 @@ async function createSalesLineItems(
 ): Promise<Array<{sale_id: string; invoice_id: string}>> {
   const supabase = await createClient()
 
-  // Get credit sales for this period
+  // Get credit sales for this period with ALL required data
   const { data: creditSales } = await supabase
     .from("sales")
-    .select("id")
+    .select(`
+      id,
+      quantity,
+      unit_price,
+      total_amount,
+      gst_amount,
+      product:products(
+        id,
+        name,
+        gst_rate
+      )
+    `)
     .eq("customer_id", customerId)
     .eq("sale_type", "Credit")
     .eq("payment_status", "Pending")
@@ -1090,11 +1141,18 @@ async function createSalesLineItems(
 
   if (!creditSales?.length) return []
 
-  // Create line items for each credit sale
+  // Create line items for each credit sale with ALL required fields
   const lineItemsData = creditSales.map(sale => ({
     invoice_id: invoiceId,
     sale_id: sale.id,
-    line_item_type: 'manual_sale'
+    line_item_type: 'manual_sale',
+    product_id: sale.product.id,
+    product_name: sale.product.name,
+    quantity: Number(sale.quantity),
+    unit_price: Number(sale.unit_price),
+    line_total: Number(sale.total_amount),
+    gst_rate: Number(sale.product.gst_rate || 0),
+    gst_amount: Number(sale.gst_amount || 0)
   }))
 
   const { data: lineItems, error } = await supabase

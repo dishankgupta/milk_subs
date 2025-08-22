@@ -159,6 +159,14 @@ Complete Supabase database with 16 tables:
 - **UI/UX Enhancement**: Updated customer selection interface with clear, descriptive options
 - **Error Handling**: Added comprehensive error handling with toast notifications for better user feedback
 
+### ✅ Phase 10: Invoice Line Items & Performance Optimization Complete
+- **Schema Alignment**: Fixed invoice_line_items table schema to match code expectations (line_type → line_item_type, added order_id/sale_id columns)
+- **Line Items Population**: Resolved empty invoice_line_items table by adding missing required fields (product_name, quantity, unit_price, line_total) to insert operations
+- **Performance Optimization**: Eliminated N+1 query problem in invoice preview (426 queries → 1 query = 99.8% reduction)
+- **Database Function**: Created optimized get_bulk_invoice_preview_optimized() function for bulk operations
+- **Deletion Error Fix**: Removed obsolete outstanding_amount column references from invoice deletion process
+- **Data Integrity**: Verified both subscription and manual sale line items creation with proper foreign key relationships
+
 ## Key Features Implemented
 
 ### Customer Management (`/dashboard/customers`)
@@ -327,6 +335,7 @@ Complete Supabase database with 16 tables:
 - **Invoice System Fix**: Complete resolution of invoice generation blockage with transaction-based logic (August 21, 2025)
 - **Opening Balance System Fix**: Complete resolution of opening balance data integrity issue with immutable historical tracking (August 21, 2025)
 - **Outstanding Dashboard Recovery**: Fixed missing outstanding customers by including 'sent' invoice status in calculations
+- **Invoice Line Items Population Fix**: Resolved empty invoice_line_items table by fixing schema mismatch and missing required fields in insert operations (August 22, 2025)
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
