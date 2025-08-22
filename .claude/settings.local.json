@@ -23,7 +23,11 @@
       "mcp__brave-search__brave_web_search",
       "Bash(find:*)",
       "Bash(git add:*)",
-      "mcp__linear-server__list_teams"
+      "mcp__linear-server__list_teams",
+      "mcp__linear-server__list_projects",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_console_messages",
+      "mcp__linear-server__create_issue"
     ]
   },
   "enabledMcpjsonServers": [

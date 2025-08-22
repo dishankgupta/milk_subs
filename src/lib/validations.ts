@@ -135,20 +135,22 @@ export const saleSchema = z.object({
     .min(0.01, "Unit price must be greater than 0")
     .max(100000, "Unit price too high"),
   sale_type: z.enum(['Cash', 'Credit']),
-  sale_date: z.date().max(new Date(), "Sale date cannot be in the future"),
+  sale_date: z.date().refine((date) => {
+    const today = new Date();
+    const saleDate = new Date(date);
+    // Reset time to compare only dates
+    today.setHours(23, 59, 59, 999);
+    return saleDate <= today;
+  }, "Sale date cannot be in the future"),
   notes: z.string().max(500, "Notes must be less than 500 characters").optional()
 }).refine((data) => {
-  // Business rule: Cash sales cannot have customer_id
-  if (data.sale_type === 'Cash' && data.customer_id !== null) {
-    return false
-  }
-  // Business rule: Credit sales must have customer_id
+  // Business rule: Credit sales must have customer_id (Cash sales can optionally have customer for reporting)
   if (data.sale_type === 'Credit' && data.customer_id === null) {
     return false
   }
   return true
 }, {
-  message: "Cash sales cannot have customer, Credit sales must have customer",
+  message: "Credit sales must have a customer selected",
   path: ["customer_id"]
 })
 

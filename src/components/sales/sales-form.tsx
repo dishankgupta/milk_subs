@@ -74,9 +74,8 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
     const customerId = form.watch("customer_id")
     if (customerId) {
       form.setValue("sale_type", "Credit")
-    } else {
-      form.setValue("sale_type", "Cash")
     }
+    // Note: Don't auto-change to Cash when customer is null, let user choose
   }, [form.watch("customer_id")])
 
   // Auto-fill unit price when product changes
@@ -126,7 +125,11 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
           <CardTitle>Record New Sale</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit)} 
+            className="space-y-6"
+            action="#"
+          >
             {/* Sale Type Selection */}
             <div className="space-y-3">
               <Label>Sale Type</Label>
