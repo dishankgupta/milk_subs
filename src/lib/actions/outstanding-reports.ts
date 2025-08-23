@@ -26,17 +26,27 @@ export async function generateOutstandingReport(
   
   console.log("Outstanding report config:", { startDate, endDate, customer_selection: config.customer_selection })
   
-  // Use the optimized master view for initial customer data
-  let customersQuery = supabase
-    .from("outstanding_report_data")
-    .select("*")
-    .order("billing_name")
+  let customersQuery: any
+  
+  // Handle "All customers" selection differently to bypass view filtering
+  if (config.customer_selection === 'all') {
+    // Query all customers directly from base tables when "All customers" is selected
+    customersQuery = supabase
+      .rpc('get_all_customers_outstanding_data')
+      .order("billing_name")
+  } else {
+    // Use the optimized filtered view for other selections
+    customersQuery = supabase
+      .from("outstanding_report_data")
+      .select("*")
+      .order("billing_name")
 
-  // Apply customer selection filters
-  if (config.customer_selection === 'selected' && config.selected_customer_ids) {
-    customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
-  } else if (config.customer_selection === 'with_outstanding') {
-    customersQuery = customersQuery.gt("total_outstanding", 0)
+    // Apply customer selection filters
+    if (config.customer_selection === 'selected' && config.selected_customer_ids) {
+      customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
+    } else if (config.customer_selection === 'with_outstanding') {
+      customersQuery = customersQuery.gt("total_outstanding", 0)
+    }
   }
 
   const { data: customerSummaries, error: customersError } = await customersQuery

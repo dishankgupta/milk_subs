@@ -37,6 +37,7 @@ import { toast } from "sonner"
 import type { OutstandingCustomerData, OutstandingReportSummary } from "@/lib/types/outstanding-reports"
 
 export function OutstandingReport() {
+  const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [reportData, setReportData] = useState<{
     customers: OutstandingCustomerData[]
@@ -51,11 +52,48 @@ export function OutstandingReport() {
   const form = useForm<OutstandingReportFormData>({
     resolver: zodResolver(outstandingReportSchema),
     defaultValues: {
-      start_date: new Date(2025, 7, 1), // Fixed date to prevent hydration issues
-      end_date: new Date(2025, 7, 22), // Today's date (22nd August 2025)
+      start_date: undefined, // Will be set in useEffect to prevent hydration issues
+      end_date: undefined, // Will be set in useEffect to prevent hydration issues
       customer_selection: "with_outstanding"
     }
   })
+
+  // Filter customers based on search query
+  const filteredCustomers = reportData?.customers.filter(customer => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      customer.customer.billing_name.toLowerCase().includes(query) ||
+      customer.customer.contact_person.toLowerCase().includes(query) ||
+      (customer.customer.route?.name && customer.customer.route.name.toLowerCase().includes(query))
+    )
+  }) || []
+
+  // Apply sorting to filtered customers - MUST be called unconditionally
+  const { sortedData: sortedCustomers, sortConfig, handleSort } = useSorting(
+    filteredCustomers,
+    'customer.billing_name',
+    'asc',
+    (item, key) => {
+      if (key === 'customer.billing_name') return item.customer.billing_name
+      if (key === 'opening_balance') return item.opening_balance
+      if (key === 'subscription_amount') return item.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+      if (key === 'manual_sales_amount') return item.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+      if (key === 'payments_amount') return item.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+      if (key === 'total_outstanding') return item.total_outstanding
+      return item[key as keyof OutstandingCustomerData]
+    }
+  )
+
+  // Set mounted state and initialize form values to prevent hydration mismatch
+  useEffect(() => {
+    const startDate = new Date(2025, 7, 1) // Fixed date: August 1, 2025
+    const endDate = new Date(2025, 7, 22) // Fixed date: August 22, 2025
+    
+    form.setValue("start_date", startDate)
+    form.setValue("end_date", endDate)
+    setMounted(true)
+  }, [form])
 
   const generateReport = async (data: OutstandingReportFormData) => {
     setIsLoading(true)
@@ -128,32 +166,6 @@ export function OutstandingReport() {
     setSelectedCustomers(newSelection)
   }
 
-  // Filter customers based on search query
-  const filteredCustomers = reportData?.customers.filter(customer => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      customer.customer.billing_name.toLowerCase().includes(query) ||
-      customer.customer.contact_person.toLowerCase().includes(query) ||
-      (customer.customer.route?.name && customer.customer.route.name.toLowerCase().includes(query))
-    )
-  }) || []
-
-  // Apply sorting to filtered customers
-  const { sortedData: sortedCustomers, sortConfig, handleSort } = useSorting(
-    filteredCustomers,
-    'customer.billing_name',
-    'asc',
-    (item, key) => {
-      if (key === 'customer.billing_name') return item.customer.billing_name
-      if (key === 'opening_balance') return item.opening_balance
-      if (key === 'subscription_amount') return item.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
-      if (key === 'manual_sales_amount') return item.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
-      if (key === 'payments_amount') return item.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
-      if (key === 'total_outstanding') return item.total_outstanding
-      return item[key as keyof OutstandingCustomerData]
-    }
-  )
 
   const selectAllCustomers = (select: boolean) => {
     if (select && reportData) {
@@ -178,6 +190,11 @@ export function OutstandingReport() {
     }
 
     window.open(`/api/print/outstanding-report?${params.toString()}`, '_blank')
+  }
+
+  // Don't render form until mounted to prevent hydration issues
+  if (!mounted) {
+    return <div className="space-y-6">Loading...</div>
   }
 
   return (
