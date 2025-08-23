@@ -1,5 +1,13 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { 
+  formatDateForDatabase, 
+  parseLocalDateIST, 
+  formatDateTimeIST, 
+  isValidISTDate,
+  IST_LOCALE,
+  IST_TIMEZONE
+} from './date-utils'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -51,19 +59,87 @@ export function calculateGSTFromExclusive(exclusiveAmount: number, gstRate: numb
   }
 }
 
-// Date conversion utility that avoids timezone issues
+// =============================================================================
+// ENHANCED DATE UTILITIES WITH IST SUPPORT
+// =============================================================================
+
+/**
+ * Format date for API/Database operations with IST validation
+ * Enhanced version with validation - maintains backward compatibility
+ */
 export function formatDateForAPI(date: Date): string {
-  // Get local date components and format as YYYY-MM-DD
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0') // getMonth() is 0-indexed
-  const day = String(date.getDate()).padStart(2, '0')
-  
-  return `${year}-${month}-${day}`
+  // Use the new IST-aware function for validation and consistency
+  return formatDateForDatabase(date)
 }
 
-// Parse date string as local date to avoid timezone issues
+/**
+ * Parse date string as local IST date with validation
+ * Enhanced version with IST context - maintains backward compatibility
+ */
 export function parseLocalDate(dateString: string): Date {
-  // Parse YYYY-MM-DD as local date to avoid timezone shift
-  const [year, month, day] = dateString.split('-').map(Number)
-  return new Date(year, month - 1, day) // month is 0-indexed in Date constructor
+  // Use the new IST-aware function for validation and consistency
+  return parseLocalDateIST(dateString)
+}
+
+/**
+ * Enhanced currency formatting with optional IST timestamp
+ */
+export function formatCurrencyIST(
+  amount: number | string | null | undefined, 
+  options?: { includeTimestamp?: boolean }
+): string {
+  const formatted = formatCurrency(amount)
+  
+  if (options?.includeTimestamp) {
+    const timestamp = formatDateTimeIST(new Date())
+    return `${formatted} (as of ${timestamp})`
+  }
+  
+  return formatted
+}
+
+/**
+ * Date-fns configuration for IST operations
+ */
+export const DATE_FNS_IST_CONFIG = {
+  locale: 'enIN', // Will be imported from date-fns when needed
+  timeZone: IST_TIMEZONE
+} as const
+
+/**
+ * Standardized date display for IST context
+ */
+export function formatDateDisplay(date: Date): string {
+  return date.toLocaleDateString(IST_LOCALE, {
+    timeZone: IST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
+/**
+ * Standardized datetime display for IST context
+ */
+export function formatDateTimeDisplay(date: Date): string {
+  return date.toLocaleString(IST_LOCALE, {
+    timeZone: IST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+}
+
+/**
+ * Validate and format date input for IST operations
+ */
+export function validateAndFormatDate(date: unknown): string | null {
+  if (!isValidISTDate(date)) {
+    return null
+  }
+  
+  return formatDateDisplay(date)
 }

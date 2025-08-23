@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
+import { getCurrentISTDate, formatDateIST, formatDateTimeIST, parseLocalDateIST } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,12 +11,12 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date')
     
     // Default to current month if no dates provided
-    const today = new Date()
+    const today = getCurrentISTDate()
     const defaultStart = startOfMonth(today)
     const defaultEnd = endOfMonth(today)
     
-    const start = startDate ? parseISO(startDate) : defaultStart
-    const end = endDate ? parseISO(endDate) : defaultEnd
+    const start = startDate ? parseLocalDateIST(startDate) : defaultStart
+    const end = endDate ? parseLocalDateIST(endDate) : defaultEnd
     
     const supabase = await createClient()
     
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Collection Report - ${format(start, 'MMM yyyy')} to ${format(end, 'MMM yyyy')}</title>
+  <title>Payment Collection Report - ${formatDateIST(start)} to ${formatDateIST(end)}</title>
   <style>
     @page {
       size: A4;
@@ -292,7 +293,8 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="report-info">
       <h2>Payment Collection Report</h2>
-      <p>Period: ${format(start, 'PPP')} to ${format(end, 'PPP')}</p>
+      <p>Period: ${formatDateIST(start)} to ${formatDateIST(end)}</p>
+      <p>Generated: ${formatDateTimeIST(getCurrentISTDate())}</p>
     </div>
   </div>
 
@@ -346,7 +348,7 @@ export async function GET(request: NextRequest) {
             .slice(0, 10)
             .map(([date, data]) => `
           <div>
-            <span>${format(parseISO(date), 'MMM dd')}</span>
+            <span>${formatDateIST(parseLocalDateIST(date))}</span>
             <span class="value-badge">${data.count} (${formatCurrency(data.amount)})</span>
           </div>
           `).join('')}
@@ -373,7 +375,7 @@ export async function GET(request: NextRequest) {
       <tbody>
         ${payments?.slice(0, 25).map(payment => `
         <tr>
-          <td>${format(parseISO(payment.payment_date), 'MMM dd')}</td>
+          <td>${formatDateIST(parseLocalDateIST(payment.payment_date))}</td>
           <td class="customer-name">${payment.customer?.billing_name || 'Unknown'}</td>
           <td>${payment.customer?.phone_primary || 'N/A'}</td>
           <td>${payment.payment_method || 'N/A'}</td>

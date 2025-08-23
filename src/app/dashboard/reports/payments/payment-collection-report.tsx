@@ -9,6 +9,7 @@ import { CalendarIcon, Download } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateTimeIST } from "@/lib/date-utils"
 import { PrintHeader } from "@/components/reports/PrintHeader"
 
 export function PaymentCollectionReport() {
@@ -45,7 +46,7 @@ export function PaymentCollectionReport() {
       <PrintHeader 
         title="Payment Collection Report"
         subtitle="Monthly Payment Collection Summary"
-        date={new Date().toLocaleString()}
+        date={formatDateTimeIST(new Date())}
         additionalInfo={paymentData.length > 0 ? [
           `Report Period: Last ${paymentData.length} months`,
           `Average Collection Rate: ${Math.round(paymentData.reduce((sum, m) => sum + m.collectionRate, 0) / paymentData.length)}%`,

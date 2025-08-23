@@ -6,6 +6,11 @@ import { saleSchema, type SaleFormData } from "@/lib/validations"
 // Note: Outstanding amounts are now managed through invoice system, not direct manipulation
 import type { Sale } from "@/lib/types"
 import { z } from "zod"
+import { 
+  formatDateForDatabase, 
+  formatTimestampForDatabase, 
+  getCurrentISTDate 
+} from "@/lib/date-utils"
 
 export async function createSale(data: SaleFormData & { 
   total_amount: number
@@ -35,7 +40,7 @@ export async function createSale(data: SaleFormData & {
       total_amount: validatedData.total_amount,
       gst_amount: validatedData.gst_amount,
       sale_type: validatedData.sale_type,
-      sale_date: validatedData.sale_date.toISOString().split('T')[0],
+      sale_date: formatDateForDatabase(validatedData.sale_date),
       payment_status: paymentStatus,
       notes: validatedData.notes || null,
     }])
@@ -223,7 +228,7 @@ export async function updateSalePaymentStatus(saleId: string, status: 'Pending' 
     .from("sales")
     .update({
       payment_status: status,
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .eq("id", saleId)
     .select()
@@ -245,7 +250,7 @@ export async function markSalesAsBilled(saleIds: string[], invoiceNumber: string
     .from("sales")
     .update({
       payment_status: 'Billed',
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .in("id", saleIds)
 
@@ -346,10 +351,10 @@ export async function updateSale(saleId: string, data: SaleFormData & {
       total_amount: validatedData.total_amount,
       gst_amount: validatedData.gst_amount,
       sale_type: validatedData.sale_type,
-      sale_date: validatedData.sale_date.toISOString().split('T')[0],
+      sale_date: formatDateForDatabase(validatedData.sale_date),
       payment_status: paymentStatus,
       notes: validatedData.notes || null,
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .eq("id", saleId)
     .select(`

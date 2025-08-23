@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
+import { formatDateToIST } from "@/lib/utils"
 import { Package, CheckCircle2, Filter, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
 
@@ -378,7 +379,7 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
                   <div>
                     <div className="font-medium">{order.route.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {order.delivery_time} • {format(new Date(order.order_date), "PP")}
+                      {order.delivery_time} • {formatDateToIST(order.order_date)}
                     </div>
                   </div>
                   

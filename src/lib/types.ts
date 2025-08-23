@@ -1,3 +1,79 @@
+// =============================================================================
+// IST DATE & TIMEZONE TYPES
+// =============================================================================
+
+// IST-specific date types
+export type ISTDate = Date & { __istMarker?: never }
+export type ISTDateString = string // YYYY-MM-DD format
+export type ISTTimestamp = string // ISO string with timezone
+export type ISTBusinessHour = 'morning' | 'evening'
+
+// Date range types
+export interface ISTDateRange {
+  start: Date
+  end: Date
+  timezone: 'Asia/Kolkata'
+}
+
+// Business context types
+export interface ISTBusinessCalendar {
+  businessHours: {
+    morning: { start: string, end: string }
+    evening: { start: string, end: string }
+  }
+  workingDays: number[] // 0-6, Sunday=0
+  holidays: ISTDateString[]
+}
+
+// Utility function types
+export type ISTFormatter = (date: Date) => string
+export type ISTParser = (dateString: string) => Date
+export type ISTValidator = (date: Date) => boolean
+export type ISTComparator = (date1: Date, date2: Date) => number
+
+// Options types
+export interface ISTFormatOptions {
+  includeTime?: boolean
+  includeSeconds?: boolean
+  format?: 'short' | 'long' | 'numeric'
+  business?: boolean
+}
+
+export interface ISTValidationOptions {
+  allowFuture?: boolean
+  allowPast?: boolean
+  businessHoursOnly?: boolean
+  workingDaysOnly?: boolean
+}
+
+// Database operation types
+export interface ISTDatabaseDate {
+  raw: string // UTC timestamp from database
+  ist: Date   // Converted to IST
+  formatted: string // Display format
+}
+
+// API request/response types
+export interface ISTDateFilter {
+  from?: ISTDateString
+  to?: ISTDateString
+  timezone: 'Asia/Kolkata'
+}
+
+export interface ISTTimestampResponse {
+  timestamp: ISTTimestamp
+  formatted: string
+  businessContext?: {
+    isBusinessHour: boolean
+    isWorkingDay: boolean
+    nextBusinessDay: ISTDateString
+  }
+}
+
+// =============================================================================
+// BUSINESS DOMAIN TYPES
+// =============================================================================
+
 export interface Customer {
   id: string
   billing_name: string

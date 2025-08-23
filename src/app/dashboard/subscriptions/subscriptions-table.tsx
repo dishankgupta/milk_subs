@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Subscription } from "@/lib/types"
 import { searchSubscriptions, toggleSubscriptionStatus } from "@/lib/actions/subscriptions"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST } from "@/lib/date-utils"
 import {
   Table,
   TableBody,
@@ -110,7 +111,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
   const getPatternPreview = (subscription: Subscription) => {
     if (subscription.subscription_type === "Pattern") {
       const startDate = subscription.pattern_start_date ? new Date(subscription.pattern_start_date) : new Date()
-      return `Started: ${startDate.toLocaleDateString()}`
+      return `Started: ${formatDateIST(startDate)}`
     }
     return null
   }
@@ -268,7 +269,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(subscription.created_at).toLocaleDateString()}
+                    {formatDateIST(new Date(subscription.created_at))}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>

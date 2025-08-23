@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { format } from "date-fns"
+import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { ArrowLeft, Edit, Package, User, MapPin, Clock, Calendar, FileText } from "lucide-react"
 
 import { getDeliveryById } from "@/lib/actions/deliveries"
@@ -104,7 +105,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                 <div>
                   <div className="font-medium mb-1">Order Date</div>
                   <div className="text-muted-foreground">
-                    {format(new Date(order.order_date), "PPP")}
+                    {formatDateToIST(order.order_date)}
                   </div>
                 </div>
                 <div>
@@ -140,7 +141,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                   <div className="font-medium mb-1">Delivered At</div>
                   <div className="text-muted-foreground">
                     {delivery.delivered_at 
-                      ? format(new Date(delivery.delivered_at), "PPP 'at' p")
+                      ? formatDateTimeToIST(delivery.delivered_at)
                       : "Not recorded"
                     }
                   </div>
@@ -156,7 +157,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
               <div>
                 <div className="font-medium mb-1">Created</div>
                 <div className="text-muted-foreground text-sm">
-                  {format(new Date(delivery.created_at), "PPP 'at' p")}
+                  {formatDateTimeToIST(delivery.created_at)}
                 </div>
               </div>
 
@@ -164,7 +165,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                 <div>
                   <div className="font-medium mb-1">Last Updated</div>
                   <div className="text-muted-foreground text-sm">
-                    {format(new Date(delivery.updated_at), "PPP 'at' p")}
+                    {formatDateTimeToIST(delivery.updated_at)}
                   </div>
                 </div>
               )}

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { format } from 'date-fns'
+import { getCurrentISTDate, formatDateForDatabase } from '@/lib/date-utils'
 
 export interface InvoiceFileManager {
   createDateFolder(baseFolder: string, date?: Date): Promise<string>
@@ -11,7 +12,7 @@ export interface InvoiceFileManager {
 }
 
 export const invoiceFileManager: InvoiceFileManager = {
-  async createDateFolder(baseFolder: string, date: Date = new Date()): Promise<string> {
+  async createDateFolder(baseFolder: string, date: Date = getCurrentISTDate()): Promise<string> {
     const dateFolder = format(date, 'yyyyMMdd') + '_generated_invoices'
     const fullPath = path.join(baseFolder, dateFolder)
     

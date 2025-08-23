@@ -29,6 +29,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCurrency, cn, formatDateForAPI } from "@/lib/utils"
+import { formatDateIST } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 import { generateOutstandingReport } from "@/lib/actions/outstanding-reports"
 import { outstandingReportSchema, type OutstandingReportFormData } from "@/lib/validations"
@@ -543,7 +544,7 @@ export function OutstandingReport() {
                               <div className="bg-white p-3 rounded border">
                                 <div className="flex justify-between items-center">
                                   <span className="font-medium text-gray-700">
-                                    Opening Balance (as of {format(form.watch("start_date"), 'dd/MM/yyyy')}):
+                                    Opening Balance (as of {formatDateIST(form.watch("start_date"))}):
                                   </span>
                                   <span className="font-bold text-lg">
                                     {formatCurrency(customerData.opening_balance)}
@@ -664,7 +665,7 @@ export function OutstandingReport() {
                                                   </span>
                                                 </div>
                                                 <div className="text-xs text-gray-600 ml-2">
-                                                  {format(new Date(sale.sale_date), 'dd/MM/yyyy')} • 
+                                                  {formatDateIST(new Date(sale.sale_date))} • 
                                                   ₹{sale.unit_price}/{sale.unit_of_measure}
                                                   {sale.gst_amount > 0 && ` • GST: ${formatCurrency(sale.gst_amount)}`}
                                                 </div>
@@ -718,7 +719,7 @@ export function OutstandingReport() {
                                                   </span>
                                                 </div>
                                                 <div className="text-xs text-gray-600 ml-2">
-                                                  {format(new Date(payment.payment_date), 'dd/MM/yyyy')}
+                                                  {formatDateIST(new Date(payment.payment_date))}
                                                   {payment.notes && ` • ${payment.notes}`}
                                                 </div>
                                               </div>

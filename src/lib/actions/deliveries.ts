@@ -4,6 +4,10 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 import type { DeliveryFormData, BulkDeliveryFormData } from "@/lib/validations"
+import { 
+  formatTimestampForDatabase, 
+  getCurrentISTDate 
+} from "@/lib/date-utils"
 
 export async function getDeliveries() {
   const supabase = await createClient()
@@ -103,7 +107,7 @@ export async function createDelivery(data: DeliveryFormData) {
     actual_quantity: data.actual_quantity,
     delivery_notes: data.delivery_notes || null,
     delivery_person: data.delivery_person || null,
-    delivered_at: data.delivered_at ? data.delivered_at.toISOString() : new Date().toISOString(),
+    delivered_at: data.delivered_at ? formatTimestampForDatabase(data.delivered_at) : formatTimestampForDatabase(getCurrentISTDate()),
   }
 
   const { data: delivery, error } = await supabase
@@ -153,7 +157,7 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
     throw new Error('Some orders are not available for delivery or have already been delivered')
   }
   
-  const deliveredAt = data.delivered_at ? data.delivered_at.toISOString() : new Date().toISOString()
+  const deliveredAt = data.delivered_at ? formatTimestampForDatabase(data.delivered_at) : formatTimestampForDatabase(getCurrentISTDate())
   
   // Prepare delivery records
   const deliveryRecords = orders.map((order) => {
@@ -214,9 +218,9 @@ export async function updateDelivery(id: string, data: Partial<DeliveryFormData>
   if (data.actual_quantity !== undefined) updateData.actual_quantity = data.actual_quantity
   if (data.delivery_notes !== undefined) updateData.delivery_notes = data.delivery_notes || null
   if (data.delivery_person !== undefined) updateData.delivery_person = data.delivery_person || null
-  if (data.delivered_at !== undefined) updateData.delivered_at = data.delivered_at?.toISOString() || null
+  if (data.delivered_at !== undefined) updateData.delivered_at = data.delivered_at ? formatTimestampForDatabase(data.delivered_at) : null
 
-  updateData.updated_at = new Date().toISOString()
+  updateData.updated_at = formatTimestampForDatabase(getCurrentISTDate())
 
   const { data: delivery, error } = await supabase
     .from('deliveries')

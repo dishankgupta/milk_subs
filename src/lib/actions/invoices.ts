@@ -8,6 +8,12 @@ import { format } from "date-fns"
 import path from "path"
 import { formatCurrency } from "@/lib/utils"
 import type { Customer } from "@/lib/types"
+import { 
+  formatDateForDatabase, 
+  getCurrentISTDate, 
+  addDaysIST, 
+  getStartOfDayIST 
+} from "@/lib/date-utils"
 
 export interface InvoiceData {
   customer: Customer
@@ -226,7 +232,7 @@ export async function prepareInvoiceData(
   return {
     customer,
     invoiceNumber,
-    invoiceDate: new Date().toISOString().split('T')[0],
+    invoiceDate: formatDateForDatabase(getCurrentISTDate()),
     periodStart,
     periodEnd,
     subscriptionItems,
@@ -261,7 +267,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
       invoice_status: 'sent', // Initialize as sent (unpaid)
       amount_paid: 0,
       amount_outstanding: invoiceData.totals.grandTotal,
-      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+      due_date: formatDateForDatabase(addDaysIST(getCurrentISTDate(), 30)), // 30 days from now
       status: 'Generated'
     })
     .select()
@@ -836,11 +842,11 @@ export async function getInvoiceStats() {
   const supabase = await createClient()
   
   try {
-    const now = new Date()
+    const now = getCurrentISTDate()
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
-    const today = now.toISOString().split('T')[0]
-    const startOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0]
+    const today = formatDateForDatabase(now)
+    const startOfMonth = formatDateForDatabase(getStartOfDayIST(new Date(currentYear, currentMonth, 1)))
     
     // 1. Ready for Generation - customers with subscription dues OR outstanding amounts
     

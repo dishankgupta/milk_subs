@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DollarSign, Users, Clock, TrendingUp, Search, Eye, CreditCard } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateIST } from '@/lib/date-utils'
 import { useSorting } from '@/hooks/useSorting'
 
 export function OutstandingDashboard() {
@@ -303,7 +304,7 @@ export function OutstandingDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {customer.oldest_unpaid_date 
-                          ? new Date(customer.oldest_unpaid_date).toLocaleDateString()
+                          ? formatDateIST(new Date(customer.oldest_unpaid_date))
                           : 'N/A'
                         }
                       </td>

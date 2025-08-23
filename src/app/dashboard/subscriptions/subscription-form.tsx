@@ -10,6 +10,7 @@ import { getCustomers } from "@/lib/actions/customers"
 import { calculatePatternDay } from "@/lib/subscription-utils"
 import { Product, Customer, Subscription } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST, formatWithIST } from "@/lib/date-utils"
 import {
   Form,
   FormControl,
@@ -154,8 +155,8 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
       const quantity = patternDay === 1 ? watchedPatternDay1 : watchedPatternDay2
       
       preview.push({
-        date: date.toLocaleDateString(),
-        day: date.toLocaleDateString('en', { weekday: 'short' }),
+        date: formatDateIST(date),
+        day: formatWithIST(date, 'EEE'),
         patternDay,
         quantity
       })

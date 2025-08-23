@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, Package, CheckCircle, AlertTriangle, Users, B
 
 import { getDeliveryPerformanceReport, type DeliveryPerformanceReport } from "@/lib/actions/reports"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateTimeIST, formatWithIST } from "@/lib/date-utils"
 import { PrintHeader } from "@/components/reports/PrintHeader"
 import { PrintButton } from "@/components/reports/PrintButton"
 
@@ -52,9 +53,9 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
       <PrintHeader 
         title="Delivery Performance Report"
         subtitle="Delivery Completion Analysis"
-        date={new Date().toLocaleString()}
+        date={formatDateTimeIST(new Date())}
         additionalInfo={[
-          `Period: ${format(new Date(startDate), 'MMM dd')} - ${format(new Date(endDate), 'MMM dd')}`,
+          `Period: ${formatWithIST(new Date(startDate), 'MMM dd')} - ${formatWithIST(new Date(endDate), 'MMM dd')}`,
           `Completion Rate: ${report.summary.completionRate}%`,
           `Total Orders: ${report.summary.totalOrders}`,
           `Quantity Variance: ${report.summary.quantityVariance >= 0 ? '+' : ''}${report.summary.quantityVariance}L`

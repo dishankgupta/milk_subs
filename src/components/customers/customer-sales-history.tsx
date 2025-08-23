@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
+import { formatWithIST } from "@/lib/date-utils"
 import { Eye, Receipt, CreditCard } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -103,7 +104,7 @@ export function CustomerSalesHistory({ customerId, onGenerateInvoice }: Customer
                 <TableBody>
                   {sales.slice(0, 10).map((sale) => (
                     <TableRow key={sale.id}>
-                      <TableCell>{format(new Date(sale.sale_date), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>{formatWithIST(new Date(sale.sale_date), 'MMM dd, yyyy')}</TableCell>
                       <TableCell>
                         <div>
                           <div className="font-medium">{sale.product?.name}</div>

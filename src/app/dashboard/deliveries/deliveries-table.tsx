@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
 
@@ -176,7 +177,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                 <SelectItem value="all">All Dates</SelectItem>
                 {uniqueDates.map(date => (
                   <SelectItem key={date} value={date}>
-                    {format(new Date(date), "PP")}
+                    {formatDateToIST(date)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -350,7 +351,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {format(new Date(order.order_date), "PP")}
+                            {formatDateToIST(order.order_date)}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
@@ -377,7 +378,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                           {delivery.delivered_at && (
                             <div className="flex items-center gap-2 text-sm">
                               <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{format(new Date(delivery.delivered_at), "PP 'at' p")}</span>
+                              <span>{formatDateTimeToIST(delivery.delivered_at)}</span>
                             </div>
                           )}
                           

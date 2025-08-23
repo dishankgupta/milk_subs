@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatCurrency } from '@/lib/utils'
+import { formatDateTimeIST, formatWithIST } from '@/lib/date-utils'
 
 import { getRouteDeliveryReport } from '@/lib/actions/reports'
 import { createClient } from '@/lib/supabase/client'
@@ -113,9 +114,9 @@ export function DeliveryReportsInterface() {
       <PrintHeader 
         title="Route Delivery Report"
         subtitle={report ? `${report.routeName} - ${report.deliveryTime} Delivery` : undefined}
-        date={new Date().toLocaleString()}
+        date={formatDateTimeIST(new Date())}
         additionalInfo={report && report.orders.length > 0 ? [
-          `Date: ${format(selectedDate, 'PPPP')}`,
+          `Date: ${formatWithIST(selectedDate, 'PPPP')}`,
           `Total Orders: ${report.summary.totalOrders}`,
           `Total Quantity: ${report.summary.totalQuantity}L`,
           `Total Value: ${formatCurrency(report.summary.totalValue)}`,

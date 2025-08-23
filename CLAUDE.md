@@ -401,6 +401,131 @@ Complete Supabase database with 16 tables:
     - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
     - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
     - Sort types and configurations in `/src/lib/types.ts`
+11. **IST Date Handling**: **MANDATORY** - Use only IST utilities from `/src/lib/date-utils.ts` for ALL date operations
+    - `/src/lib/date-utils.ts` - Comprehensive IST utilities (400+ lines, 40+ functions)
+    - **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
+    - **ALWAYS** use `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()` for consistency
+
+## IST Date Handling Standards
+
+**🇮🇳 CRITICAL: ALL date operations MUST use Indian Standard Time (IST) utilities to ensure data consistency across the dairy management system.**
+
+### Required IST Utilities (src/lib/date-utils.ts)
+
+**Core Functions - MANDATORY for all date operations:**
+- `getCurrentISTDate()` - Get current date in IST context (replaces `new Date()`)
+- `formatDateIST(date)` - Format dates for display (dd/MM/yyyy format)
+- `parseLocalDateIST(dateString)` - Parse date strings in IST context
+- `formatDateForDatabase(date)` - Format dates for database storage (YYYY-MM-DD)
+- `formatTimestampForDatabase(date)` - Format timestamps for database storage
+
+**Business Logic Functions:**
+- `calculateFinancialYear(date)` - Calculate Indian financial year (April-March)
+- `addDaysIST(date, days)` - Add days while maintaining IST context (all days are working days)
+- `isWithinBusinessHours(date)` - Check if date falls within business hours (6 AM - 12 PM, 5 PM - 9 PM IST)
+
+**Validation Functions:**
+- `isValidISTDate(date)` - Validate if date object is valid
+- `validateDateRange(startDate, endDate)` - Validate date ranges
+- `checkTimezoneConsistency(date)` - Ensure date maintains IST context
+
+**Display Functions:**
+- `formatDateTimeIST(date)` - Format date with time (dd/MM/yyyy, HH:mm)
+- `formatBusinessDate(date)` - Format for business documents (DD-MM-YYYY)
+- `getRelativeTimeIST(date)` - Get relative time strings ("2 days ago", "in 3 hours")
+
+### PROHIBITED Patterns - NEVER USE THESE:
+
+❌ **Forbidden Date Patterns:**
+```typescript
+// NEVER use these patterns - they cause timezone inconsistencies
+new Date()                           // Use getCurrentISTDate()
+new Date(dateString)                 // Use parseLocalDateIST(dateString)
+date.toISOString().split('T')[0]     // Use formatDateForDatabase(date)
+new Date().toISOString()             // Use formatTimestampForDatabase(getCurrentISTDate())
+Date.now()                           // Use getCurrentISTDate().getTime()
+```
+
+### Required Patterns - ALWAYS USE THESE:
+
+✅ **Correct IST Patterns:**
+```typescript
+// Server Actions - Date Operations
+import { getCurrentISTDate, formatDateForDatabase, parseLocalDateIST } from '@/lib/date-utils'
+
+// Get current date
+const now = getCurrentISTDate()
+
+// Format date for database
+const dbDate = formatDateForDatabase(getCurrentISTDate())
+
+// Parse user input
+const userDate = parseLocalDateIST(formData.dateString)
+
+// Format for display
+const displayDate = formatDateIST(date)
+```
+
+### TypeScript Types for IST
+
+**Use IST-specific types from `/src/lib/types.ts`:**
+- `ISTDateString` - For date strings in IST format
+- `ISTTimestamp` - For timestamp strings with IST context
+- `ISTDateRange` - For date range objects with IST dates
+
+### Code Review Checklist
+
+**Before committing any code with date operations, verify:**
+- [ ] No usage of `new Date()` without IST context
+- [ ] No `toISOString().split('T')[0]` patterns
+- [ ] All date formatting uses IST utilities
+- [ ] Database operations use `formatDateForDatabase()` or `formatTimestampForDatabase()`
+- [ ] Display dates use `formatDateIST()` or appropriate display functions
+- [ ] User input parsing uses `parseLocalDateIST()`
+- [ ] Business logic uses IST-aware calculation functions
+- [ ] Financial year calculations use `calculateFinancialYear()`
+
+### Common Pitfalls & Solutions
+
+**1. Database Date Storage:**
+```typescript
+// ❌ Wrong - timezone inconsistency
+const date = new Date().toISOString().split('T')[0]
+
+// ✅ Correct - IST context maintained
+const date = formatDateForDatabase(getCurrentISTDate())
+```
+
+**2. User Input Processing:**
+```typescript
+// ❌ Wrong - loses IST context
+const userDate = new Date(formData.date)
+
+// ✅ Correct - maintains IST context
+const userDate = parseLocalDateIST(formData.date)
+```
+
+**3. Display Formatting:**
+```typescript
+// ❌ Wrong - inconsistent formatting
+const display = date.toLocaleDateString()
+
+// ✅ Correct - consistent dd/MM/yyyy format
+const display = formatDateIST(date)
+```
+
+### Testing Requirements
+
+**All date-dependent code MUST include:**
+- Unit tests for IST utility usage
+- Edge case testing (month boundaries, leap years, financial year transitions)
+- Performance validation for bulk date operations
+- Integration tests for business workflows with dates
+
+**Run comprehensive test suite:**
+```bash
+pnpm test  # All IST tests must pass before deployment
+```
 
 ## Testing & Validation
 

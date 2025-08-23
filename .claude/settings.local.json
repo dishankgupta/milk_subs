@@ -27,7 +27,13 @@
       "mcp__linear-server__list_projects",
       "mcp__playwright__browser_network_requests",
       "mcp__playwright__browser_console_messages",
-      "mcp__linear-server__create_issue"
+      "mcp__linear-server__create_issue",
+      "mcp__linear-server__update_issue",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__list_issues",
+      "mcp__linear-server__create_comment",
+      "Bash(pnpm test:run:*)"
     ]
   },
   "enabledMcpjsonServers": [

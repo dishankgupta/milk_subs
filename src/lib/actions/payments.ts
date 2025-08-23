@@ -5,6 +5,12 @@ import { revalidatePath } from "next/cache"
 import { PaymentFormData, paymentSchema } from "@/lib/validations"
 import type { Payment } from "@/lib/types"
 import { allocatePayment, allocatePaymentToOpeningBalance } from "@/lib/actions/outstanding"
+import { 
+  formatDateForDatabase, 
+  formatTimestampForDatabase, 
+  getCurrentISTDate,
+  getStartOfDayIST
+} from "@/lib/date-utils"
 
 interface PaymentAllocation {
   id: string
@@ -24,10 +30,10 @@ export async function createPayment(data: PaymentFormData, paymentAllocations?: 
     .insert([{
       customer_id: validatedData.customer_id,
       amount: validatedData.amount,
-      payment_date: validatedData.payment_date.toISOString().split('T')[0],
+      payment_date: formatDateForDatabase(validatedData.payment_date),
       payment_method: validatedData.payment_method || null,
-      period_start: validatedData.period_start?.toISOString().split('T')[0] || null,
-      period_end: validatedData.period_end?.toISOString().split('T')[0] || null,
+      period_start: validatedData.period_start ? formatDateForDatabase(validatedData.period_start) : null,
+      period_end: validatedData.period_end ? formatDateForDatabase(validatedData.period_end) : null,
       notes: validatedData.notes || null,
       allocation_status: paymentAllocations && paymentAllocations.length > 0 ? 'partially_applied' : 'unapplied',
       amount_applied: 0,
@@ -217,12 +223,12 @@ export async function updatePayment(id: string, data: PaymentFormData, newPaymen
     .update({
       customer_id: validatedData.customer_id,
       amount: validatedData.amount,
-      payment_date: validatedData.payment_date.toISOString().split('T')[0],
+      payment_date: formatDateForDatabase(validatedData.payment_date),
       payment_method: validatedData.payment_method || null,
-      period_start: validatedData.period_start?.toISOString().split('T')[0] || null,
-      period_end: validatedData.period_end?.toISOString().split('T')[0] || null,
+      period_start: validatedData.period_start ? formatDateForDatabase(validatedData.period_start) : null,
+      period_end: validatedData.period_end ? formatDateForDatabase(validatedData.period_end) : null,
       notes: validatedData.notes || null,
-      updated_at: new Date().toISOString(),
+      updated_at: formatTimestampForDatabase(getCurrentISTDate()),
       // Reset allocation fields if amount changed
       allocation_status: oldPayment.amount !== validatedData.amount ? 'unapplied' : oldPayment.allocation_status,
       amount_applied: oldPayment.amount !== validatedData.amount ? 0 : oldPayment.amount_applied,
@@ -338,9 +344,10 @@ export async function getCustomerPayments(customerId: string) {
 export async function getPaymentStats() {
   const supabase = await createClient()
 
-  // Get total payments this month
-  const currentMonth = new Date().toISOString().slice(0, 7) + '-01'
-  const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString().slice(0, 10)
+  // Get total payments this month using IST dates
+  const currentISTDate = getCurrentISTDate()
+  const currentMonth = formatDateForDatabase(getStartOfDayIST(new Date(currentISTDate.getFullYear(), currentISTDate.getMonth(), 1)))
+  const nextMonth = formatDateForDatabase(getStartOfDayIST(new Date(currentISTDate.getFullYear(), currentISTDate.getMonth() + 1, 1)))
 
   const { data: monthlyPayments, error: monthlyError } = await supabase
     .from("payments")

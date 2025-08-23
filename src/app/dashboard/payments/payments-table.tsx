@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { MoreHorizontal, Search, Eye, Edit, Trash2 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { format } from "date-fns"
+import { formatWithIST } from "@/lib/date-utils"
 import { deletePayment } from "@/lib/actions/payments"
 import { toast } from "sonner"
 import type { Payment } from "@/lib/types"
@@ -155,7 +156,7 @@ export default function PaymentsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {format(new Date(payment.payment_date), "MMM dd, yyyy")}
+                    {formatWithIST(new Date(payment.payment_date), "MMM dd, yyyy")}
                   </TableCell>
                   <TableCell>
                     {payment.payment_method ? (
@@ -167,7 +168,7 @@ export default function PaymentsTable({
                   <TableCell>
                     {payment.period_start && payment.period_end ? (
                       <div className="text-sm">
-                        {format(new Date(payment.period_start), "MMM dd")} - {format(new Date(payment.period_end), "MMM dd, yyyy")}
+                        {formatWithIST(new Date(payment.period_start), "MMM dd")} - {formatWithIST(new Date(payment.period_end), "MMM dd, yyyy")}
                       </div>
                     ) : (
                       <span className="text-muted-foreground">-</span>

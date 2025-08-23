@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AlertCircle, DollarSign, ArrowRight, Search } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateIST } from '@/lib/date-utils'
 import { InvoiceAllocationSection } from './InvoiceAllocationSection'
 import { allocatePayment, getUnappliedPayments, type UnappliedPayment } from '@/lib/actions/outstanding'
 import { toast } from 'sonner'
@@ -149,7 +150,7 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
                     <span className="font-medium text-lg">{payment.customer_name}</span>
                     <Badge variant="outline">{payment.payment_method}</Badge>
                     <Badge variant="secondary">
-                      {new Date(payment.payment_date).toLocaleDateString()}
+                      {formatDateIST(new Date(payment.payment_date))}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">

@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn, formatCurrency } from '@/lib/utils'
+import { formatDateTimeIST } from '@/lib/date-utils'
 
 import { getDailyProductionSummary } from '@/lib/actions/reports'
 import { PrintHeader } from '@/components/reports/PrintHeader'
@@ -51,7 +52,7 @@ export function ProductionSummaryReport() {
 
   // Set current date/time on client side to avoid hydration mismatch
   useEffect(() => {
-    setCurrentDateTime(new Date().toLocaleString())
+    setCurrentDateTime(formatDateTimeIST(new Date()))
   }, [])
 
   const handleDateSelect = (date: Date | undefined) => {

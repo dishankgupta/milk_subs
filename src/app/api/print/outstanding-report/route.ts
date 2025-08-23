@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { generateOutstandingReport } from '@/lib/actions/outstanding-reports'
 import { formatCurrency, parseLocalDate } from '@/lib/utils'
+import { getCurrentISTDate, formatDateIST, formatDateTimeIST } from '@/lib/date-utils'
 import type { OutstandingCustomerData, OutstandingReportSummary } from '@/lib/types/outstanding-reports'
 
 export async function GET(request: NextRequest) {
@@ -113,7 +114,7 @@ function generateSummaryHTML(
   
   <div class="report-period">
     <strong>Report Period:</strong> ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}<br>
-    <strong>Generated On:</strong> ${format(new Date(), 'dd MMMM yyyy HH:mm')}
+    <strong>Generated On:</strong> ${formatDateTimeIST(getCurrentISTDate())}
   </div>
 
   <!-- Summary Statistics -->
@@ -214,13 +215,13 @@ function generateCustomerStatementsHTML(
         </div>
         <div class="statement-period">
           <p><strong>Statement Period:</strong><br>
-          ${format(parseLocalDate(startDate), 'dd MMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMM yyyy')}</p>
+          ${formatDateIST(parseLocalDate(startDate))} to ${formatDateIST(parseLocalDate(endDate))}</p>
         </div>
       </div>
 
       <div class="balance-summary">
         <div class="balance-row">
-          <span>Opening Balance (as of ${format(parseLocalDate(startDate), 'dd/MM/yyyy')}):</span>
+          <span>Opening Balance (as of ${formatDateIST(parseLocalDate(startDate))}):</span>
           <span class="amount">${formatCurrency(customerData.opening_balance)}</span>
         </div>
       </div>
@@ -271,7 +272,7 @@ function generateCustomerStatementsHTML(
             ${customerData.manual_sales_breakdown.map(salesGroup =>
               salesGroup.sale_details.map(sale => `
                 <tr>
-                  <td>${format(new Date(sale.sale_date), 'dd/MM/yyyy')}</td>
+                  <td>${formatDateIST(new Date(sale.sale_date))}</td>
                   <td>${sale.product_name}</td>
                   <td>${sale.quantity} ${sale.unit_of_measure}</td>
                   <td>${formatCurrency(sale.total_amount)}</td>
@@ -300,7 +301,7 @@ function generateCustomerStatementsHTML(
             ${customerData.payment_breakdown.map(paymentGroup =>
               paymentGroup.payment_details.map(payment => `
                 <tr>
-                  <td>${format(new Date(payment.payment_date), 'dd/MM/yyyy')}</td>
+                  <td>${formatDateIST(new Date(payment.payment_date))}</td>
                   <td>${payment.payment_method}</td>
                   <td class="payment-amount">-${formatCurrency(payment.amount)}</td>
                   <td>${payment.notes || ''}</td>
@@ -336,7 +337,7 @@ function generateCustomerStatementsHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Statements - ${format(new Date(), 'dd/MM/yyyy')}</title>
+  <title>Customer Statements - ${formatDateIST(getCurrentISTDate())}</title>
   <style>
     ${getCommonPrintStyles()}
     

@@ -3,6 +3,7 @@ import Link from "next/link"
 import { getSubscription } from "@/lib/actions/subscriptions"
 import { calculatePatternDay } from "@/lib/subscription-utils"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST, formatWithIST } from "@/lib/date-utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -37,8 +38,8 @@ export default async function SubscriptionDetailPage({
       const quantity = patternDay === 1 ? subscription.pattern_day1_quantity : subscription.pattern_day2_quantity
       
       preview.push({
-        date: date.toLocaleDateString(),
-        day: date.toLocaleDateString('en', { weekday: 'short' }),
+        date: formatDateIST(date),
+        day: formatWithIST(date, 'EEE'),
         patternDay,
         quantity,
         isToday: date.toDateString() === today.toDateString()
@@ -173,11 +174,11 @@ export default async function SubscriptionDetailPage({
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Created</label>
-                <p className="text-sm">{new Date(subscription.created_at).toLocaleDateString()}</p>
+                <p className="text-sm">{formatDateIST(new Date(subscription.created_at))}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Last Updated</label>
-                <p className="text-sm">{new Date(subscription.updated_at).toLocaleDateString()}</p>
+                <p className="text-sm">{formatDateIST(new Date(subscription.updated_at))}</p>
               </div>
             </div>
 
@@ -206,7 +207,7 @@ export default async function SubscriptionDetailPage({
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Pattern Started</label>
-                    <p className="text-sm">{subscription.pattern_start_date ? new Date(subscription.pattern_start_date).toLocaleDateString() : 'Not set'}</p>
+                    <p className="text-sm">{subscription.pattern_start_date ? formatDateIST(new Date(subscription.pattern_start_date)) : 'Not set'}</p>
                   </div>
                 </div>
                 

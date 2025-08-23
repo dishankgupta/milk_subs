@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { formatDateToIST, formatDateTimeToIST } from '@/lib/utils'
 import { Edit, ArrowLeft, Calendar, User, Package, FileText } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -129,14 +130,14 @@ export default async function ModificationDetailPage({ params }: ModificationDet
             <div>
               <p className="text-sm font-medium text-gray-900">Start Date</p>
               <p className="text-gray-600">
-                {format(new Date(modification.start_date), 'PPPP')}
+                {formatDateToIST(modification.start_date)}
               </p>
             </div>
 
             <div>
               <p className="text-sm font-medium text-gray-900">End Date</p>
               <p className="text-gray-600">
-                {format(new Date(modification.end_date), 'PPPP')}
+                {formatDateToIST(modification.end_date)}
               </p>
             </div>
 
@@ -154,7 +155,7 @@ export default async function ModificationDetailPage({ params }: ModificationDet
             <div>
               <p className="text-sm font-medium text-gray-900">Created</p>
               <p className="text-gray-600">
-                {format(new Date(modification.created_at), 'PPP')}
+                {formatDateTimeToIST(modification.created_at)}
               </p>
             </div>
           </CardContent>

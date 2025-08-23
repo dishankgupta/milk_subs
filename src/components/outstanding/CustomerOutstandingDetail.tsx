@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, CreditCard, FileText, Phone, MapPin, DollarSign, Calendar, Receipt, Printer } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateIST } from '@/lib/date-utils'
 
 interface CustomerOutstandingDetailProps {
   customerId: string
@@ -236,11 +237,11 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(invoice.invoice_date).toLocaleDateString()}
+                          {formatDateIST(new Date(invoice.invoice_date))}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                            {new Date(invoice.due_date).toLocaleDateString()}
+                            {formatDateIST(new Date(invoice.due_date))}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

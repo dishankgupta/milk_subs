@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { formatDateForAPI } from "@/lib/utils"
+import type { Customer } from "@/lib/types"
 import type { 
   OutstandingReportConfiguration, 
   OutstandingCustomerData,
@@ -26,7 +27,7 @@ export async function generateOutstandingReport(
   
   console.log("Outstanding report config:", { startDate, endDate, customer_selection: config.customer_selection })
   
-  let customersQuery: any
+  let customersQuery
   
   // Handle "All customers" selection differently to bypass view filtering
   if (config.customer_selection === 'all') {
@@ -71,7 +72,7 @@ export async function generateOutstandingReport(
   }
 
   // Get all customer IDs for batch processing
-  const customerIds = customerSummaries.map(c => c.customer_id)
+  const customerIds = customerSummaries.map((c: { customer_id: string }) => c.customer_id)
 
   // Batch fetch all detailed data in parallel
   const [
@@ -97,14 +98,30 @@ export async function generateOutstandingReport(
   }
 
   for (const customerSummary of customerSummaries) {
-    const customer = {
+    const customer: Customer = {
       id: customerSummary.customer_id,
       billing_name: customerSummary.billing_name,
       contact_person: customerSummary.contact_person,
       phone_primary: customerSummary.phone_primary,
+      phone_secondary: customerSummary.phone_secondary || null,
+      phone_tertiary: customerSummary.phone_tertiary || null,
       address: customerSummary.address,
+      route_id: customerSummary.route_id || '',
+      delivery_time: customerSummary.delivery_time || 'Morning',
+      payment_method: customerSummary.payment_method || 'Monthly',
+      billing_cycle_day: customerSummary.billing_cycle_day || 1,
       opening_balance: customerSummary.opening_balance,
-      route: customerSummary.route_name ? { name: customerSummary.route_name } : undefined
+      status: customerSummary.status || 'Active',
+      created_at: customerSummary.created_at || new Date().toISOString(),
+      updated_at: customerSummary.updated_at || new Date().toISOString(),
+      route: customerSummary.route_name ? { 
+        id: customerSummary.route_id || '',
+        name: customerSummary.route_name,
+        description: null,
+        personnel_name: null,
+        created_at: '',
+        updated_at: ''
+      } : undefined
     }
 
     const subscriptionBreakdown = subscriptionData.get(customerSummary.customer_id) || []

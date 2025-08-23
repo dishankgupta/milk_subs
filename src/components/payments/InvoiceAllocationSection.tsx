@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { AlertTriangle, Calculator, DollarSign, Clock } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateIST } from '@/lib/date-utils'
 import { getCustomerUnpaidInvoices, getCustomerOutstanding } from '@/lib/actions/outstanding'
 
 interface UnpaidInvoice {
@@ -421,8 +422,8 @@ export function InvoiceAllocationSection({
                           )}
                         </div>
                         <div className="text-sm text-gray-600 mt-1">
-                          <div>Date: {new Date(invoice.invoice_date).toLocaleDateString()}</div>
-                          <div>Due: {new Date(invoice.due_date).toLocaleDateString()}</div>
+                          <div>Date: {formatDateIST(new Date(invoice.invoice_date))}</div>
+                          <div>Due: {formatDateIST(new Date(invoice.due_date))}</div>
                           <div>Outstanding: {formatCurrency(invoice.amount_outstanding)}</div>
                         </div>
                       </div>

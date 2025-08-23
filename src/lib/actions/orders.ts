@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { DailyOrder, Subscription, Customer, Product } from "@/lib/types"
 import { getPatternQuantity } from "@/lib/subscription-utils"
 import { revalidatePath } from "next/cache"
+import { parseLocalDateIST } from "@/lib/date-utils"
 
 // Generate daily orders for a specific date
 export async function generateDailyOrders(orderDate: string) {
@@ -44,7 +45,7 @@ export async function generateDailyOrders(orderDate: string) {
       }
     }
 
-    const targetDate = new Date(orderDate)
+    const targetDate = parseLocalDateIST(orderDate)
     const ordersToInsert = []
 
     // Calculate orders for each subscription
@@ -269,7 +270,7 @@ export async function previewDailyOrders(orderDate: string) {
       }
     }
 
-    const targetDate = new Date(orderDate)
+    const targetDate = parseLocalDateIST(orderDate)
     const previewOrders = []
     let totalAmount = 0
     const byRoute: Record<string, { quantity: number, amount: number }> = {}

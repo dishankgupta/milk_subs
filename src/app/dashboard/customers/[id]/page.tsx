@@ -3,6 +3,7 @@ import { getCustomerSubscriptions } from "@/lib/actions/subscriptions"
 import { getCustomerPayments } from "@/lib/actions/payments"
 import { getCustomerOutstanding, calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST } from "@/lib/date-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -198,11 +199,11 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
           <CardContent className="space-y-4">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Customer Since</p>
-              <p>{new Date(customer.created_at).toLocaleDateString()}</p>
+              <p>{formatDateIST(new Date(customer.created_at))}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
-              <p>{new Date(customer.updated_at).toLocaleDateString()}</p>
+              <p>{formatDateIST(new Date(customer.updated_at))}</p>
             </div>
           </CardContent>
         </Card>

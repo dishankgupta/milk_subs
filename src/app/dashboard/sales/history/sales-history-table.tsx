@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Trash2, Edit, MoreVertical, Search, Download } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { formatDateIST, formatWithIST } from '@/lib/date-utils'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -307,10 +308,10 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                 <TableRow key={sale.id}>
                   <TableCell>
                     <div className="font-medium">
-                      {format(new Date(sale.sale_date), 'dd/MM/yy')}
+                      {formatDateIST(new Date(sale.sale_date)).split('/').map((part, i) => i === 2 ? part.slice(-2) : part).join('/')}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {format(new Date(sale.sale_date), 'EEE')}
+                      {formatWithIST(new Date(sale.sale_date), 'EEE')}
                     </div>
                   </TableCell>
                   <TableCell>
