@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCurrentISTDate, formatDateForDatabase } from "@/lib/date-utils"
 
 export interface CustomerOutstanding {
   customer: {
@@ -137,7 +138,7 @@ export async function getOutstandingDashboard(): Promise<OutstandingDashboard> {
   const { count: overdueInvoices, error: overdueError } = await supabase
     .from("invoice_metadata")
     .select("*", { count: "exact", head: true })
-    .lt("due_date", new Date().toISOString().split('T')[0])
+    .lt("due_date", formatDateForDatabase(getCurrentISTDate()))
     .in("invoice_status", ["pending", "partially_paid", "overdue", "sent"])
 
   if (overdueError) {

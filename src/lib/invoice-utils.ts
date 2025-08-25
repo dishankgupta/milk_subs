@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentISTDate, calculateFinancialYear } from "@/lib/date-utils"
 
 export interface InvoiceNumberResult {
   invoiceNumber: string
@@ -9,20 +10,11 @@ export interface InvoiceNumberResult {
 export async function getNextInvoiceNumber(): Promise<InvoiceNumberResult> {
   const supabase = await createClient()
 
-  // Get current financial year
-  const currentDate = new Date()
-  const currentMonth = currentDate.getMonth() + 1 // JS months are 0-based
+  // Get current financial year using IST context
+  const currentDate = getCurrentISTDate()
+  const financialYearInfo = calculateFinancialYear(currentDate)
   
-  // Financial year starts from April (month 4)
-  let financialYearStart: number
-  if (currentMonth >= 4) {
-    financialYearStart = currentDate.getFullYear()
-  } else {
-    financialYearStart = currentDate.getFullYear() - 1
-  }
-  
-  const financialYearEnd = financialYearStart + 1
-  const financialYearCode = `${financialYearStart}${financialYearEnd.toString().slice(-2)}`
+  const financialYearCode = `${financialYearInfo.startYear}${financialYearInfo.endYear.toString().slice(-2)}`
   
   // Get next sequence number from database
   const { data, error } = await supabase.rpc('get_next_invoice_sequence', {
@@ -38,7 +30,7 @@ export async function getNextInvoiceNumber(): Promise<InvoiceNumberResult> {
 
   return {
     invoiceNumber,
-    financialYear: `${financialYearStart}-${financialYearEnd}`,
+    financialYear: `${financialYearInfo.startYear}-${financialYearInfo.endYear}`,
     sequenceNumber
   }
 }
@@ -72,23 +64,15 @@ export function getCurrentFinancialYear(): {
   yearCode: string
   displayYear: string
 } {
-  const currentDate = new Date()
-  const currentMonth = currentDate.getMonth() + 1
+  const currentDate = getCurrentISTDate()
+  const financialYearInfo = calculateFinancialYear(currentDate)
   
-  let startYear: number
-  if (currentMonth >= 4) {
-    startYear = currentDate.getFullYear()
-  } else {
-    startYear = currentDate.getFullYear() - 1
-  }
-  
-  const endYear = startYear + 1
-  const yearCode = `${startYear}${endYear.toString().slice(-2)}`
-  const displayYear = `${startYear}-${endYear}`
+  const yearCode = `${financialYearInfo.startYear}${financialYearInfo.endYear.toString().slice(-2)}`
+  const displayYear = `${financialYearInfo.startYear}-${financialYearInfo.endYear}`
   
   return {
-    startYear,
-    endYear,
+    startYear: financialYearInfo.startYear,
+    endYear: financialYearInfo.endYear,
     yearCode,
     displayYear
   }
@@ -112,19 +96,8 @@ export function isDateInFinancialYear(date: Date, financialYear: string): boolea
  * Get financial year for a specific date
  */
 export function getFinancialYearForDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  
-  if (month >= 3) {
-    // April to December - same financial year
-    const nextYear = (year + 1).toString().slice(-2)
-    return `${year}-${nextYear}`
-  } else {
-    // January to March - previous financial year
-    const prevYear = year - 1
-    const currentYearShort = year.toString().slice(-2)
-    return `${prevYear}-${currentYearShort}`
-  }
+  const financialYearInfo = calculateFinancialYear(date)
+  return `${financialYearInfo.startYear}-${financialYearInfo.endYear}`
 }
 
 /**

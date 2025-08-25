@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Modification } from '@/lib/types'
+import { formatTimestampForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 
 export async function createModification(data: {
   customer_id: string
@@ -148,7 +149,7 @@ export async function updateModification(id: string, data: {
       .from('modifications')
       .update({
         ...data,
-        updated_at: new Date().toISOString()
+        updated_at: formatTimestampForDatabase(getCurrentISTDate())
       })
       .eq('id', id)
       .select()
@@ -213,7 +214,7 @@ export async function toggleModificationStatus(id: string) {
       .from('modifications')
       .update({ 
         is_active: !currentModification.is_active,
-        updated_at: new Date().toISOString()
+        updated_at: formatTimestampForDatabase(getCurrentISTDate())
       })
       .eq('id', id)
       .select()

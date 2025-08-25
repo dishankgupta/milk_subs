@@ -468,6 +468,32 @@ export function getNextISTBusinessDay(date: Date): Date {
  * Get the current financial year based on IST date
  * Financial year runs April 1 to March 31
  */
+/**
+ * Calculate Indian financial year for a given date
+ * Financial year runs from April 1st to March 31st
+ * 
+ * @param date - Date to calculate financial year for
+ * @returns Object with startYear and endYear
+ */
+export function calculateFinancialYear(date: Date): { startYear: number; endYear: number } {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  
+  if (month >= 3) {
+    // April to December - financial year starts this year
+    return {
+      startYear: year,
+      endYear: year + 1
+    }
+  } else {
+    // January to March - financial year started previous year
+    return {
+      startYear: year - 1,
+      endYear: year
+    }
+  }
+}
+
 export function getCurrentFinancialYearIST(): string {
   const now = getCurrentISTDate()
   const currentYear = now.getFullYear()
@@ -548,4 +574,20 @@ export function formatDateForAPI(date: Date): string {
  */
 export function parseLocalDate(dateString: string): Date {
   return parseLocalDateIST(dateString)
+}
+
+/**
+ * Legacy alias for formatDateIST (maintains backward compatibility)
+ * @deprecated Use formatDateIST instead
+ */
+export function formatDateToIST(date: Date): string {
+  return formatDateIST(date)
+}
+
+/**
+ * Legacy alias for formatDateTimeIST (maintains backward compatibility)
+ * @deprecated Use formatDateTimeIST instead
+ */
+export function formatDateTimeToIST(date: Date): string {
+  return formatDateTimeIST(date)
 }

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CalendarIcon, Download, AlertTriangle, X } from "lucide-react"
 import { format } from "date-fns"
+import { getCurrentISTDate } from "@/lib/date-utils"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -84,7 +85,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
   // Set default dates after component mounts to avoid hydration issues
   useEffect(() => {
     setMounted(true)
-    const now = new Date()
+    const now = getCurrentISTDate()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     
     form.setValue("period_start", startOfMonth)
@@ -360,7 +361,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                     mode="single"
                     selected={form.watch("period_start")}
                     onSelect={(date) => {
-                      form.setValue("period_start", date || new Date())
+                      form.setValue("period_start", date || getCurrentISTDate())
                       setPreviewData([])
                     }}
                     initialFocus
@@ -393,7 +394,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                     mode="single"
                     selected={form.watch("period_end")}
                     onSelect={(date) => {
-                      form.setValue("period_end", date || new Date())
+                      form.setValue("period_end", date || getCurrentISTDate())
                       setPreviewData([])
                     }}
                     disabled={(date) => date < form.watch("period_start")}

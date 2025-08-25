@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { formatDateForDatabase } from "@/lib/date-utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
@@ -63,8 +64,8 @@ export function InvoiceList({ onStatsRefresh }: InvoiceListProps) {
     try {
       const data = await getInvoicesList({
         status: statusFilter === "all" ? undefined : statusFilter,
-        date_from: dateFrom ? dateFrom.toISOString().split('T')[0] : undefined,
-        date_to: dateTo ? dateTo.toISOString().split('T')[0] : undefined,
+        date_from: dateFrom ? formatDateForDatabase(dateFrom) : undefined,
+        date_to: dateTo ? formatDateForDatabase(dateTo) : undefined,
         limit: 100
       })
       setInvoices(data as InvoiceWithCustomer[])

@@ -5,6 +5,7 @@ import { Customer, Route } from "@/lib/types"
 import { CustomerFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
 import { calculateCustomerOutstandingAmount } from "@/lib/actions/outstanding"
+import { formatTimestampForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 
 export async function getCustomers(options?: { hasOutstanding?: boolean }): Promise<{ customers: Customer[], total: number }> {
   const supabase = await createClient()
@@ -159,7 +160,7 @@ export async function updateCustomer(id: string, customerData: CustomerFormData)
       billing_cycle_day: customerData.billing_cycle_day,
       opening_balance: customerData.opening_balance || 0,
       status: customerData.status,
-      updated_at: new Date().toISOString(),
+      updated_at: formatTimestampForDatabase(getCurrentISTDate()),
     })
     .eq("id", id)
     .select()

@@ -1,4 +1,5 @@
 import { Subscription } from "@/lib/types"
+import { formatDateForDatabase, addDaysIST } from "@/lib/date-utils"
 
 // Calculate which day in the 2-day pattern cycle for a given date
 export function calculatePatternDay(startDate: Date, targetDate: Date): 1 | 2 {
@@ -28,15 +29,14 @@ export function generatePatternPreview(subscription: Subscription, startDate: Da
   const preview = []
   
   for (let i = 0; i < days; i++) {
-    const currentDate = new Date(startDate)
-    currentDate.setDate(startDate.getDate() + i)
+    const currentDate = addDaysIST(startDate, i)
     
     const quantity = getPatternQuantity(subscription, currentDate)
     const patternDay = subscription.pattern_start_date ? 
       calculatePatternDay(new Date(subscription.pattern_start_date), currentDate) : 1
     
     preview.push({
-      date: currentDate.toISOString().split('T')[0],
+      date: formatDateForDatabase(currentDate),
       quantity,
       patternDay,
       dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' })

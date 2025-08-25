@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { generateDailyOrders, previewDailyOrders, deleteDailyOrders } from "@/lib/actions/orders"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 import { Eye, Zap, Trash2, AlertCircle, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
 
@@ -49,7 +50,7 @@ export function OrderGenerationForm() {
   const form = useForm<GenerateOrdersFormData>({
     resolver: zodResolver(generateOrdersSchema),
     defaultValues: {
-      orderDate: new Date().toISOString().split('T')[0] // Today's date
+      orderDate: formatDateForDatabase(getCurrentISTDate()) // Today's date in IST
     }
   })
 

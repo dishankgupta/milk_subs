@@ -2,11 +2,12 @@ import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { getRouteDeliveryReport } from '@/lib/actions/reports'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
+    const date = searchParams.get('date') || formatDateForDatabase(getCurrentISTDate())
     const routeId = searchParams.get('route')
     const timeSlot = searchParams.get('time_slot') as 'Morning' | 'Evening'
     const sortKey = searchParams.get('sort_key') || 'customerName'

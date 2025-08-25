@@ -6,7 +6,9 @@ import {
   formatDateTimeIST, 
   isValidISTDate,
   IST_LOCALE,
-  IST_TIMEZONE
+  IST_TIMEZONE,
+  formatDateToIST,
+  formatDateTimeToIST
 } from './date-utils'
 
 export function cn(...inputs: ClassValue[]) {
@@ -143,3 +145,6 @@ export function validateAndFormatDate(date: unknown): string | null {
   
   return formatDateDisplay(date)
 }
+
+// Export legacy date functions for backward compatibility
+export { formatDateToIST, formatDateTimeToIST }

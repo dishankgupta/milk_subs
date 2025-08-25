@@ -379,9 +379,9 @@ describe('IST Date Utilities - Validation Functions', () => {
     })
 
     it('should return false for non-string inputs', () => {
-      expect(isValidISTDateString(null as any)).toBe(false)
-      expect(isValidISTDateString(undefined as any)).toBe(false)
-      expect(isValidISTDateString(123 as any)).toBe(false)
+      expect(isValidISTDateString(null as string)).toBe(false)
+      expect(isValidISTDateString(undefined as unknown as string)).toBe(false)
+      expect(isValidISTDateString(123 as unknown as string)).toBe(false)
     })
   })
 })

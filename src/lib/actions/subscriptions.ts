@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Subscription, Product } from "@/lib/types"
 import { SubscriptionFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
+import { formatTimestampForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 
 export async function getSubscriptions(): Promise<Subscription[]> {
   const supabase = await createClient()
@@ -146,7 +147,7 @@ export async function updateSubscription(id: string, subscriptionData: Subscript
     product_id: subscriptionData.product_id,
     subscription_type: subscriptionData.subscription_type,
     is_active: subscriptionData.is_active,
-    updated_at: new Date().toISOString(),
+    updated_at: formatTimestampForDatabase(getCurrentISTDate()),
   }
 
   if (subscriptionData.subscription_type === "Daily") {
@@ -227,7 +228,7 @@ export async function toggleSubscriptionStatus(id: string): Promise<{ success: b
     .from("base_subscriptions")
     .update({ 
       is_active: !current.is_active,
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .eq("id", id)
     .select(`

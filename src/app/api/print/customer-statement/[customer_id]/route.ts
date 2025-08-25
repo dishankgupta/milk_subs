@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCustomerOutstanding } from '@/lib/actions/outstanding'
 import { getCustomerPayments } from '@/lib/actions/payments'
 import { formatCurrency } from '@/lib/utils'
+import { getCurrentISTDate, formatDateIST } from '@/lib/date-utils'
 
 export async function GET(
   request: NextRequest,
@@ -294,7 +295,7 @@ export async function GET(
                 </thead>
                 <tbody>
                   ${data.unpaidInvoices.map((invoice) => {
-                    const isOverdue = new Date(invoice.due_date) < new Date()
+                    const isOverdue = new Date(invoice.due_date) < getCurrentISTDate()
                     const statusClass = invoice.invoice_status === 'overdue' 
                       ? 'status-overdue' 
                       : invoice.invoice_status === 'partially_paid'
@@ -304,9 +305,9 @@ export async function GET(
                     return `
                       <tr>
                         <td>${invoice.invoice_number}</td>
-                        <td>${new Date(invoice.invoice_date).toLocaleDateString()}</td>
+                        <td>${formatDateIST(new Date(invoice.invoice_date))}</td>
                         <td ${isOverdue ? 'class="overdue"' : ''}>
-                          ${new Date(invoice.due_date).toLocaleDateString()}
+                          ${formatDateIST(new Date(invoice.due_date))}
                         </td>
                         <td class="amount">${formatCurrency(invoice.total_amount)}</td>
                         <td class="amount">${formatCurrency(invoice.amount_paid)}</td>
@@ -346,10 +347,10 @@ export async function GET(
                   ${recentPayments.slice(0, 10).map((payment) => {
                     return `
                       <tr>
-                        <td>${new Date(payment.payment_date).toLocaleDateString()}</td>
+                        <td>${formatDateIST(new Date(payment.payment_date))}</td>
                         <td class="amount">${formatCurrency(payment.amount)}</td>
                         <td>${payment.payment_method || 'N/A'}</td>
-                        <td>${payment.period_start && payment.period_end ? `${new Date(payment.period_start).toLocaleDateString()} - ${new Date(payment.period_end).toLocaleDateString()}` : 'N/A'}</td>
+                        <td>${payment.period_start && payment.period_end ? `${formatDateIST(new Date(payment.period_start))} - ${formatDateIST(new Date(payment.period_end))}` : 'N/A'}</td>
                         <td>${payment.notes || '-'}</td>
                       </tr>
                     `
@@ -360,7 +361,7 @@ export async function GET(
           </div>
 
           <div class="footer">
-            <p>Statement generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+            <p>Statement generated on ${formatDateIST(getCurrentISTDate())}</p>
             <p>PureDairy - Customer Outstanding Statement</p>
           </div>
 

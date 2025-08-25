@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { formatDateForAPI } from "@/lib/utils"
 import type { Customer } from "@/lib/types"
+import { formatTimestampForDatabase, getCurrentISTDate, addDaysIST, formatDateForDatabase } from "@/lib/date-utils"
 import type { 
   OutstandingReportConfiguration, 
   OutstandingCustomerData,
@@ -112,8 +113,8 @@ export async function generateOutstandingReport(
       billing_cycle_day: customerSummary.billing_cycle_day || 1,
       opening_balance: customerSummary.opening_balance,
       status: customerSummary.status || 'Active',
-      created_at: customerSummary.created_at || new Date().toISOString(),
-      updated_at: customerSummary.updated_at || new Date().toISOString(),
+      created_at: customerSummary.created_at || formatTimestampForDatabase(getCurrentISTDate()),
+      updated_at: customerSummary.updated_at || formatTimestampForDatabase(getCurrentISTDate()),
       route: customerSummary.route_name ? { 
         id: customerSummary.route_id || '',
         name: customerSummary.route_name,
@@ -329,7 +330,7 @@ async function getPaymentBreakdownBatch(
     .select("*")
     .in("customer_id", customerIds)
     .gte("payment_date", startDate)
-    .lt("payment_date", new Date(new Date(endDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+    .lt("payment_date", formatDateForDatabase(addDaysIST(new Date(endDate), 1)))
     .order("customer_id, payment_date")
 
   if (error) {

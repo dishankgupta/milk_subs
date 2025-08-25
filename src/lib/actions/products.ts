@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { productSchema, type ProductFormData } from "@/lib/validations"
 import type { Product } from "@/lib/types"
+import { formatTimestampForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 
 export async function createProduct(data: ProductFormData) {
   const supabase = await createClient()
@@ -71,7 +72,7 @@ export async function updateProduct(id: string, data: ProductFormData) {
       gst_rate: validatedData.gst_rate,
       unit_of_measure: validatedData.unit_of_measure,
       is_subscription_product: validatedData.is_subscription_product,
-      updated_at: new Date().toISOString(),
+      updated_at: formatTimestampForDatabase(getCurrentISTDate()),
     })
     .eq("id", id)
     .select()
@@ -179,7 +180,7 @@ export async function updateUnbilledSalesPrices(productId: string, newPrice: num
     .from("sales")
     .update({
       unit_price: newPrice,
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .eq("product_id", productId)
     .eq("payment_status", "Pending")

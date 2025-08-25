@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { getDailyOrders } from "@/lib/actions/orders"
 import { DailyOrder } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 import { Search, MapPin, Clock, Package, Truck } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -17,7 +18,7 @@ export function OrdersList() {
   const [orders, setOrders] = useState<DailyOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(formatDateForDatabase(getCurrentISTDate()))
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [routeFilter, setRouteFilter] = useState<string>("all")
 

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, CreditCard, FileText, Phone, MapPin, DollarSign, Calendar, Receipt, Printer } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { formatDateIST } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
 
 interface CustomerOutstandingDetailProps {
   customerId: string
@@ -227,7 +227,7 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {unpaidInvoices.map((invoice) => {
-                    const isOverdue = new Date(invoice.due_date) < new Date()
+                    const isOverdue = new Date(invoice.due_date) < getCurrentISTDate()
                     
                     return (
                       <tr key={invoice.id} className="hover:bg-gray-50">

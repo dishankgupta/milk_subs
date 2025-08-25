@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { AlertTriangle, Calculator, DollarSign, Clock } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { formatDateIST } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
 import { getCustomerUnpaidInvoices, getCustomerOutstanding } from '@/lib/actions/outstanding'
 
 interface UnpaidInvoice {
@@ -397,7 +397,7 @@ export function InvoiceAllocationSection({
               const invoice = unpaidInvoices.find(inv => inv.id === allocation.id)
               if (!invoice) return null
               
-              const isOverdue = new Date(invoice.due_date) < new Date()
+              const isOverdue = new Date(invoice.due_date) < getCurrentISTDate()
 
               return (
                 <div 

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { CalendarIcon, Receipt, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
+import { getCurrentISTDate, formatDateIST } from "@/lib/date-utils"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -38,8 +39,8 @@ export function GenerateCustomerInvoice({
   const [previewData, setPreviewData] = useState<InvoicePreviewData | null>(null)
 
   const [formData, setFormData] = useState({
-    period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    period_end: new Date(),
+    period_start: new Date(getCurrentISTDate().getFullYear(), getCurrentISTDate().getMonth(), 1),
+    period_end: getCurrentISTDate(),
     include_subscriptions: true,
     include_credit_sales: true
   })

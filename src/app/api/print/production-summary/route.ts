@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Production Summary - ${formatDateIST(date)}</title>
+  <title>Production Summary - ${formatDateIST(new Date(date))}</title>
   <style>
     @page {
       size: A4;
@@ -242,14 +242,14 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="report-info">
       <h2>Daily Production Summary</h2>
-      <p>Report Date: ${formatDateIST(date)}</p>
+      <p>Report Date: ${formatDateIST(new Date(date))}</p>
       <p>Generated: ${formatDateTimeIST(getCurrentISTDate())}</p>
     </div>
   </div>
 
   ${summary.totalOrders === 0 ? `
   <div class="no-data">
-    <h3>No orders found for ${formatDateIST(date)}</h3>
+    <h3>No orders found for ${formatDateIST(new Date(date))}</h3>
     <p>No production data available for the selected date.</p>
   </div>
   ` : `
