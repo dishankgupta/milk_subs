@@ -11,7 +11,7 @@ export const customerSchema = z.object({
   delivery_time: z.enum(["Morning", "Evening"], { message: "Please select delivery time" }),
   payment_method: z.enum(["Monthly", "Prepaid"], { message: "Please select payment method" }),
   billing_cycle_day: z.number().min(1, "Billing cycle day must be between 1 and 31").max(31, "Billing cycle day must be between 1 and 31"),
-  opening_balance: z.number().min(0, "Opening balance cannot be negative").optional().default(0),
+  opening_balance: z.number().min(0, "Opening balance cannot be negative"),
   status: z.enum(["Active", "Inactive"]),
 })
 

@@ -59,7 +59,7 @@ async function NewDeliveryContent({ searchParams }: NewDeliveryPageProps) {
             <h3 className="text-lg font-semibold mb-2">No Orders Available</h3>
             <p className="mb-4">
               No undelivered orders found
-              {resolvedSearchParams?.date && ` for ${formatDateToIST(resolvedSearchParams.date)}`}.
+              {resolvedSearchParams?.date && ` for ${formatDateToIST(new Date(resolvedSearchParams.date))}`}.
             </p>
             <div className="flex justify-center gap-2">
               <Link href="/dashboard/orders/generate">

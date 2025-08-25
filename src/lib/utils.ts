@@ -4,6 +4,7 @@ import {
   formatDateForDatabase, 
   parseLocalDateIST, 
   formatDateTimeIST, 
+  formatDateIST,
   isValidISTDate,
   IST_LOCALE,
   IST_TIMEZONE,
@@ -110,14 +111,10 @@ export const DATE_FNS_IST_CONFIG = {
 
 /**
  * Standardized date display for IST context
+ * @deprecated Use formatDateIST instead for consistency
  */
 export function formatDateDisplay(date: Date): string {
-  return date.toLocaleDateString(IST_LOCALE, {
-    timeZone: IST_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
+  return formatDateIST(date)
 }
 
 /**

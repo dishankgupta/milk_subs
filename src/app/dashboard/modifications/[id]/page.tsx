@@ -130,14 +130,14 @@ export default async function ModificationDetailPage({ params }: ModificationDet
             <div>
               <p className="text-sm font-medium text-gray-900">Start Date</p>
               <p className="text-gray-600">
-                {formatDateToIST(modification.start_date)}
+                {formatDateToIST(new Date(modification.start_date))}
               </p>
             </div>
 
             <div>
               <p className="text-sm font-medium text-gray-900">End Date</p>
               <p className="text-gray-600">
-                {formatDateToIST(modification.end_date)}
+                {formatDateToIST(new Date(modification.end_date))}
               </p>
             </div>
 
@@ -155,7 +155,7 @@ export default async function ModificationDetailPage({ params }: ModificationDet
             <div>
               <p className="text-sm font-medium text-gray-900">Created</p>
               <p className="text-gray-600">
-                {formatDateTimeToIST(modification.created_at)}
+                {formatDateTimeToIST(new Date(modification.created_at))}
               </p>
             </div>
           </CardContent>

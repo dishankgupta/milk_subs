@@ -114,10 +114,11 @@ export function convertISTToUTC(istDate: Date): Date {
  * 
  * // ✅ Correct - consistent IST formatting
  * const display = formatDateIST(getCurrentISTDate())  // "23/08/2025"
+ * const display2 = formatDateIST(new Date(dateString))  // Parse first, then format
  * 
  * // Usage in UI components
- * <span>{formatDateIST(customer.created_at)}</span>
- * <TableCell>{formatDateIST(invoice.invoice_date)}</TableCell>
+ * <span>{formatDateIST(new Date(customer.created_at))}</span>
+ * <TableCell>{formatDateIST(new Date(invoice.invoice_date))}</TableCell>
  * ```
  * 
  * @throws {Error} If date is invalid
@@ -125,6 +126,10 @@ export function convertISTToUTC(istDate: Date): Date {
  * @see {@link formatTimestampIST} For timestamp display
  */
 export function formatDateIST(date: Date): string {
+  if (!isValidISTDate(date)) {
+    throw new Error(`Invalid Date object for IST formatting: ${date}`)
+  }
+
   return date.toLocaleDateString(IST_LOCALE, {
     timeZone: IST_TIMEZONE,
     year: 'numeric',
@@ -137,6 +142,10 @@ export function formatDateIST(date: Date): string {
  * Format date and time for display in IST (dd/MM/yyyy, HH:mm)
  */
 export function formatDateTimeIST(date: Date): string {
+  if (!isValidISTDate(date)) {
+    throw new Error(`Invalid Date object for IST datetime formatting: ${date}`)
+  }
+
   return date.toLocaleString(IST_LOCALE, {
     timeZone: IST_TIMEZONE,
     year: 'numeric',

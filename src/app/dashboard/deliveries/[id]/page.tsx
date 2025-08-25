@@ -105,7 +105,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                 <div>
                   <div className="font-medium mb-1">Order Date</div>
                   <div className="text-muted-foreground">
-                    {formatDateToIST(order.order_date)}
+                    {formatDateToIST(new Date(order.order_date))}
                   </div>
                 </div>
                 <div>
@@ -141,7 +141,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                   <div className="font-medium mb-1">Delivered At</div>
                   <div className="text-muted-foreground">
                     {delivery.delivered_at 
-                      ? formatDateTimeToIST(delivery.delivered_at)
+                      ? formatDateTimeToIST(new Date(delivery.delivered_at))
                       : "Not recorded"
                     }
                   </div>
@@ -157,7 +157,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
               <div>
                 <div className="font-medium mb-1">Created</div>
                 <div className="text-muted-foreground text-sm">
-                  {formatDateTimeToIST(delivery.created_at)}
+                  {formatDateTimeToIST(new Date(delivery.created_at))}
                 </div>
               </div>
 
@@ -165,7 +165,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                 <div>
                   <div className="font-medium mb-1">Last Updated</div>
                   <div className="text-muted-foreground text-sm">
-                    {formatDateTimeToIST(delivery.updated_at)}
+                    {formatDateTimeToIST(new Date(delivery.updated_at))}
                   </div>
                 </div>
               )}

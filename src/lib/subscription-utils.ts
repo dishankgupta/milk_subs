@@ -39,7 +39,7 @@ export function generatePatternPreview(subscription: Subscription, startDate: Da
       date: formatDateForDatabase(currentDate),
       quantity,
       patternDay,
-      dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' })
+      dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' })
     })
   }
   

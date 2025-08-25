@@ -111,7 +111,7 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
             Order Details
           </CardTitle>
           <CardDescription>
-            Order for {formatDateToIST(order.order_date)}
+            Order for {formatDateToIST(new Date(order.order_date))}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

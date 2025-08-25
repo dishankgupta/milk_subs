@@ -327,11 +327,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {new Date(payment.payment_date).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                        {formatDateIST(new Date(payment.payment_date))}
                       </div>
                       {payment.notes && (
                         <div className="text-xs text-muted-foreground mt-1 truncate max-w-[200px]" title={payment.notes}>

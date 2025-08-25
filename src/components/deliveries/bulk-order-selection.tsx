@@ -379,7 +379,7 @@ export function BulkOrderSelection({ orders }: BulkOrderSelectionProps) {
                   <div>
                     <div className="font-medium">{order.route.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {order.delivery_time} • {formatDateToIST(order.order_date)}
+                      {order.delivery_time} • {formatDateToIST(new Date(order.order_date))}
                     </div>
                   </div>
                   

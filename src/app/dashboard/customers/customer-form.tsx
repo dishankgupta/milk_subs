@@ -50,7 +50,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
       delivery_time: customer?.delivery_time || "Morning",
       payment_method: customer?.payment_method || "Monthly",
       billing_cycle_day: customer?.billing_cycle_day || 1,
-      opening_balance: customer?.opening_balance || 0,
+      opening_balance: customer?.opening_balance ?? 0,
       status: customer?.status || "Active",
     },
   })

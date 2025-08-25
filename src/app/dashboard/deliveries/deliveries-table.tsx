@@ -177,7 +177,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                 <SelectItem value="all">All Dates</SelectItem>
                 {uniqueDates.map(date => (
                   <SelectItem key={date} value={date}>
-                    {formatDateToIST(date)}
+                    {formatDateToIST(new Date(date))}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -351,7 +351,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {formatDateToIST(order.order_date)}
+                            {formatDateToIST(new Date(order.order_date))}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
@@ -378,7 +378,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                           {delivery.delivered_at && (
                             <div className="flex items-center gap-2 text-sm">
                               <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{formatDateTimeToIST(delivery.delivered_at)}</span>
+                              <span>{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
                             </div>
                           )}
                           
