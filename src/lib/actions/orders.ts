@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { DailyOrder, Subscription, Customer, Product } from "@/lib/types"
 import { getPatternQuantity } from "@/lib/subscription-utils"
 import { revalidatePath } from "next/cache"
-import { parseLocalDateIST } from "@/lib/date-utils"
+import { parseLocalDateIST, getCurrentISTDate, addDaysIST, formatDateForDatabase } from "@/lib/date-utils"
 
 // Generate daily orders for a specific date
 export async function generateDailyOrders(orderDate: string) {
@@ -349,6 +349,43 @@ export async function previewDailyOrders(orderDate: string) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to preview orders"
+    }
+  }
+}
+
+// Get dates that have existing orders (last 30 days)
+export async function getOrderDates() {
+  const supabase = await createClient()
+
+  try {
+    // Get distinct order dates from the last 30 days
+    const today = getCurrentISTDate()
+    const thirtyDaysAgo = addDaysIST(today, -30)
+    const thirtyDaysAgoString = formatDateForDatabase(thirtyDaysAgo)
+
+    const { data: orderDates, error } = await supabase
+      .from("daily_orders")
+      .select("order_date")
+      .gte("order_date", thirtyDaysAgoString)
+      .order("order_date", { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    // Get unique dates
+    const uniqueDates = [...new Set(orderDates?.map(item => item.order_date) || [])]
+
+    return {
+      success: true,
+      data: uniqueDates
+    }
+
+  } catch (error) {
+    console.error("Error fetching order dates:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch order dates"
     }
   }
 }

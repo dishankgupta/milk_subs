@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { generateDailyOrders, previewDailyOrders, deleteDailyOrders } from "@/lib/actions/orders"
+import { generateDailyOrders, previewDailyOrders, deleteDailyOrders, getOrderDates } from "@/lib/actions/orders"
 import { formatCurrency } from "@/lib/utils"
-import { formatDateForDatabase, getCurrentISTDate } from "@/lib/date-utils"
+import { formatDateForDatabase, getCurrentISTDate, formatDateIST, parseLocalDateIST } from "@/lib/date-utils"
 import { Eye, Zap, Trash2, AlertCircle, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
 
@@ -46,12 +46,40 @@ export function OrderGenerationForm() {
   const [summary, setSummary] = useState<PreviewSummary | null>(null)
   const [hasPreview, setHasPreview] = useState(false)
   const [generationResult, setGenerationResult] = useState<{ success: boolean, message: string } | null>(null)
+  const [existingOrderDates, setExistingOrderDates] = useState<string[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
 
   const form = useForm<GenerateOrdersFormData>({
     resolver: zodResolver(generateOrdersSchema),
     defaultValues: {
       orderDate: formatDateForDatabase(getCurrentISTDate()) // Today's date in IST
     }
+  })
+
+  // Load existing order dates on component mount
+  useEffect(() => {
+    const loadOrderDates = async () => {
+      try {
+        const result = await getOrderDates()
+        if (result.success) {
+          setExistingOrderDates(result.data || [])
+        }
+      } catch (error) {
+        console.error("Error loading order dates:", error)
+      }
+    }
+    loadOrderDates()
+  }, [])
+
+  // Filter preview orders based on search term
+  const filteredPreview = preview.filter((order) => {
+    if (!searchTerm) return true
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      order.customer_name.toLowerCase().includes(searchLower) ||
+      order.product_name.toLowerCase().includes(searchLower) ||
+      order.route_name.toLowerCase().includes(searchLower)
+    )
   })
 
   const handlePreview = async (data: GenerateOrdersFormData) => {
@@ -65,18 +93,21 @@ export function OrderGenerationForm() {
         setPreview(result.data || [])
         setSummary(result.summary || null)
         setHasPreview(true)
+        setSearchTerm("") // Clear search when loading new preview
         toast.success(`Preview loaded: ${result.data?.length || 0} orders`)
       } else {
         toast.error(result.error || "Failed to load preview")
         setPreview([])
         setSummary(null)
         setHasPreview(false)
+        setSearchTerm("")
       }
     } catch {
       toast.error("Failed to load preview")
       setPreview([])
       setSummary(null)
       setHasPreview(false)
+      setSearchTerm("")
     } finally {
       setIsLoading(false)
     }
@@ -95,6 +126,12 @@ export function OrderGenerationForm() {
         setPreview([])
         setSummary(null)
         setHasPreview(false)
+        setSearchTerm("")
+        // Refresh existing order dates
+        const datesResult = await getOrderDates()
+        if (datesResult.success) {
+          setExistingOrderDates(datesResult.data || [])
+        }
       } else {
         setGenerationResult({ success: false, message: result.error || "Failed to generate orders" })
         toast.error(result.error)
@@ -121,6 +158,11 @@ export function OrderGenerationForm() {
       if (result.success) {
         toast.success(result.message)
         setGenerationResult(null)
+        // Refresh existing order dates
+        const datesResult = await getOrderDates()
+        if (datesResult.success) {
+          setExistingOrderDates(datesResult.data || [])
+        }
         // Refresh preview if it exists
         if (hasPreview) {
           handlePreview(data)
@@ -148,6 +190,24 @@ export function OrderGenerationForm() {
           />
           {form.formState.errors.orderDate && (
             <p className="text-sm text-red-500">{form.formState.errors.orderDate.message}</p>
+          )}
+          
+          {existingOrderDates.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">Dates with existing orders:</p>
+              <div className="flex flex-wrap gap-1">
+                {existingOrderDates.slice(0, 10).map((date) => (
+                  <Badge key={date} variant="outline" className="text-xs">
+                    {formatDateIST(parseLocalDateIST(date))}
+                  </Badge>
+                ))}
+                {existingOrderDates.length > 10 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{existingOrderDates.length - 10} more
+                  </Badge>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
@@ -264,25 +324,36 @@ export function OrderGenerationForm() {
           <CardHeader>
             <CardTitle>Order Details Preview</CardTitle>
             <CardDescription>
-              {preview.length} orders will be generated
+              {filteredPreview.length} of {preview.length} orders will be generated
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {preview.map((order, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div className="flex-1">
-                    <div className="font-medium">{order.customer_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {order.product_name} • {order.route_name} • {order.delivery_time}
+            <div className="space-y-4">
+              <div className="max-w-sm">
+                <Input
+                  placeholder="Search by customer, product, or route..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                {filteredPreview.map((order, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{order.customer_name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {order.product_name} • {order.route_name} • {order.delivery_time}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{order.quantity}L × {formatCurrency(order.unit_price)}</div>
+                      <div className="text-sm font-semibold">{formatCurrency(order.total_amount)}</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium">{order.quantity}L × {formatCurrency(order.unit_price)}</div>
-                    <div className="text-sm font-semibold">{formatCurrency(order.total_amount)}</div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

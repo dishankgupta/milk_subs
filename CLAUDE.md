@@ -350,6 +350,7 @@ Complete Supabase database with 16 tables:
 - **Invoice Line Items Population Fix**: Resolved empty invoice_line_items table by fixing schema mismatch and missing required fields in insert operations (August 22, 2025)
 - **Outstanding Report Timezone Fix**: Complete resolution of timezone date issues in outstanding reports print API causing incorrect period dates (August 22, 2025)
 - **IST Date Migration Complete**: Comprehensive system-wide migration from prohibited date patterns to IST-compliant utilities across 25+ critical files, eliminating timezone inconsistencies in financial calculations, invoice numbering, and business logic (August 25, 2025)
+- **Date Runtime Error Fix**: Resolved `date.toLocaleDateString is not a function` error by standardizing date parsing architecture - formatting functions now only accept Date objects while properly parsing strings at component boundaries (August 25, 2025)
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
