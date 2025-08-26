@@ -146,16 +146,20 @@ export async function prepareInvoiceData(
     const key = order.product.id
     const existing = subscriptionItemsMap.get(key)
     
+    // Use actual delivered quantity instead of planned quantity
+    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
+    const actualTotalAmount = actualQuantity * Number(order.unit_price)
+    
     if (existing) {
-      existing.quantity += Number(order.planned_quantity)
-      existing.totalAmount += Number(order.total_amount)
+      existing.quantity += actualQuantity
+      existing.totalAmount += actualTotalAmount
     } else {
       subscriptionItemsMap.set(key, {
         productName: order.product.name,
         productCode: order.product.code,
-        quantity: Number(order.planned_quantity),
+        quantity: actualQuantity,
         unitPrice: Number(order.unit_price),
-        totalAmount: Number(order.total_amount),
+        totalAmount: actualTotalAmount,
         unitOfMeasure: order.product.unit_of_measure || order.product.unit
       })
     }
@@ -183,9 +187,12 @@ export async function prepareInvoiceData(
     const dateKey = order.order_date
     const existing = dailySummaryMap.get(dateKey)
     
+    // Use actual delivered quantity instead of planned quantity
+    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
+    
     const item = {
       productName: order.product.name,
-      quantity: Number(order.planned_quantity),
+      quantity: actualQuantity,
       unitOfMeasure: order.product.unit_of_measure || order.product.unit
     }
     
@@ -327,6 +334,7 @@ async function getUnbilledDeliveryAmount(
       .select(`
         id,
         total_amount,
+        unit_price,
         deliveries!inner(actual_quantity)
       `)
       .eq("customer_id", customerId)
@@ -345,10 +353,15 @@ async function getUnbilledDeliveryAmount(
     
     const billedOrderIds = new Set(billedOrders?.map(item => item.order_id) || [])
     
-    // Calculate total amount for unbilled orders
+    // Calculate total amount for unbilled orders using actual delivered quantities
     return deliveredOrders
       .filter(order => !billedOrderIds.has(order.id))
-      .reduce((sum, order) => sum + Number(order.total_amount), 0)
+      .reduce((sum, order) => {
+        // Use actual delivered quantity instead of planned quantity
+        const actualQuantity = Number(order.deliveries[0]?.actual_quantity || 0)
+        const actualAmount = actualQuantity * Number(order.unit_price)
+        return sum + actualAmount
+      }, 0)
   }
   
   return Number(data[0]?.total_amount || 0)
@@ -1081,7 +1094,7 @@ async function createSubscriptionLineItems(
         name,
         gst_rate
       ),
-      deliveries!inner(id)
+      deliveries!inner(id, actual_quantity)
     `)
     .eq("customer_id", customerId)
     .gte("order_date", periodStart)
@@ -1090,18 +1103,27 @@ async function createSubscriptionLineItems(
   if (!deliveredOrders?.length) return []
 
   // Create line items for each delivered order with ALL required fields
-  const lineItemsData = deliveredOrders.map(order => ({
-    invoice_id: invoiceId,
-    order_id: order.id,
-    line_item_type: 'subscription',
-    product_id: order.product.id,
-    product_name: order.product.name,
-    quantity: Number(order.planned_quantity),
-    unit_price: Number(order.unit_price),
-    line_total: Number(order.total_amount),
-    gst_rate: Number(order.product.gst_rate || 0),
-    gst_amount: 0 // Subscriptions typically don't have GST
-  }))
+  const lineItemsData = deliveredOrders.map(order => {
+    // Use actual delivered quantity instead of planned quantity
+    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
+    const actualLineTotal = actualQuantity * Number(order.unit_price)
+    
+    // Handle product data - it should be a single object, not array
+    const product = Array.isArray(order.product) ? order.product[0] : order.product
+    
+    return {
+      invoice_id: invoiceId,
+      order_id: order.id,
+      line_item_type: 'subscription',
+      product_id: product.id,
+      product_name: product.name,
+      quantity: actualQuantity,
+      unit_price: Number(order.unit_price),
+      line_total: actualLineTotal,
+      gst_rate: Number(product.gst_rate || 0),
+      gst_amount: 0 // Subscriptions typically don't have GST
+    }
+  })
 
   const { data: lineItems, error } = await supabase
     .from("invoice_line_items")
@@ -1148,18 +1170,23 @@ async function createSalesLineItems(
   if (!creditSales?.length) return []
 
   // Create line items for each credit sale with ALL required fields
-  const lineItemsData = creditSales.map(sale => ({
-    invoice_id: invoiceId,
-    sale_id: sale.id,
-    line_item_type: 'manual_sale',
-    product_id: sale.product.id,
-    product_name: sale.product.name,
-    quantity: Number(sale.quantity),
-    unit_price: Number(sale.unit_price),
-    line_total: Number(sale.total_amount),
-    gst_rate: Number(sale.product.gst_rate || 0),
-    gst_amount: Number(sale.gst_amount || 0)
-  }))
+  const lineItemsData = creditSales.map(sale => {
+    // Handle product data - it should be a single object, not array
+    const product = Array.isArray(sale.product) ? sale.product[0] : sale.product
+    
+    return {
+      invoice_id: invoiceId,
+      sale_id: sale.id,
+      line_item_type: 'manual_sale',
+      product_id: product.id,
+      product_name: product.name,
+      quantity: Number(sale.quantity),
+      unit_price: Number(sale.unit_price),
+      line_total: Number(sale.total_amount),
+      gst_rate: Number(product.gst_rate || 0),
+      gst_amount: Number(sale.gst_amount || 0)
+    }
+  })
 
   const { data: lineItems, error } = await supabase
     .from("invoice_line_items")

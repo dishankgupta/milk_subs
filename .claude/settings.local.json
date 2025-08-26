@@ -33,7 +33,8 @@
       "mcp__linear-server__get_issue",
       "mcp__linear-server__list_issues",
       "mcp__linear-server__create_comment",
-      "Bash(pnpm test:run:*)"
+      "Bash(pnpm test:run:*)",
+      "Bash(grep:*)"
     ]
   },
   "enabledMcpjsonServers": [
