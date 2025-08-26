@@ -120,8 +120,8 @@ export function OrderGenerationForm() {
       const result = await generateDailyOrders(data.orderDate)
       
       if (result.success) {
-        setGenerationResult({ success: true, message: result.message || "Orders generated successfully" })
-        toast.success(result.message)
+        setGenerationResult({ success: true, message: "Orders generated successfully" })
+        toast.success("Orders generated successfully")
         // Clear preview after successful generation
         setPreview([])
         setSummary(null)
