@@ -36,6 +36,7 @@ The project follows Next.js App Router structure:
 - `/src/app/globals.css` - Global styles with CSS variables
 - `/src/components/` - Reusable UI components
 - `/src/components/ui/` - Shadcn/ui component library
+  - `/src/components/ui/error-boundary.tsx` - **NEW** - Reusable error boundary component for graceful error handling
 - `/src/lib/` - Utilities, types, validations, and server actions
 - `/public/` - Static assets
 
@@ -599,6 +600,62 @@ pnpm test  # All IST tests must pass before deployment
 2. **Data Operations**: Use direct MCP calls for efficiency
 3. **Code References**: Use existing server actions as schema reference
 4. **Documentation**: This CLAUDE.md file contains complete schema information
+
+## Performance Optimization Standards
+
+**🚀 CRITICAL: All customer-facing pages MUST follow these performance optimization patterns implemented in the outstanding detail page (`/dashboard/outstanding/[customer_id]`).**
+
+### Server-Side Data Fetching (MANDATORY)
+- **Move data fetching to server components** for better caching and faster initial load
+- **Use Promise.all for parallel queries** instead of sequential database calls
+- **Pre-fetch essential data** on server to eliminate client-side loading waterfalls
+- **Limit large datasets** by default (e.g., recent payments only, with "view more" options)
+
+### Component Performance Standards
+- **Wrap components with React.memo** to prevent unnecessary re-renders
+- **Use useMemo for expensive calculations** (date comparisons, filtering, aggregations)
+- **Accept initialData props** to avoid double-fetching when data is available server-side
+- **Implement progressive loading** with meaningful skeleton states
+
+### Error Handling & UX Requirements
+- **ErrorBoundary components** must wrap all major page sections
+- **Suspense boundaries** with detailed skeleton loading states
+- **Graceful error recovery** with retry functionality
+- **Meaningful loading states** that match the actual content structure
+
+### Database Query Optimization
+- **Parallel query execution** using Promise.all for independent data
+- **Smart query limits** (default 5-10 items, expandable on demand)
+- **Efficient joins** and proper indexing considerations
+- **Avoid N+1 query patterns** through batched operations
+
+### Implementation Example (Outstanding Detail Page)
+```typescript
+// ✅ Correct Pattern - Server Component with Parallel Data Fetching
+export default async function Page({ params }) {
+  const [data, payments] = await Promise.all([
+    getCustomerOutstanding(customerId),
+    getCustomerPayments(customerId, 5) // Limited for performance
+  ])
+  
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<DetailedSkeleton />}>
+        <OptimizedComponent 
+          initialData={data} 
+          initialPayments={payments} 
+        />
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
+```
+
+### Performance Metrics to Achieve
+- **First Contentful Paint**: < 1.5s on average network
+- **Time to Interactive**: < 3s on average network  
+- **Database Queries**: < 3 parallel queries per page load
+- **Bundle Size**: Minimize client-side JavaScript for data fetching
 
 ## Deployment Notes
 
