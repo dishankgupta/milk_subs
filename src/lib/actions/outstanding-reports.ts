@@ -11,9 +11,11 @@ import type {
   MonthlySubscriptionBreakdown,
   ManualSalesBreakdown,
   PaymentBreakdown,
+  UnappliedPaymentsBreakdown,
   SubscriptionProductDetail,
   ManualSaleDetail,
-  PaymentDetail
+  PaymentDetail,
+  UnappliedPaymentDetail
 } from "@/lib/types/outstanding-reports"
 
 export async function generateOutstandingReport(
@@ -48,6 +50,20 @@ export async function generateOutstandingReport(
       customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
     } else if (config.customer_selection === 'with_outstanding') {
       customersQuery = customersQuery.gt("total_outstanding", 0)
+    } else if (config.customer_selection === 'with_credit') {
+      // Filter for customers with unapplied payments (available credit > 0)
+      const { data: customersWithCredit } = await supabase
+        .from('unapplied_payments')
+        .select('customer_id')
+        .gt('amount_unapplied', 0)
+      
+      if (customersWithCredit && customersWithCredit.length > 0) {
+        const customerIdsWithCredit = [...new Set(customersWithCredit.map(up => up.customer_id))]
+        customersQuery = customersQuery.in("customer_id", customerIdsWithCredit)
+      } else {
+        // If no customers have credit, return empty result
+        customersQuery = customersQuery.eq("customer_id", "00000000-0000-0000-0000-000000000000") // Non-existent UUID
+      }
     }
   }
 
@@ -67,7 +83,9 @@ export async function generateOutstandingReport(
         total_subscription_amount: 0,
         total_manual_sales_amount: 0,
         total_payments_amount: 0,
-        total_outstanding_amount: 0
+        total_unapplied_payments_amount: 0,
+        total_outstanding_amount: 0,
+        net_outstanding_amount: 0
       }
     }
   }
@@ -79,11 +97,13 @@ export async function generateOutstandingReport(
   const [
     subscriptionData,
     salesData,
-    paymentData
+    paymentData,
+    unappliedPaymentsData
   ] = await Promise.all([
     getSubscriptionBreakdownBatch(customerIds, startDate, endDate),
     getManualSalesBreakdownBatch(customerIds, startDate, endDate),
-    getPaymentBreakdownBatch(customerIds, startDate, endDate)
+    getPaymentBreakdownBatch(customerIds, startDate, endDate),
+    getUnappliedPaymentsBreakdownBatch(customerIds)
   ])
 
   // Build customer data efficiently
@@ -95,7 +115,9 @@ export async function generateOutstandingReport(
     total_subscription_amount: 0,
     total_manual_sales_amount: 0,
     total_payments_amount: 0,
-    total_outstanding_amount: 0
+    total_unapplied_payments_amount: 0,
+    total_outstanding_amount: 0,
+    net_outstanding_amount: 0
   }
 
   for (const customerSummary of customerSummaries) {
@@ -128,6 +150,7 @@ export async function generateOutstandingReport(
     const subscriptionBreakdown = subscriptionData.get(customerSummary.customer_id) || []
     const manualSalesBreakdown = salesData.get(customerSummary.customer_id) || []
     const paymentBreakdown = paymentData.get(customerSummary.customer_id) || []
+    const unappliedPaymentsBreakdown = unappliedPaymentsData.get(customerSummary.customer_id)
 
     const customerData: OutstandingCustomerData = {
       customer,
@@ -135,6 +158,7 @@ export async function generateOutstandingReport(
       subscription_breakdown: subscriptionBreakdown,
       manual_sales_breakdown: manualSalesBreakdown,
       payment_breakdown: paymentBreakdown,
+      unapplied_payments_breakdown: unappliedPaymentsBreakdown,
       current_outstanding: customerSummary.invoice_outstanding,
       total_outstanding: customerSummary.total_outstanding
     }
@@ -156,6 +180,8 @@ export async function generateOutstandingReport(
     summary.total_payments_amount += paymentBreakdown.reduce(
       (sum, payments) => sum + payments.total_amount, 0
     )
+    const customerUnappliedTotal = unappliedPaymentsBreakdown ? unappliedPaymentsBreakdown.total_amount : 0
+    summary.total_unapplied_payments_amount += customerUnappliedTotal
     summary.total_outstanding_amount += customerData.total_outstanding
   }
 
@@ -173,6 +199,9 @@ export async function generateOutstandingReport(
   }
 
   summary.total_customers = filteredCustomersData.length
+  
+  // Calculate net outstanding (total outstanding minus available credits)
+  summary.net_outstanding_amount = Math.max(0, summary.total_outstanding_amount - summary.total_unapplied_payments_amount)
   
   return {
     customers: filteredCustomersData,
@@ -387,7 +416,9 @@ function recalculateSummary(customers: OutstandingCustomerData[]): OutstandingRe
     total_subscription_amount: 0,
     total_manual_sales_amount: 0,
     total_payments_amount: 0,
-    total_outstanding_amount: 0
+    total_unapplied_payments_amount: 0,
+    total_outstanding_amount: 0,
+    net_outstanding_amount: 0
   }
   
   for (const customerData of customers) {
@@ -405,10 +436,93 @@ function recalculateSummary(customers: OutstandingCustomerData[]): OutstandingRe
     summary.total_payments_amount += customerData.payment_breakdown.reduce(
       (sum, payments) => sum + payments.total_amount, 0
     )
+    const customerUnappliedTotal = customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0
+    summary.total_unapplied_payments_amount += customerUnappliedTotal
     summary.total_outstanding_amount += customerData.total_outstanding
   }
   
+  // Calculate net outstanding
+  summary.net_outstanding_amount = Math.max(0, summary.total_outstanding_amount - summary.total_unapplied_payments_amount)
+  
   return summary
+}
+
+async function getUnappliedPaymentsBreakdownBatch(
+  customerIds: string[]
+): Promise<Map<string, UnappliedPaymentsBreakdown>> {
+  const supabase = await createClient()
+  const breakdownMap = new Map<string, UnappliedPaymentsBreakdown>()
+
+  if (customerIds.length === 0) return breakdownMap
+
+  const { data: unappliedData, error } = await supabase
+    .from('unapplied_payments')
+    .select(`
+      customer_id,
+      amount_unapplied,
+      payment_id,
+      payments (
+        payment_date,
+        amount,
+        payment_method,
+        notes
+      )
+    `)
+    .in('customer_id', customerIds)
+    .order('payment_id', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching unapplied payments breakdown:', error)
+    return breakdownMap
+  }
+
+  // Group by customer_id
+  interface RawUnappliedPayment {
+    customer_id: string
+    amount_unapplied: number
+    payment_id: string
+    payments: {
+      payment_date: string
+      amount: number
+      payment_method: string | null
+      notes: string | null
+    }[]
+  }
+  
+  const groupedData = new Map<string, RawUnappliedPayment[]>()
+  for (const payment of unappliedData || []) {
+    if (!groupedData.has(payment.customer_id)) {
+      groupedData.set(payment.customer_id, [])
+    }
+    groupedData.get(payment.customer_id)!.push(payment)
+  }
+
+  // Build breakdown for each customer
+  for (const [customerId, payments] of groupedData) {
+    const unappliedPaymentDetails: UnappliedPaymentDetail[] = payments.map(payment => {
+      const paymentData = Array.isArray(payment.payments) && payment.payments.length > 0 
+        ? payment.payments[0] 
+        : { payment_date: formatDateForDatabase(getCurrentISTDate()), amount: 0, payment_method: null, notes: null }
+      
+      return {
+        payment_id: payment.payment_id,
+        payment_date: paymentData.payment_date,
+        payment_amount: paymentData.amount,
+        amount_unapplied: payment.amount_unapplied,
+        payment_method: paymentData.payment_method || 'N/A',
+        notes: paymentData.notes || undefined
+      }
+    })
+
+    const totalAmount = payments.reduce((sum, payment) => sum + payment.amount_unapplied, 0)
+
+    breakdownMap.set(customerId, {
+      total_amount: totalAmount,
+      unapplied_payment_details: unappliedPaymentDetails
+    })
+  }
+
+  return breakdownMap
 }
 
 // Old individual functions removed - replaced with batch processing for performance

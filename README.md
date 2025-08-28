@@ -11,6 +11,9 @@ A comprehensive dairy business management system built with Next.js 15, featurin
 - Professional invoice generation with bulk processing
 - Comprehensive reporting and analytics
 - Outstanding payment tracking with detailed breakdowns
+- ✅ **NEW**: Advanced unapplied payment management with allocation workflows
+- ✅ **NEW**: Credit visibility across all customer interfaces
+- ✅ **NEW**: Enhanced print reports with three-tier financial totals
 
 ## 🏗️ Technology Stack
 
@@ -54,6 +57,15 @@ Complete PostgreSQL database with 15 tables:
 
 ## 🎯 Key Features
 
+### ✅ Advanced Unapplied Payment Management ⭐ **LATEST ENHANCEMENT**
+- **Dedicated Dashboard Tab**: Complete unapplied payments interface in payments dashboard with customer-first allocation workflow
+- **System-Wide Credit Visibility**: Available credit display across customer profiles, outstanding dashboard, and payment interfaces
+- **Smart Filtering**: "Customers with Credit" filter in outstanding reports for efficient credit management  
+- **Professional Print Integration**: Three-tier financial totals (Gross → Credits → Net) in all business reports
+- **Enhanced Customer Statements**: Detailed available credit sections with payment breakdowns and professional PureDairy styling
+- **Optimized Performance**: Customer-specific queries and batch processing for efficient credit operations
+- **Comprehensive Error Handling**: Robust validation including Invalid Date fixes for seamless print report generation
+
 ### ✅ Customer Management
 - Complete CRUD operations with advanced search and sorting
 - Multiple phone number support and route assignment
@@ -85,7 +97,10 @@ Complete PostgreSQL database with 15 tables:
 - Collection rate tracking and trend analysis
 - Invoice-based outstanding calculations with real-time updates
 - Comprehensive outstanding dashboard with customer detail views
-- Unapplied payment management for payments not yet allocated to invoices
+- ✅ **ENHANCED**: Complete unapplied payment management system with dedicated dashboard tab
+- ✅ **NEW**: Available credit visibility across all customer interfaces with consistent green formatting
+- ✅ **NEW**: "Customers with Credit" filter in outstanding reports for efficient credit identification
+- ✅ **NEW**: Three-tier financial totals (Gross Outstanding → Credits Available → Net Outstanding)
 
 ### ✅ Sales Management
 - Manual sales entry (Cash vs Credit) with business logic validation
@@ -108,7 +123,10 @@ Complete PostgreSQL database with 15 tables:
 - Payment collection reports with trend analysis
 - Delivery performance analytics with variance tracking
 - Outstanding reports with triple-level expandable data
-- Professional print layouts for all reports
+- ✅ **ENHANCED**: Professional print layouts for all reports with comprehensive unapplied payment integration
+- ✅ **NEW**: Three-tier financial totals system in all print reports (Gross → Credits → Net Outstanding)
+- ✅ **NEW**: Available credit sections in customer statements with detailed payment breakdowns
+- ✅ **NEW**: Enhanced outstanding reports with credit filtering and professional PureDairy branding
 
 ## 🛠️ Development Commands
 
@@ -187,15 +205,15 @@ src/
 
 **🎉 PRODUCTION READY** - All major features implemented and tested
 
-- ✅ **Phase 1-9 Complete**: All core business functionality implemented including invoice generation system fix
+- ✅ **Phase 1-12 Complete**: All core business functionality implemented including latest unapplied payments enhancement
 - ✅ **Mobile Optimized**: Responsive design throughout
 - ✅ **GST Compliant**: Full GST integration with proper tax handling
-- ✅ **Professional Reports**: Complete print system with branding
-- ✅ **Robust PDF Generation**: Stable PDF generation with error recovery
+- ✅ **Professional Reports**: Complete print system with branding and comprehensive credit integration
+- ✅ **Robust PDF Generation**: Stable PDF generation with error recovery and Invalid Date fixes
 - ✅ **Invoice-Based Outstanding**: Proper outstanding calculations with payment allocation tracking
-- ✅ **Enhanced Payment System**: Advanced payment-to-invoice allocation with auto-allocation modes
-- ✅ **Comprehensive Data Management**: Advanced search, filter, and sort capabilities
-- ✅ **Invoice Generation System**: Fixed and operational with transaction-based logic and proper customer selection
+- ✅ **Enhanced Payment System**: Advanced payment-to-invoice allocation with auto-allocation modes and unapplied payment management
+- ✅ **Comprehensive Data Management**: Advanced search, filter, and sort capabilities with credit-based filtering
+- ✅ **Complete Credit Management**: Full unapplied payment workflow from allocation to reporting with three-tier financial display
 
 ## 🔐 Authentication
 
@@ -229,7 +247,9 @@ This system completely replaces Excel-based tracking with:
 - Invoice-based outstanding tracking with 100% accuracy and audit trails
 - Advanced payment allocation system eliminating manual outstanding calculations
 - Real-time outstanding dashboard with comprehensive customer detail views
-- Fixed invoice generation system with proper customer selection and data integrity
+- ✅ **NEW**: Complete unapplied payment workflow eliminating manual credit tracking
+- ✅ **NEW**: Instant credit identification with smart filtering and consistent visibility
+- ✅ **NEW**: Professional three-tier financial reporting (Gross → Credits → Net Outstanding)
 - Mobile-optimized interfaces for field operations
 - Complete payment-to-invoice audit trail for financial accuracy
 

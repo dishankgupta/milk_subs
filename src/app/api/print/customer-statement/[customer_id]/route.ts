@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCustomerOutstanding } from '@/lib/actions/outstanding'
+import { getCustomerOutstanding, getCustomerCreditInfo } from '@/lib/actions/outstanding'
 import { getCustomerPayments } from '@/lib/actions/payments'
 import { formatCurrency } from '@/lib/utils'
 import { getCurrentISTDate, formatDateIST } from '@/lib/date-utils'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
@@ -18,11 +19,37 @@ export async function GET(
 
     const data = await getCustomerOutstanding(customerId)
     const recentPayments = await getCustomerPayments(customerId)
+    const creditInfo = await getCustomerCreditInfo(customerId)
+    
+    // Get detailed unapplied payments for this customer
+    const supabase = await createClient()
+    const { data: unappliedPayments, error: unappliedError } = await supabase
+      .from('unapplied_payments')
+      .select(`
+        amount_unapplied,
+        payment_id,
+        payments (
+          payment_date,
+          payment_method,
+          amount,
+          notes
+        )
+      `)
+      .eq('customer_id', customerId)
+      .order('payment_id', { ascending: false })
+    
+    if (unappliedError) {
+      console.error('Error fetching unapplied payments:', unappliedError)
+    }
+    
+    const unappliedPaymentsData = unappliedPayments || []
     
     const html = `
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Customer Outstanding Statement</title>
           <style>
             body {
@@ -83,13 +110,13 @@ export async function GET(
             }
             .outstanding-summary {
               display: grid;
-              grid-template-columns: repeat(4, 1fr);
+              grid-template-columns: repeat(6, 1fr);
               gap: 15px;
               margin-bottom: 30px;
             }
             @media print {
               .outstanding-summary {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
                 gap: 10px;
               }
             }
@@ -122,6 +149,20 @@ export async function GET(
             }
             .summary-card.total .summary-amount {
               color: #dc2626;
+            }
+            .summary-card.credit {
+              background: #f0fdf4;
+              border-color: #86efac;
+            }
+            .summary-card.credit .summary-amount {
+              color: #15803d;
+            }
+            .summary-card.net-outstanding {
+              background: #fef3c7;
+              border-color: #fcd34d;
+            }
+            .summary-card.net-outstanding .summary-amount {
+              color: #92400e;
             }
             .invoices-section {
               margin-bottom: 30px;
@@ -263,9 +304,32 @@ export async function GET(
               <div class="text-xs text-gray-500 mt-1">${data.unpaidInvoices.length} unpaid invoices</div>
             </div>
             <div class="summary-card total">
-              <div class="summary-title">Total Outstanding</div>
+              <div class="summary-title">Gross Outstanding</div>
               <div class="summary-amount">${formatCurrency(data.totalOutstanding)}</div>
-              <div class="text-xs text-white mt-1 opacity-80">Amount to be collected</div>
+              <div class="text-xs text-white mt-1 opacity-80">Before credit adjustment</div>
+            </div>
+            <div class="summary-card credit">
+              <div class="summary-title">Available Credit</div>
+              <div class="summary-amount">${formatCurrency(creditInfo.total_amount)}</div>
+              <div class="text-xs text-gray-500 mt-1">${creditInfo.payment_count} unapplied payment${creditInfo.payment_count !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="summary-card net-outstanding">
+              ${(() => {
+                const netBalance = data.totalOutstanding - creditInfo.total_amount;
+                if (netBalance > 0) {
+                  return `<div class="summary-title">Net Outstanding</div>
+                          <div class="summary-amount" style="color: #dc2626;">${formatCurrency(netBalance)}</div>
+                          <div class="text-xs text-gray-500 mt-1">Amount due after credit</div>`;
+                } else if (netBalance < 0) {
+                  return `<div class="summary-title">Net Credit Balance</div>
+                          <div class="summary-amount" style="color: #15803d;">${formatCurrency(Math.abs(netBalance))}</div>
+                          <div class="text-xs text-gray-500 mt-1">Excess credit available</div>`;
+                } else {
+                  return `<div class="summary-title">Net Balance</div>
+                          <div class="summary-amount" style="color: #6b7280;">₹0.00</div>
+                          <div class="text-xs text-gray-500 mt-1">Account balanced</div>`;
+                }
+              })()}
             </div>
             <div class="summary-card">
               <div class="summary-title">Recent Payments</div>
@@ -325,7 +389,7 @@ export async function GET(
             `}
           </div>
 
-          {/* Payment History Section */}
+          <!-- Payment History Section -->
           <div class="invoices-section">
             <div class="section-title">Recent Payment History (Last 10 Payments)</div>
             ${recentPayments.length === 0 ? `
@@ -360,6 +424,55 @@ export async function GET(
             `}
           </div>
 
+          <!-- Available Credit Section -->
+          <div class="invoices-section">
+            <div class="section-title">Available Credit (${unappliedPaymentsData.length} Unapplied Payments)</div>
+            ${unappliedPaymentsData.length === 0 ? `
+              <div class="no-invoices">
+                No unapplied payments available
+              </div>
+            ` : `
+              <table>
+                <thead>
+                  <tr>
+                    <th>Payment Date</th>
+                    <th>Original Amount</th>
+                    <th>Available Credit</th>
+                    <th>Payment Method</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${unappliedPaymentsData.map((payment) => {
+                    const paymentData = Array.isArray(payment.payments) ? payment.payments[0] : payment.payments
+                    return `
+                      <tr>
+                        <td>${formatDateIST(new Date(paymentData.payment_date))}</td>
+                        <td class="amount">${formatCurrency(paymentData.amount)}</td>
+                        <td class="amount" style="color: #15803d; font-weight: bold;">${formatCurrency(payment.amount_unapplied)}</td>
+                        <td>${paymentData.payment_method || 'N/A'}</td>
+                        <td>${paymentData.notes || '-'}</td>
+                      </tr>
+                    `
+                  }).join('')}
+                </tbody>
+              </table>
+              <div style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #15803d;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong style="color: #15803d; font-size: 16px;">Total Credit Available</strong>
+                    <div style="color: #6b7280; font-size: 12px; margin-top: 4px;">
+                      This credit can be applied to outstanding invoices or opening balance
+                    </div>
+                  </div>
+                  <div style="color: #15803d; font-size: 24px; font-weight: bold;">
+                    ${formatCurrency(creditInfo.total_amount)}
+                  </div>
+                </div>
+              </div>
+            `}
+          </div>
+
           <div class="footer">
             <p>Statement generated on ${formatDateIST(getCurrentISTDate())}</p>
             <p>PureDairy - Customer Outstanding Statement</p>
@@ -377,7 +490,7 @@ export async function GET(
 
     return new NextResponse(html, {
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=UTF-8',
       },
     })
   } catch (error) {

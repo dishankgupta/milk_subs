@@ -1,11 +1,11 @@
-import { Suspense } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, CreditCard, AlertCircle, TrendingUp, Users } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Plus, CreditCard, AlertCircle, TrendingUp, Users, DollarSign } from "lucide-react"
 import { getPayments, getPaymentStats } from "@/lib/actions/payments"
+import { getUnappliedPaymentStats } from "@/lib/actions/outstanding"
 import { formatCurrency } from "@/lib/utils"
-import PaymentsTable from "./payments-table"
+import { PaymentTabs } from "@/components/payments/PaymentTabs"
 
 export default async function PaymentsPage(props: { 
   searchParams: Promise<{ 
@@ -17,14 +17,15 @@ export default async function PaymentsPage(props: {
 }) {
   const searchParams = await props.searchParams
   
-  const [paymentsResult, stats] = await Promise.all([
+  const [paymentsResult, stats, unappliedStats] = await Promise.all([
     getPayments({
       search: searchParams.search,
       customer_id: searchParams.customer_id,
       payment_method: searchParams.payment_method,
       page: searchParams.page ? parseInt(searchParams.page) : 1,
     }),
-    getPaymentStats()
+    getPaymentStats(),
+    getUnappliedPaymentStats()
   ])
 
   return (
@@ -46,7 +47,7 @@ export default async function PaymentsPage(props: {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">This Month</CardTitle>
@@ -102,26 +103,27 @@ export default async function PaymentsPage(props: {
             </p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Unapplied Payments</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(unappliedStats.totalAmount)}</div>
+            <p className="text-xs text-muted-foreground">
+              {unappliedStats.totalCount} payment{unappliedStats.totalCount !== 1 ? 's' : ''} across {unappliedStats.customersCount} customer{unappliedStats.customersCount !== 1 ? 's' : ''}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Payments Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment History</CardTitle>
-          <CardDescription>
-            Recent payments and transactions from customers
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div>Loading payments...</div>}>
-            <PaymentsTable 
-              initialPayments={paymentsResult.payments}
-              initialTotal={paymentsResult.total}
-              searchParams={searchParams}
-            />
-          </Suspense>
-        </CardContent>
-      </Card>
+      {/* Payment Tabs */}
+      <PaymentTabs
+        initialPayments={paymentsResult.payments}
+        initialTotal={paymentsResult.total}
+        searchParams={searchParams}
+      />
     </div>
   )
 }

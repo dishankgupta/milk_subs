@@ -282,8 +282,8 @@ export function OutstandingReport() {
               <Label>Customer Selection</Label>
               <RadioGroup
                 value={form.watch("customer_selection")}
-                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding')}
-                className="grid grid-cols-2 gap-4"
+                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding' | 'with_credit')}
+                className="grid grid-cols-3 gap-4"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="all" id="all" />
@@ -292,6 +292,10 @@ export function OutstandingReport() {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="with_outstanding" id="with_outstanding" />
                   <Label htmlFor="with_outstanding">Customers with Outstanding &gt; 0</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="with_credit" id="with_credit" />
+                  <Label htmlFor="with_credit">Customers with Credit</Label>
                 </div>
               </RadioGroup>
             </div>

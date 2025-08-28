@@ -47,6 +47,10 @@ export interface OutstandingDashboard {
     total_outstanding: number
     unpaid_invoice_count: number
     oldest_unpaid_date?: string
+    // Credit information
+    credit_amount?: number
+    credit_count?: number
+    hasCredit?: boolean
   }>
 }
 
@@ -134,6 +138,32 @@ export async function getOutstandingDashboard(): Promise<OutstandingDashboard> {
     throw new Error("Failed to fetch outstanding summary")
   }
   
+  // Get credit information for all customers
+  const { data: creditData, error: creditError } = await supabase
+    .from("unapplied_payments")
+    .select("customer_id, amount_unapplied")
+  
+  if (creditError) {
+    console.error("Failed to fetch credit data:", creditError)
+  }
+  
+  // Group credit data by customer
+  const creditMap = new Map<string, { amount: number; count: number }>()
+  creditData?.forEach(payment => {
+    const existing = creditMap.get(payment.customer_id) || { amount: 0, count: 0 }
+    existing.amount += payment.amount_unapplied
+    existing.count += 1
+    creditMap.set(payment.customer_id, existing)
+  })
+  
+  // Enhance customers with credit information
+  const enhancedCustomers = customersWithOutstanding?.map(customer => ({
+    ...customer,
+    credit_amount: creditMap.get(customer.customer_id)?.amount || 0,
+    credit_count: creditMap.get(customer.customer_id)?.count || 0,
+    hasCredit: (creditMap.get(customer.customer_id)?.amount || 0) > 0
+  })) || []
+  
   // Get overdue invoices count
   const { count: overdueInvoices, error: overdueError } = await supabase
     .from("invoice_metadata")
@@ -145,18 +175,18 @@ export async function getOutstandingDashboard(): Promise<OutstandingDashboard> {
     throw new Error("Failed to fetch overdue invoices count")
   }
   
-  const totalOutstanding = customersWithOutstanding?.reduce(
+  const totalOutstanding = enhancedCustomers.reduce(
     (sum, customer) => sum + (customer.total_outstanding || 0), 0
-  ) || 0
+  )
   
   return {
     totalOutstanding,
-    customersWithOutstanding: customersWithOutstanding?.length || 0,
+    customersWithOutstanding: enhancedCustomers.length,
     overdueInvoices: overdueInvoices || 0,
-    averageOutstanding: customersWithOutstanding?.length 
-      ? totalOutstanding / customersWithOutstanding.length 
+    averageOutstanding: enhancedCustomers.length 
+      ? totalOutstanding / enhancedCustomers.length 
       : 0,
-    customers: customersWithOutstanding || []
+    customers: enhancedCustomers
   }
 }
 
@@ -403,6 +433,44 @@ export async function getCustomerUnappliedPayments(customerId: string): Promise<
   return getUnappliedPayments(customerId)
 }
 
+export interface CustomerCreditInfo {
+  total_amount: number
+  payment_count: number
+  hasCredit: boolean
+}
+
+export async function getCustomerCreditInfo(customerId: string): Promise<CustomerCreditInfo> {
+  const supabase = await createClient()
+  
+  try {
+    const { data: creditData, error } = await supabase
+      .from("unapplied_payments")
+      .select("amount_unapplied")
+      .eq("customer_id", customerId)
+    
+    if (error) {
+      throw new Error("Failed to fetch customer credit information")
+    }
+    
+    const total_amount = creditData?.reduce((sum, payment) => sum + payment.amount_unapplied, 0) || 0
+    const payment_count = creditData?.length || 0
+    const hasCredit = total_amount > 0
+    
+    return {
+      total_amount,
+      payment_count,
+      hasCredit
+    }
+  } catch (error) {
+    console.error("Failed to get customer credit info:", error)
+    return {
+      total_amount: 0,
+      payment_count: 0,
+      hasCredit: false
+    }
+  }
+}
+
 // Function to allocate payment to customer's opening balance
 export async function allocatePaymentToOpeningBalance(
   paymentId: string,
@@ -493,6 +561,51 @@ export async function allocatePaymentToOpeningBalance(
     
   } catch (error) {
     console.error("Opening balance allocation error:", error)
+    throw error
+  }
+}
+
+export interface UnappliedPaymentStats {
+  totalAmount: number
+  totalCount: number
+  customersCount: number
+}
+
+export async function getUnappliedPaymentStats(): Promise<UnappliedPaymentStats> {
+  const supabase = await createClient()
+  
+  try {
+    // Get total amount and count of unapplied payments
+    const { data: statsData, error: statsError } = await supabase
+      .from("unapplied_payments")
+      .select("amount_unapplied")
+    
+    if (statsError) {
+      throw new Error("Failed to fetch unapplied payment statistics")
+    }
+    
+    const totalAmount = statsData?.reduce((sum, payment) => sum + payment.amount_unapplied, 0) || 0
+    const totalCount = statsData?.length || 0
+    
+    // Get count of unique customers with unapplied payments
+    const { data: customersData, error: customersError } = await supabase
+      .from("unapplied_payments")
+      .select("customer_id")
+    
+    if (customersError) {
+      throw new Error("Failed to fetch customer count")
+    }
+    
+    const uniqueCustomers = new Set(customersData?.map(payment => payment.customer_id) || [])
+    const customersCount = uniqueCustomers.size
+    
+    return {
+      totalAmount,
+      totalCount,
+      customersCount
+    }
+  } catch (error) {
+    console.error("Failed to get unapplied payment stats:", error)
     throw error
   }
 }

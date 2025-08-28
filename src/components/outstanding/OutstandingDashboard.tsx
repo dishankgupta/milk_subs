@@ -296,6 +296,11 @@ export function OutstandingDashboard() {
                             Opening: {formatCurrency(customer.opening_balance)}
                           </div>
                         )}
+                        {customer.hasCredit && (
+                          <div className="text-xs text-green-600 font-medium">
+                            + Credit Available: {formatCurrency(customer.credit_amount || 0)} ({customer.credit_count} payment{(customer.credit_count || 0) !== 1 ? 's' : ''})
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant={customer.unpaid_invoice_count > 0 ? "destructive" : "secondary"}>

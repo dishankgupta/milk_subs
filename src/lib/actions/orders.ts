@@ -161,7 +161,7 @@ async function batchApplyModifications(
       baseQuantity = subscription.daily_quantity || 0
     } else if (subscription.subscription_type === "Pattern") {
       const targetDate = parseLocalDateIST(orderDate)
-      baseQuantity = getPatternQuantity(subscription, targetDate)
+      baseQuantity = getPatternQuantity(subscription as import('@/lib/types').Subscription, targetDate)
     }
     
     // Apply modifications

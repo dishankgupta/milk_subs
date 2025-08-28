@@ -185,7 +185,7 @@ export type ProductFormData = z.infer<typeof productSchema>
 export const outstandingReportSchema = z.object({
   start_date: z.date(),
   end_date: z.date(),
-  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'selected']),
+  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'with_credit', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional()
 }).refine((data) => {
   // End date must be after start date

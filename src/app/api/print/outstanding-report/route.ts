@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const reportData = await generateOutstandingReport({
       start_date: parseLocalDate(startDate),
       end_date: parseLocalDate(endDate),
-      customer_selection: customerSelection as 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'selected',
+      customer_selection: customerSelection as 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'selected',
       selected_customer_ids: selectedCustomerIds
     })
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     return new Response(html, {
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=UTF-8',
         'Cache-Control': 'no-cache'
       }
     })
@@ -69,7 +69,7 @@ function generateSummaryHTML(
     
     .summary-stats {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       margin: 30px 0;
     }
@@ -133,7 +133,20 @@ function generateSummaryHTML(
     </div>
     <div class="stat-card">
       <div class="stat-value">${formatCurrency(reportData.summary.total_outstanding_amount)}</div>
-      <div class="stat-label">Total Outstanding</div>
+      <div class="stat-label">Gross Outstanding</div>
+    </div>
+    <div class="stat-card" style="background: #f0fdf4; border-color: #86efac;">
+      <div class="stat-value" style="color: #15803d;">${formatCurrency(reportData.summary.total_unapplied_payments_amount)}</div>
+      <div class="stat-label">Total Credits Available</div>
+    </div>
+    <div class="stat-card" style="background: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#fef3c7' : '#f0fdf4'}; border-color: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#fcd34d' : '#86efac'};">
+      <div class="stat-value" style="color: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#92400e' : '#15803d'};">
+        ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 
+          ? formatCurrency(reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount)
+          : formatCurrency(Math.abs(reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount))
+        }
+      </div>
+      <div class="stat-label">${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? 'Net Outstanding' : 'Net Credit Balance'}</div>
     </div>
   </div>
 
@@ -149,7 +162,9 @@ function generateSummaryHTML(
           <th>Subscription</th>
           <th>Manual Sales</th>
           <th>Payments</th>
-          <th>Outstanding</th>
+          <th>Credits Available</th>
+          <th>Gross Outstanding</th>
+          <th>Net Balance</th>
         </tr>
       </thead>
       <tbody>
@@ -173,8 +188,23 @@ function generateSummaryHTML(
               <td class="payment-amount">-${formatCurrency(
                 customer.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
               )}</td>
+              <td style="color: #15803d; font-weight: bold;">
+                ${formatCurrency(customer.unapplied_payments_breakdown ? customer.unapplied_payments_breakdown.total_amount : 0)}
+              </td>
               <td class="${customer.total_outstanding > 0 ? 'outstanding-amount' : 'no-outstanding'}">
                 ${formatCurrency(customer.total_outstanding)}
+              </td>
+              <td style="font-weight: bold;">
+                ${(() => {
+                  const netBalance = customer.total_outstanding - (customer.unapplied_payments_breakdown ? customer.unapplied_payments_breakdown.total_amount : 0);
+                  if (netBalance > 0) {
+                    return `<span style="color: #dc2626;">${formatCurrency(netBalance)}</span>`;
+                  } else if (netBalance < 0) {
+                    return `<span style="color: #15803d;">Cr. ${formatCurrency(Math.abs(netBalance))}</span>`;
+                  } else {
+                    return `<span style="color: #6b7280;">₹0.00</span>`;
+                  }
+                })()}
               </td>
             </tr>
           `).join('')}
@@ -301,7 +331,7 @@ function generateCustomerStatementsHTML(
             ${customerData.payment_breakdown.map(paymentGroup =>
               paymentGroup.payment_details.map(payment => `
                 <tr>
-                  <td>${formatDateIST(new Date(payment.payment_date))}</td>
+                  <td>${payment.payment_date && !isNaN(new Date(payment.payment_date).getTime()) ? formatDateIST(new Date(payment.payment_date)) : 'N/A'}</td>
                   <td>${payment.payment_method}</td>
                   <td class="payment-amount">-${formatCurrency(payment.amount)}</td>
                   <td>${payment.notes || ''}</td>
@@ -313,20 +343,101 @@ function generateCustomerStatementsHTML(
       </div>
       ` : ''}
 
-      <!-- Final Balance -->
-      <div class="balance-summary final-balance">
-        <div class="balance-row total-row">
-          <span><strong>Current Outstanding Balance:</strong></span>
-          <span class="amount outstanding">${formatCurrency(customerData.total_outstanding)}</span>
+      <!-- Available Credit Section -->
+      ${customerData.unapplied_payments_breakdown && customerData.unapplied_payments_breakdown.unapplied_payment_details.length > 0 ? `
+      <div class="transaction-section">
+        <h4>Available Credit (${customerData.unapplied_payments_breakdown.unapplied_payment_details.length} Unapplied Payments)</h4>
+        <table class="transaction-table">
+          <thead>
+            <tr>
+              <th>Payment Date</th>
+              <th>Original Amount</th>
+              <th>Available Credit</th>
+              <th>Payment Method</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${customerData.unapplied_payments_breakdown.unapplied_payment_details.map(payment => `
+              <tr>
+                <td>${payment.payment_date && !isNaN(new Date(payment.payment_date).getTime()) ? formatDateIST(new Date(payment.payment_date)) : 'N/A'}</td>
+                <td>${formatCurrency(payment.payment_amount)}</td>
+                <td style="color: #15803d; font-weight: bold;">${formatCurrency(payment.amount_unapplied)}</td>
+                <td>${payment.payment_method}</td>
+                <td>${payment.notes || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #15803d;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="color: #15803d; font-size: 14px;">Total Credit Available</strong>
+              <div style="color: #6b7280; font-size: 11px; margin-top: 2px;">
+                Can be applied to outstanding invoices or opening balance
+              </div>
+            </div>
+            <div style="color: #15803d; font-size: 18px; font-weight: bold;">
+              ${formatCurrency(customerData.unapplied_payments_breakdown.total_amount)}
+            </div>
+          </div>
         </div>
       </div>
-
-      ${customerData.total_outstanding > 0 ? `
-      <div class="payment-notice">
-        <p><strong>Payment Due:</strong> ${formatCurrency(customerData.total_outstanding)}</p>
-        <p>Please remit payment at your earliest convenience.</p>
-      </div>
       ` : ''}
+
+      <!-- Final Balance -->
+      <div class="balance-summary final-balance">
+        <div class="balance-row">
+          <span><strong>Gross Outstanding Balance:</strong></span>
+          <span class="amount outstanding">${formatCurrency(customerData.total_outstanding)}</span>
+        </div>
+        ${customerData.unapplied_payments_breakdown ? `
+        <div class="balance-row">
+          <span><strong>Less: Available Credit:</strong></span>
+          <span class="amount" style="color: #15803d;">-${formatCurrency(customerData.unapplied_payments_breakdown.total_amount)}</span>
+        </div>
+        <div class="balance-row total-row">
+          ${(() => {
+            const netBalance = customerData.total_outstanding - customerData.unapplied_payments_breakdown.total_amount;
+            if (netBalance > 0) {
+              return `<span><strong>Net Outstanding Balance:</strong></span>
+                      <span class="amount" style="color: #dc2626;">${formatCurrency(netBalance)}</span>`;
+            } else if (netBalance < 0) {
+              return `<span><strong>Net Credit Balance:</strong></span>
+                      <span class="amount" style="color: #15803d;">${formatCurrency(Math.abs(netBalance))}</span>`;
+            } else {
+              return `<span><strong>Net Balance:</strong></span>
+                      <span class="amount" style="color: #6b7280;">₹0.00</span>`;
+            }
+          })()}
+        </div>
+        ` : `
+        <div class="balance-row total-row">
+          <span><strong>Net Outstanding Balance:</strong></span>
+          <span class="amount outstanding">${formatCurrency(customerData.total_outstanding)}</span>
+        </div>
+        `}
+      </div>
+
+      ${(() => {
+        const netBalance = customerData.total_outstanding - (customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0);
+        if (netBalance > 0) {
+          return `<div class="payment-notice">
+            <p><strong>Payment Due:</strong> ${formatCurrency(netBalance)}</p>
+            <p>Please remit payment at your earliest convenience.</p>
+          </div>`;
+        } else if (netBalance < 0) {
+          return `<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 15px; margin-top: 30px;">
+            <p style="color: #15803d; font-weight: bold; margin: 5px 0;">✓ Account in Credit</p>
+            <p style="color: #15803d; margin: 5px 0;">Excess credit of ${formatCurrency(Math.abs(netBalance))} available.</p>
+          </div>`;
+        } else {
+          return `<div style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin-top: 30px;">
+            <p style="color: #6b7280; font-weight: bold; margin: 5px 0;">✓ Account Balanced</p>
+            <p style="color: #6b7280; margin: 5px 0;">No outstanding amount or excess credit.</p>
+          </div>`;
+        }
+      })()}
     </div>
     `
   }).join('')
