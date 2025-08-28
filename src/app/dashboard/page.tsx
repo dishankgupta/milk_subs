@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { getOutstandingDashboard } from '@/lib/actions/outstanding'
+import Link from 'next/link'
+import { CalendarPlus, FileText, Truck, ShoppingCart } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -123,6 +125,64 @@ export default async function DashboardPage() {
               </dl>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Action Buttons */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            href="/dashboard/orders/generate"
+            className="bg-blue-500 hover:bg-blue-600 text-white p-6 rounded-lg shadow transition-colors duration-200"
+          >
+            <div className="flex items-center">
+              <CalendarPlus className="h-8 w-8 mr-4" />
+              <div>
+                <h3 className="font-semibold text-lg">Generate Daily Orders</h3>
+                <p className="text-blue-100 text-sm">Create orders for today</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/dashboard/reports/delivery"
+            className="bg-green-500 hover:bg-green-600 text-white p-6 rounded-lg shadow transition-colors duration-200"
+          >
+            <div className="flex items-center">
+              <FileText className="h-8 w-8 mr-4" />
+              <div>
+                <h3 className="font-semibold text-lg">Daily Route Report</h3>
+                <p className="text-green-100 text-sm">View delivery routes</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/dashboard/deliveries/new"
+            className="bg-orange-500 hover:bg-orange-600 text-white p-6 rounded-lg shadow transition-colors duration-200"
+          >
+            <div className="flex items-center">
+              <Truck className="h-8 w-8 mr-4" />
+              <div>
+                <h3 className="font-semibold text-lg">Mark Deliveries</h3>
+                <p className="text-orange-100 text-sm">Confirm deliveries</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/dashboard/sales/new"
+            className="bg-purple-500 hover:bg-purple-600 text-white p-6 rounded-lg shadow transition-colors duration-200"
+          >
+            <div className="flex items-center">
+              <ShoppingCart className="h-8 w-8 mr-4" />
+              <div>
+                <h3 className="font-semibold text-lg">Record New Sale</h3>
+                <p className="text-purple-100 text-sm">Add manual sale</p>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 
