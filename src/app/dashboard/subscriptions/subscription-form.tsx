@@ -56,7 +56,7 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
       daily_quantity: subscription?.daily_quantity || undefined,
       pattern_day1_quantity: subscription?.pattern_day1_quantity || undefined,
       pattern_day2_quantity: subscription?.pattern_day2_quantity || undefined,
-      pattern_start_date: subscription?.pattern_start_date ? new Date(subscription.pattern_start_date) : undefined,
+      pattern_start_date: subscription?.pattern_start_date ? new Date(subscription.pattern_start_date) : null,
       is_active: subscription?.is_active ?? true,
     },
   })
@@ -113,7 +113,7 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
     if (watchedSubscriptionType === "Daily") {
       form.setValue("pattern_day1_quantity", undefined)
       form.setValue("pattern_day2_quantity", undefined)
-      form.setValue("pattern_start_date", undefined)
+      form.setValue("pattern_start_date", null)
     } else if (watchedSubscriptionType === "Pattern") {
       form.setValue("daily_quantity", undefined)
     }
@@ -125,14 +125,14 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
       const result = subscription 
         ? await updateSubscription(subscription.id, data)
         : await createSubscription(data)
-
+      
       if (result.success) {
         toast.success(`Subscription ${subscription ? 'updated' : 'created'} successfully`)
         router.push("/dashboard/subscriptions")
       } else {
         toast.error(result.error || `Failed to ${subscription ? 'update' : 'create'} subscription`)
       }
-    } catch {
+    } catch (error) {
       toast.error(`Failed to ${subscription ? 'update' : 'create'} subscription`)
     } finally {
       setLoading(false)
@@ -313,7 +313,18 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                       min="0.1"
                       placeholder="e.g., 1.5"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                      value={field.value !== undefined ? String(field.value) : ''}
+                      onChange={(e) => {
+                        const value = e.target.value.trim()
+                        if (value === '') {
+                          field.onChange(undefined)
+                        } else {
+                          const numValue = parseFloat(value)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            field.onChange(numValue)
+                          }
+                        }
+                      }}
                     />
                   </FormControl>
                   <FormDescription>
@@ -339,10 +350,19 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         <Input
                           type="number"
                           step="0.1"
-                          min="0.1"
-                          placeholder="e.g., 1.0"
+                          min="0"
+                          placeholder="e.g., 1.0 (0 for no delivery)"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          value={field.value !== undefined ? field.value : ''}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === '') {
+                              field.onChange(undefined)
+                            } else {
+                              const numValue = parseFloat(value)
+                              field.onChange(isNaN(numValue) ? undefined : numValue)
+                            }
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -360,10 +380,19 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         <Input
                           type="number"
                           step="0.1"
-                          min="0.1"
-                          placeholder="e.g., 2.0"
+                          min="0"
+                          placeholder="e.g., 2.0 (0 for no delivery)"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          value={field.value !== undefined ? field.value : ''}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === '') {
+                              field.onChange(undefined)
+                            } else {
+                              const numValue = parseFloat(value)
+                              field.onChange(isNaN(numValue) ? undefined : numValue)
+                            }
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -383,7 +412,10 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         type="date"
                         {...field}
                         value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          field.onChange(value ? new Date(value) : null)
+                        }}
                       />
                     </FormControl>
                     <FormDescription>

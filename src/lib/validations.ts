@@ -20,9 +20,9 @@ export const subscriptionSchema = z.object({
   product_id: z.string().uuid("Please select a valid product"),
   subscription_type: z.enum(["Daily", "Pattern"], { message: "Please select subscription type" }),
   daily_quantity: z.number().positive("Daily quantity must be positive").optional(),
-  pattern_day1_quantity: z.number().positive("Day 1 quantity must be positive").optional(),
-  pattern_day2_quantity: z.number().positive("Day 2 quantity must be positive").optional(),
-  pattern_start_date: z.date({ message: "Pattern start date is required" }).optional(),
+  pattern_day1_quantity: z.number().min(0, "Day 1 quantity cannot be negative").optional(),
+  pattern_day2_quantity: z.number().min(0, "Day 2 quantity cannot be negative").optional(),
+  pattern_start_date: z.date({ message: "Pattern start date is required" }).nullable().optional(),
   is_active: z.boolean(),
 }).refine((data) => {
   if (data.subscription_type === "Daily") {
@@ -31,14 +31,16 @@ export const subscriptionSchema = z.object({
   if (data.subscription_type === "Pattern") {
     return data.pattern_day1_quantity !== undefined && 
            data.pattern_day2_quantity !== undefined && 
-           data.pattern_start_date !== undefined &&
-           data.pattern_day1_quantity > 0 &&
-           data.pattern_day2_quantity > 0
+           data.pattern_start_date !== undefined && 
+           data.pattern_start_date !== null &&
+           data.pattern_day1_quantity >= 0 &&
+           data.pattern_day2_quantity >= 0 &&
+           (data.pattern_day1_quantity > 0 || data.pattern_day2_quantity > 0) // At least one day must have delivery
   }
   return true
 }, {
-  message: "Please provide valid quantities for the selected subscription type",
-  path: ["subscription_type"]
+  message: "For Pattern subscriptions, at least one day must have a delivery quantity greater than 0",
+  path: ["pattern_day1_quantity"]
 })
 
 export const modificationSchema = z.object({
