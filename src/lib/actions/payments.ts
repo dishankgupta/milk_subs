@@ -325,7 +325,7 @@ export async function deletePayment(id: string) {
   revalidatePath("/dashboard/outstanding")
 }
 
-export async function getCustomerPayments(customerId: string) {
+export async function getCustomerPayments(customerId: string, limit: number = 10) {
   const supabase = await createClient()
 
   const { data: payments, error } = await supabase
@@ -333,6 +333,7 @@ export async function getCustomerPayments(customerId: string) {
     .select("*")
     .eq("customer_id", customerId)
     .order("payment_date", { ascending: false })
+    .limit(limit)
 
   if (error) {
     throw new Error(`Failed to fetch customer payments: ${error.message}`)

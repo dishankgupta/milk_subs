@@ -57,53 +57,59 @@ export interface OutstandingDashboard {
 export async function getCustomerOutstanding(customerId: string): Promise<CustomerOutstanding> {
   const supabase = await createClient()
   
-  // Get customer with opening balance and route
-  const { data: customer, error: customerError } = await supabase
-    .from("customers")
-    .select(`
-      id,
-      billing_name,
-      contact_person,
-      phone_primary,
-      opening_balance,
-      routes!inner(name)
-    `)
-    .eq("id", customerId)
-    .single()
+  // Single optimized query using Promise.all for parallel execution
+  const [customerResult, unpaidInvoicesResult, effectiveOpeningBalance] = await Promise.all([
+    // Get customer with opening balance and route
+    supabase
+      .from("customers")
+      .select(`
+        id,
+        billing_name,
+        contact_person,
+        phone_primary,
+        opening_balance,
+        routes!inner(name)
+      `)
+      .eq("id", customerId)
+      .single(),
+    
+    // Get unpaid invoices with details
+    supabase
+      .from("invoice_metadata")
+      .select(`
+        id,
+        invoice_number,
+        invoice_date,
+        due_date,
+        total_amount,
+        amount_paid,
+        amount_outstanding,
+        invoice_status,
+        last_payment_date
+      `)
+      .eq("customer_id", customerId)
+      .in("invoice_status", ["pending", "partially_paid", "overdue", "sent"])
+      .order("invoice_date"),
+    
+    // Get effective opening balance in parallel
+    getEffectiveOpeningBalance(customerId)
+  ])
 
-  if (customerError || !customer) {
+  if (customerResult.error || !customerResult.data) {
     throw new Error("Customer not found")
   }
-  
-  // Get unpaid invoices with details
-  const { data: unpaidInvoices, error: invoicesError } = await supabase
-    .from("invoice_metadata")
-    .select(`
-      id,
-      invoice_number,
-      invoice_date,
-      due_date,
-      total_amount,
-      amount_paid,
-      amount_outstanding,
-      invoice_status,
-      last_payment_date
-    `)
-    .eq("customer_id", customerId)
-    .in("invoice_status", ["pending", "partially_paid", "overdue", "sent"])
-    .order("invoice_date")
 
-  if (invoicesError) {
+  if (unpaidInvoicesResult.error) {
     throw new Error("Failed to fetch unpaid invoices")
   }
   
-  // Get effective opening balance (original balance minus payments allocated to it)
-  const effectiveOpeningBalance = await getEffectiveOpeningBalance(customerId)
+  const customer = customerResult.data
+  const unpaidInvoices = unpaidInvoicesResult.data || []
   
   // Calculate totals
-  const invoiceOutstanding = unpaidInvoices?.reduce(
+  const invoiceOutstanding = unpaidInvoices.reduce(
     (sum, invoice) => sum + (invoice.amount_outstanding || 0), 0
-  ) || 0
+  )
   
   const totalOutstanding = effectiveOpeningBalance + invoiceOutstanding
   
@@ -117,7 +123,7 @@ export async function getCustomerOutstanding(customerId: string): Promise<Custom
 
   return {
     customer: transformedCustomer,
-    unpaidInvoices: unpaidInvoices || [],
+    unpaidInvoices,
     openingBalance: customer.opening_balance || 0,  // Original opening balance (immutable)
     effectiveOpeningBalance,  // Opening balance minus payments allocated to it
     invoiceOutstanding,

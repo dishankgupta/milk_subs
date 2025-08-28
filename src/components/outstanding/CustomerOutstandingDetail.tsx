@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCustomerOutstanding, type CustomerOutstanding } from '@/lib/actions/outstanding'
@@ -15,34 +15,43 @@ import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
 
 interface CustomerOutstandingDetailProps {
   customerId: string
+  initialData?: CustomerOutstanding
+  initialPayments?: Payment[]
 }
 
-export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDetailProps) {
-  const [data, setData] = useState<CustomerOutstanding | null>(null)
-  const [payments, setPayments] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(true)
+function CustomerOutstandingDetailComponent({ 
+  customerId, 
+  initialData, 
+  initialPayments 
+}: CustomerOutstandingDetailProps) {
+  const [data, setData] = useState<CustomerOutstanding | null>(initialData || null)
+  const [payments, setPayments] = useState<Payment[]>(initialPayments || [])
+  const [loading, setLoading] = useState(!initialData)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true)
-        const [outstandingResult, paymentsResult] = await Promise.all([
-          getCustomerOutstanding(customerId),
-          getCustomerPayments(customerId)
-        ])
-        setData(outstandingResult)
-        setPayments(paymentsResult)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load customer outstanding data')
-      } finally {
-        setLoading(false)
+    // Only fetch data if not provided as props
+    if (!initialData || !initialPayments) {
+      async function loadData() {
+        try {
+          setLoading(true)
+          const [outstandingResult, paymentsResult] = await Promise.all([
+            getCustomerOutstanding(customerId),
+            getCustomerPayments(customerId)
+          ])
+          setData(outstandingResult)
+          setPayments(paymentsResult)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to load customer outstanding data')
+        } finally {
+          setLoading(false)
+        }
       }
-    }
 
-    loadData()
-  }, [customerId])
+      loadData()
+    }
+  }, [customerId, initialData, initialPayments])
 
   const handlePrintStatement = () => {
     const printUrl = `/api/print/customer-statement/${customerId}`
@@ -72,6 +81,17 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
   }
 
   const { customer, unpaidInvoices, openingBalance, effectiveOpeningBalance, invoiceOutstanding, totalOutstanding } = data
+
+  // Memoize expensive calculations
+  const overdueInvoicesCount = useMemo(() => {
+    if (!unpaidInvoices) return 0
+    const currentDate = getCurrentISTDate()
+    return unpaidInvoices.filter(invoice => new Date(invoice.due_date) < currentDate).length
+  }, [unpaidInvoices])
+
+  const recentPayments = useMemo(() => {
+    return payments.slice(0, 5)
+  }, [payments])
 
   return (
     <div className="space-y-6">
@@ -297,7 +317,7 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
             </div>
           ) : (
             <div className="space-y-4">
-              {payments.slice(0, 5).map((payment) => (
+              {recentPayments.map((payment) => (
                 <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                   <div className="flex items-center space-x-4">
                     <div className="flex-shrink-0">
@@ -380,3 +400,6 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
     </div>
   )
 }
+
+// Export memoized component for better performance
+export const CustomerOutstandingDetail = memo(CustomerOutstandingDetailComponent)

@@ -222,9 +222,12 @@ export function CustomersTable() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-blue-600 font-medium">
+                    <Link 
+                      href={`/dashboard/outstanding/${customer.id}`}
+                      className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                    >
                       View Details
-                    </span>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <Badge variant={customer.status === "Active" ? "default" : "secondary"}>
