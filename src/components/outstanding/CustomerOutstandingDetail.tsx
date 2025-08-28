@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCustomerOutstanding, type CustomerOutstanding } from '@/lib/actions/outstanding'
+import { getCustomerPayments } from '@/lib/actions/payments'
+import type { Payment } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +19,7 @@ interface CustomerOutstandingDetailProps {
 
 export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDetailProps) {
   const [data, setData] = useState<CustomerOutstanding | null>(null)
+  const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -25,8 +28,12 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
     async function loadData() {
       try {
         setLoading(true)
-        const result = await getCustomerOutstanding(customerId)
-        setData(result)
+        const [outstandingResult, paymentsResult] = await Promise.all([
+          getCustomerOutstanding(customerId),
+          getCustomerPayments(customerId)
+        ])
+        setData(outstandingResult)
+        setPayments(paymentsResult)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load customer outstanding data')
       } finally {
@@ -282,10 +289,65 @@ export function CustomerOutstandingDetail({ customerId }: CustomerOutstandingDet
           <CardTitle>Recent Payment Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <p>Payment history will be displayed here</p>
-            <p className="text-sm">This section will show recent payments and their allocations to invoices</p>
-          </div>
+          {payments.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Receipt className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+              <p>No payment history found</p>
+              <p className="text-sm">Payments will appear here once recorded</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {payments.slice(0, 5).map((payment) => (
+                <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-green-600" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium text-gray-900">
+                          Payment of {formatCurrency(payment.amount)}
+                        </p>
+                        {payment.payment_method && (
+                          <Badge variant="secondary" className="text-xs">
+                            {payment.payment_method}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {formatDateIST(new Date(payment.payment_date))}
+                      </p>
+                      {payment.notes && (
+                        <p className="text-xs text-gray-400 mt-1 max-w-md truncate" title={payment.notes}>
+                          {payment.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Link href={`/dashboard/payments/${payment.id}`}>
+                      <Button variant="outline" size="sm">
+                        <FileText className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              
+              {payments.length > 5 && (
+                <div className="text-center pt-4 border-t">
+                  <Link href={`/dashboard/payments?search=${encodeURIComponent(customer.billing_name)}`}>
+                    <Button variant="outline" size="sm">
+                      View All {payments.length} Payments
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

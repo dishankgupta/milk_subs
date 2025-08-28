@@ -29,7 +29,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCurrency, cn, formatDateForAPI } from "@/lib/utils"
-import { formatDateIST } from "@/lib/date-utils"
+import { formatDateIST, getCurrentISTDate } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 import { generateOutstandingReport } from "@/lib/actions/outstanding-reports"
 import { outstandingReportSchema, type OutstandingReportFormData } from "@/lib/validations"
@@ -88,8 +88,9 @@ export function OutstandingReport() {
 
   // Set mounted state and initialize form values to prevent hydration mismatch
   useEffect(() => {
-    const startDate = new Date(2025, 7, 1) // Fixed date: August 1, 2025
-    const endDate = new Date(2025, 7, 22) // Fixed date: August 22, 2025
+    const currentDate = getCurrentISTDate()
+    const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1) // Start of current month
+    const endDate = currentDate // Today's date
     
     form.setValue("start_date", startDate)
     form.setValue("end_date", endDate)
@@ -440,6 +441,7 @@ export function OutstandingReport() {
                     >
                       Customer Name
                     </SortableTableHead>
+                    <TableHead>Route</TableHead>
                     <SortableTableHead 
                       sortKey="opening_balance" 
                       sortConfig={sortConfig} 
@@ -478,8 +480,9 @@ export function OutstandingReport() {
                       onSort={handleSort}
                       className="text-right"
                     >
-                      Current Outstanding
+                      Gross Outstanding
                     </SortableTableHead>
+                    <TableHead className="text-right">Net Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -510,9 +513,12 @@ export function OutstandingReport() {
                           <div>
                             <div className="font-medium">{customerData.customer.billing_name}</div>
                             <div className="text-sm text-gray-500">
-                              {customerData.customer.contact_person} • {customerData.customer.route?.name}
+                              {customerData.customer.contact_person}
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {customerData.customer.route?.name || 'N/A'}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(customerData.opening_balance)}
@@ -537,12 +543,24 @@ export function OutstandingReport() {
                             {formatCurrency(customerData.total_outstanding)}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {(() => {
+                            const netBalance = customerData.total_outstanding - (customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0);
+                            if (netBalance > 0) {
+                              return <span className="text-red-600">{formatCurrency(netBalance)}</span>;
+                            } else if (netBalance < 0) {
+                              return <span className="text-green-600">Cr. {formatCurrency(Math.abs(netBalance))}</span>;
+                            } else {
+                              return <span className="text-gray-600">₹0.00</span>;
+                            }
+                          })()}
+                        </TableCell>
                       </TableRow>
 
                       {/* Level 2: Expanded Customer Details */}
                       {expandedCustomers.has(customerData.customer.id) && (
                         <TableRow key={`${customerData.customer.id}-expanded`}>
-                          <TableCell colSpan={8} className="p-0">
+                          <TableCell colSpan={10} className="p-0">
                             <div className="bg-gray-50 p-4 space-y-4">
                               {/* Opening Balance */}
                               <div className="bg-white p-3 rounded border">

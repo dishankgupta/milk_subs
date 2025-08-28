@@ -389,7 +389,6 @@ export async function GET(
             `}
           </div>
 
-          <!-- Payment History Section -->
           <div class="invoices-section">
             <div class="section-title">Recent Payment History (Last 10 Payments)</div>
             ${recentPayments.length === 0 ? `
