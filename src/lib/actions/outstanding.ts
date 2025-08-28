@@ -260,18 +260,48 @@ export async function allocatePayment(
       throw new Error("Failed to update payment allocation status")
     }
     
-    // Handle unapplied amount if any
-    if (amountUnapplied > 0) {
-      const { error: unappliedError } = await supabase
+    // Handle unapplied payments table updates
+    if (amountUnapplied === 0) {
+      // Payment fully allocated - remove from unapplied payments
+      await supabase
         .from("unapplied_payments")
-        .insert({
-          customer_id: payment.customer_id,
-          payment_id: paymentId,
-          amount_unapplied: amountUnapplied
-        })
+        .delete()
+        .eq("payment_id", paymentId)
+    } else {
+      // Payment partially allocated - update or insert unapplied payment record
+      const { data: existingUnapplied } = await supabase
+        .from("unapplied_payments")
+        .select("id")
+        .eq("payment_id", paymentId)
+        .single()
       
-      if (unappliedError) {
-        console.warn("Failed to record unapplied payment:", unappliedError.message)
+      if (existingUnapplied) {
+        // Update existing record
+        const { error: updateError } = await supabase
+          .from("unapplied_payments")
+          .update({ 
+            amount_unapplied: amountUnapplied,
+            reason: "Awaiting invoice allocation"
+          })
+          .eq("payment_id", paymentId)
+        
+        if (updateError) {
+          console.warn("Failed to update unapplied payment:", updateError.message)
+        }
+      } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+          .from("unapplied_payments")
+          .insert({
+            customer_id: payment.customer_id,
+            payment_id: paymentId,
+            amount_unapplied: amountUnapplied,
+            reason: "Awaiting invoice allocation"
+          })
+        
+        if (insertError) {
+          console.warn("Failed to record unapplied payment:", insertError.message)
+        }
       }
     }
     
@@ -279,20 +309,6 @@ export async function allocatePayment(
     revalidatePath("/dashboard/outstanding")
     revalidatePath("/dashboard/payments")
     revalidatePath("/dashboard/customers")
-    
-    // Remove from unapplied payments if fully allocated
-    if (amountUnapplied === 0) {
-      await supabase
-        .from("unapplied_payments")
-        .delete()
-        .eq("payment_id", paymentId)
-    } else {
-      // Update unapplied payment amount
-      await supabase
-        .from("unapplied_payments")
-        .update({ amount_unapplied: amountUnapplied })
-        .eq("payment_id", paymentId)
-    }
     
     return { success: true }
   } catch (error) {

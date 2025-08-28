@@ -23,6 +23,8 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedPayment, setSelectedPayment] = useState<UnappliedPayment | null>(null)
+  const [pendingAllocations, setPendingAllocations] = useState<{ id: string; type: 'invoice' | 'opening_balance'; amount: number }[]>([])
+  const [isAllocating, setIsAllocating] = useState(false)
 
   useEffect(() => {
     loadUnappliedPayments()
@@ -66,6 +68,7 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
       
       toast.success('Payment allocated successfully!')
       setSelectedPayment(null)
+      setPendingAllocations([])
       loadUnappliedPayments()
       onAllocationComplete?.()
     } catch (error) {
@@ -217,11 +220,43 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
                             customerId={selectedPayment.customer_id}
                             paymentAmount={selectedPayment.amount_unapplied}
                             onAllocationChange={(allocations) => {
-                              if (allocations.length > 0) {
-                                handleAllocatePayment(selectedPayment.payment_id, allocations)
-                              }
+                              // Store pending allocations, don't execute immediately
+                              setPendingAllocations(allocations)
                             }}
                           />
+                          
+                          {/* Allocation Actions */}
+                          <div className="flex justify-end space-x-2 pt-4 border-t">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => {
+                                setSelectedPayment(null)
+                                setPendingAllocations([])
+                              }}
+                              disabled={isAllocating}
+                            >
+                              Cancel
+                            </Button>
+                            <Button 
+                              onClick={async () => {
+                                if (pendingAllocations.length > 0 && selectedPayment) {
+                                  setIsAllocating(true)
+                                  try {
+                                    await handleAllocatePayment(selectedPayment.payment_id, pendingAllocations)
+                                    setPendingAllocations([])
+                                  } catch (error) {
+                                    // Error handling is already in handleAllocatePayment
+                                  } finally {
+                                    setIsAllocating(false)
+                                  }
+                                }
+                              }}
+                              disabled={pendingAllocations.length === 0 || isAllocating}
+                              className="min-w-24"
+                            >
+                              {isAllocating ? 'Allocating...' : 'Apply Allocation'}
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </DialogContent>

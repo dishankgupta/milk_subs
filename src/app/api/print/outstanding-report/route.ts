@@ -169,7 +169,6 @@ function generateSummaryHTML(
       </thead>
       <tbody>
         ${reportData.customers
-          .filter(c => c.total_outstanding > 0) // Only customers with outstanding
           .sort((a, b) => b.total_outstanding - a.total_outstanding) // Sort by outstanding desc
           .map(customer => `
             <tr>
@@ -230,7 +229,7 @@ function generateCustomerStatementsHTML(
 ): string {
   const customersToProcess = selectedCustomerIds 
     ? reportData.customers.filter(c => selectedCustomerIds.includes(c.customer.id))
-    : reportData.customers.filter(c => c.total_outstanding > 0)
+    : reportData.customers // Show all customers returned by the filter logic
 
   const statements = customersToProcess.map(customerData => {
     return `

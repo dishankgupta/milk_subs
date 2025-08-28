@@ -32,12 +32,27 @@ export async function generateOutstandingReport(
   
   let customersQuery
   
-  // Handle "All customers" selection differently to bypass view filtering
-  if (config.customer_selection === 'all') {
-    // Query all customers directly from base tables when "All customers" is selected
+  // Handle special cases that need different data sources
+  if (config.customer_selection === 'all' || config.customer_selection === 'with_credit') {
+    // Query all customers directly from base tables for "All customers" and "Net credit" selections
+    // because the view excludes customers with zero outstanding amounts
     customersQuery = supabase
       .rpc('get_all_customers_outstanding_data')
       .order("billing_name")
+    
+    // Apply filter after getting all customer data
+    if (config.customer_selection === 'with_credit') {
+      const { data: customersWithNetCredit } = await supabase
+        .rpc('get_customers_with_net_credit')
+      
+      if (customersWithNetCredit && customersWithNetCredit.length > 0) {
+        const customerIdsWithNetCredit = customersWithNetCredit.map((c: { customer_id: string }) => c.customer_id)
+        customersQuery = customersQuery.in("customer_id", customerIdsWithNetCredit)
+      } else {
+        // If no customers have net credit, return empty result
+        customersQuery = customersQuery.eq("customer_id", "00000000-0000-0000-0000-000000000000") // Non-existent UUID
+      }
+    }
   } else {
     // Use the optimized filtered view for other selections
     customersQuery = supabase
@@ -50,20 +65,6 @@ export async function generateOutstandingReport(
       customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
     } else if (config.customer_selection === 'with_outstanding') {
       customersQuery = customersQuery.gt("total_outstanding", 0)
-    } else if (config.customer_selection === 'with_credit') {
-      // Filter for customers with unapplied payments (available credit > 0)
-      const { data: customersWithCredit } = await supabase
-        .from('unapplied_payments')
-        .select('customer_id')
-        .gt('amount_unapplied', 0)
-      
-      if (customersWithCredit && customersWithCredit.length > 0) {
-        const customerIdsWithCredit = [...new Set(customersWithCredit.map(up => up.customer_id))]
-        customersQuery = customersQuery.in("customer_id", customerIdsWithCredit)
-      } else {
-        // If no customers have credit, return empty result
-        customersQuery = customersQuery.eq("customer_id", "00000000-0000-0000-0000-000000000000") // Non-existent UUID
-      }
     }
   }
 

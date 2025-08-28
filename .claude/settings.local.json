@@ -34,7 +34,11 @@
       "mcp__linear-server__list_issues",
       "mcp__linear-server__create_comment",
       "Bash(pnpm test:run:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "mcp__playwright__browser_resize",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_handle_dialog"
     ]
   },
   "enabledMcpjsonServers": [

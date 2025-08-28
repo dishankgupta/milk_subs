@@ -296,7 +296,7 @@ export function OutstandingReport() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="with_credit" id="with_credit" />
-                  <Label htmlFor="with_credit">Customers with Credit</Label>
+                  <Label htmlFor="with_credit">Customers with Net Credit Balance</Label>
                 </div>
               </RadioGroup>
             </div>
