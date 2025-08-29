@@ -27,7 +27,7 @@ export async function createSale(data: SaleFormData & {
   const validatedData = extendedSchema.parse(data)
 
   // Determine payment status based on sale type
-  const paymentStatus = validatedData.sale_type === 'Cash' ? 'Completed' : 'Pending'
+  const paymentStatus = (validatedData.sale_type === 'Cash' || validatedData.sale_type === 'QR') ? 'Completed' : 'Pending'
 
   // Insert sale
   const { data: sale, error } = await supabase
@@ -71,7 +71,7 @@ export async function getSales(searchParams?: {
   search?: string
   customer_id?: string
   product_id?: string
-  sale_type?: 'Cash' | 'Credit'
+  sale_type?: 'Cash' | 'Credit' | 'QR'
   payment_status?: 'Completed' | 'Pending' | 'Billed'
   date_from?: string
   date_to?: string
@@ -174,6 +174,8 @@ export async function getSalesStats(dateRange?: { from: string; to: string }) {
   const stats = {
     totalCashSales: 0,
     totalCashAmount: 0,
+    totalQRSales: 0,
+    totalQRAmount: 0,
     totalCreditSales: 0,
     totalCreditAmount: 0,
     pendingCreditAmount: 0,
@@ -185,6 +187,9 @@ export async function getSalesStats(dateRange?: { from: string; to: string }) {
     if (sale.sale_type === 'Cash') {
       stats.totalCashSales++
       stats.totalCashAmount += Number(sale.total_amount)
+    } else if (sale.sale_type === 'QR') {
+      stats.totalQRSales++
+      stats.totalQRAmount += Number(sale.total_amount)
     } else {
       stats.totalCreditSales++
       stats.totalCreditAmount += Number(sale.total_amount)
@@ -338,7 +343,7 @@ export async function updateSale(saleId: string, data: SaleFormData & {
   const validatedData = extendedSchema.parse(data)
 
   // Determine payment status based on sale type
-  const paymentStatus = validatedData.sale_type === 'Cash' ? 'Completed' : 'Pending'
+  const paymentStatus = (validatedData.sale_type === 'Cash' || validatedData.sale_type === 'QR') ? 'Completed' : 'Pending'
 
   // Update the sale
   const { data: updatedSale, error: updateError } = await supabase

@@ -136,8 +136,8 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
               <RadioGroup
                 value={form.watch("sale_type")}
                 onValueChange={(value) => {
-                  form.setValue("sale_type", value as "Cash" | "Credit")
-                  if (value === "Cash") {
+                  form.setValue("sale_type", value as "Cash" | "Credit" | "QR")
+                  if (value === "Cash" || value === "QR") {
                     form.setValue("customer_id", null)
                   }
                 }}
@@ -146,6 +146,10 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="Cash" id="cash" />
                   <Label htmlFor="cash">Cash Sale</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="QR" id="qr" />
+                  <Label htmlFor="qr">QR Sale</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="Credit" id="credit" />
@@ -200,7 +204,7 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500">
-                  Note: Customer name is for reporting only. Cash sales won&apos;t appear in customer invoices.
+                  Note: Customer name is for reporting only. Cash and QR sales won&apos;t appear in customer invoices.
                 </p>
               </div>
             )}
@@ -357,7 +361,7 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
                       <span className="text-green-600">{formatCurrency(totalAmount)}</span>
                     </div>
                     <div className="text-sm text-gray-600">
-                      Payment: {form.watch("sale_type") === "Cash" ? "Immediate (Cash)" : "Credit (Invoice Later)"}
+                      Payment: {form.watch("sale_type") === "Cash" ? "Immediate (Cash)" : form.watch("sale_type") === "QR" ? "Immediate (QR)" : "Credit (Invoice Later)"}
                     </div>
                   </div>
                 </CardContent>

@@ -54,7 +54,7 @@ Complete Supabase database with 16 tables:
 - `deliveries` - Actual vs planned delivery tracking
 - `payments` - Enhanced payment history with allocation tracking and status management
 - `product_pricing_history` - Price change audit trail
-- `sales` - Manual sales tracking (Cash/Credit) with GST compliance
+- `sales` - Manual sales tracking (Cash/Credit/QR) with GST compliance
 
 ### Invoice & Outstanding Management Tables
 - `invoice_metadata` - Enhanced invoice generation with status tracking, payment tracking, and financial year numbering
@@ -72,119 +72,18 @@ Complete Supabase database with 16 tables:
 
 ## Current Implementation Status
 
-### ✅ Phase 1: Foundation Complete
-- Complete database schema with 12 tables and comprehensive relationships
-- Admin-only authentication with Supabase Auth and SSR support
-- Responsive UI framework with mobile-first sidebar navigation
-- Indian Rupee currency formatting throughout
-- Complete TypeScript integration with strict mode
+### ✅ All Major Phases Complete
+- **Phase 1-3**: Foundation, Customer & Subscription Management with complete CRUD operations
+- **Phase 4-6**: Order Generation, Payment & Delivery Systems with advanced automation  
+- **Phase 7-9**: Sales Management & Outstanding System Rework with invoice-based calculations
+- **Phase 10-12**: Performance Optimization (99.8% query reduction), IST Migration & Unapplied Payments
 
-### ✅ Phase 2: Customer Management Complete
-- Full customer CRUD operations with form validation
-- Advanced search and filtering system with sortable columns
-- Customer creation/edit forms with Zod schema validation
-- Customer detail views with organized information cards
-- Multiple phone number support (primary, secondary, tertiary)
-- Outstanding payment tracking with opening balance integration
-- Route and delivery time management
-- Duplicate billing name detection and prevention
-
-### ✅ Phase 3: Subscription Management Complete
-- Complete subscription CRUD operations with comprehensive validation
-- 2-day pattern subscription logic with visual preview system
-- Pattern cycle calculation with automatic date management
-- Subscription search and filtering with sortable table interface
-- Customer-subscription integration on detail pages
-- Duplicate subscription prevention (same customer + product)
-- Subscription status management (active/inactive)
-- Form validation with real-time pattern preview for 7-14 day cycles
-
-### ✅ Phase 4: Order Generation & Daily Operations Complete
-- Automated daily order generation from active subscriptions
-- 2-day pattern cycle tracking with precise position calculation
-- Order generation UI with date selection and comprehensive preview
-- Daily orders list with advanced filtering and sortable columns
-- Complete modification system for temporary changes (skip/increase/decrease)
-- Order preview with detailed summary statistics and breakdowns
-- Order management with delete/regenerate functionality
-- Daily production summary reports with route and time slot analysis
-- Route-wise delivery reports with mobile-optimized printing
-- Modification integration seamlessly applied during order generation
-
-### ✅ Phase 5: Payment Management System Complete
-- Full payment CRUD operations with automatic outstanding calculations
-- Payment entry forms with customer selection and validation
-- Payment history with advanced search and sortable columns
-- Outstanding amount management with real-time balance updates
-- Customer payment integration with history on detail pages
-- Comprehensive payment reports with collection analytics
-- Payment collection rate tracking and trend analysis
-- Priority-based outstanding customer reports with risk categorization
-- Mobile-responsive interfaces with professional reporting
-
-### ✅ Phase 6: Delivery Confirmation System Complete
-- Complete delivery CRUD operations with variance tracking
-- Delivery confirmation with actual quantity entry and calculations
-- Advanced delivery list views with search and sortable columns
-- Bulk delivery confirmation system with 70-80% time savings
-- Delivery status management with personnel assignment
-- Real-time delivery statistics with completion rates
-- Comprehensive delivery performance reports with analytics
-- Customer and product performance analysis with variance tracking
-- Bulk selection and deletion capabilities with progress feedback
-
-### ✅ Phase 7: Sales Management System Complete
-- **Database Schema Extensions**: Complete GST integration and opening balance support
-- **Manual Sales Entry**: Cash vs Credit business logic with real-time validation
-- **GST-Compliant Invoicing**: Professional PDF generation with financial year numbering
-- **Outstanding Reports Enhancement**: Triple-level expandable reports with comprehensive data
-- **Bulk Invoice Generation**: Robust PDF generation with retry mechanisms and Chrome integration
-- **Customer Integration**: Enhanced outstanding display with detailed sales history
-- **Product Management**: Complete GST configuration with preview calculations
-
-### ✅ Phase 8: Outstanding System Rework Complete
-- **Database Architecture Overhaul**: Complete outstanding system redesign with invoice-based calculations
-- **New Table Structure**: Added invoice_line_items, invoice_payments, unapplied_payments tables
-- **Enhanced Payment Allocation**: Advanced payment-to-invoice allocation with auto-allocation modes
-- **Outstanding Dashboard**: Comprehensive outstanding management section with real-time calculations
-- **Invoice Status Management**: Automatic invoice status updates based on payment allocation
-- **Customer Outstanding Detail**: Detailed invoice breakdown with payment history integration
-- **Professional Statements**: Enhanced customer statement printing with invoice-based data
-
-### ✅ Phase 9: Invoice Generation System Fix Complete
-- **Critical Database Query Fixes**: Resolved broken outstanding_amount field references in getInvoiceStats()
-- **Transaction-Based Business Logic**: Implemented correct workflow using unbilled transactions instead of circular outstanding logic
-- **Enhanced Customer Selection**: New selection options (unbilled deliveries, credit sales, any transactions)
-- **Helper Function Implementation**: Created getUnbilledDeliveryAmount and getUnbilledCreditSalesAmount for accurate calculations
-- **Data Integrity Improvements**: Fixed invoice deletion to properly clean up invoice_line_items table
-- **UI/UX Enhancement**: Updated customer selection interface with clear, descriptive options
-- **Error Handling**: Added comprehensive error handling with toast notifications for better user feedback
-
-### ✅ Phase 10: Invoice Line Items & Performance Optimization Complete
-- **Schema Alignment**: Fixed invoice_line_items table schema to match code expectations (line_type → line_item_type, added order_id/sale_id columns)
-- **Line Items Population**: Resolved empty invoice_line_items table by adding missing required fields (product_name, quantity, unit_price, line_total) to insert operations
-- **Performance Optimization**: Eliminated N+1 query problem in invoice preview (426 queries → 1 query = 99.8% reduction)
-- **Database Function**: Created optimized get_bulk_invoice_preview_optimized() function for bulk operations
-- **Deletion Error Fix**: Removed obsolete outstanding_amount column references from invoice deletion process
-- **Data Integrity**: Verified both subscription and manual sale line items creation with proper foreign key relationships
-
-### ✅ Phase 11: IST Date Migration & System-Wide Timezone Compliance Complete
-- **Critical Business Logic Migration**: Migrated 25+ critical files from prohibited date patterns to IST-compliant utilities
-- **Financial System Accuracy**: Fixed financial year calculations, invoice numbering, and outstanding amount calculations to use consistent IST timezone
-- **UI Component Standardization**: Updated dashboard statistics, order generation, invoice management, and outstanding displays with IST date handling
-- **Print System Enhancement**: Migrated customer statements, route delivery reports, and production summaries to use IST formatting
-- **Schema Validation Fixes**: Resolved TypeScript errors and form validation mismatches (customer opening_balance schema fix)
-- **Infrastructure Improvements**: Added legacy compatibility functions and missing IST utilities for backward compatibility
-- **Zero Breaking Changes**: Maintained full system functionality while eliminating timezone-related data inconsistencies
-- **Production Ready**: Achieved zero TypeScript compilation errors with comprehensive IST date handling throughout the system
-
-### ✅ Phase 12: Unapplied Payments Management Enhancement Complete
-- **Comprehensive 4-Phase Implementation**: Complete enhancement of unapplied payment management across all system interfaces
-- **Payment Allocation Features**: Enhanced payments dashboard with dedicated "Unapplied Payments" tab and customer-first allocation workflow
-- **Visibility Integration**: Added credit information display across customer profiles, payments dashboard, and outstanding dashboard
-- **Print Reports Enhancement**: Integrated unapplied payments into all business reports with three-tier totals system (Gross → Credits → Net)
-- **Filter Enhancement**: Added "Customers with Credit" filter option in outstanding reports with efficient database filtering
-- **Professional Formatting**: Maintained PureDairy branding throughout with consistent green styling for credit amounts
+### Recent Critical Achievements (August 2025)
+- **IST Timezone Migration**: Complete system-wide migration across 25+ files ensuring data consistency
+- **Unapplied Payments System**: 4-phase enhancement with customer-first allocation workflows
+- **Invoice-Based Outstanding**: Complete overhaul from circular logic to transaction-based calculations
+- **Performance Optimization**: Eliminated N+1 queries, optimized bulk operations with real-time progress
+- **Professional PDF System**: Robust generation with retry mechanisms and Chrome integration
 - **Performance Optimization**: Customer-specific queries and batch processing for efficient unapplied payment operations
 - **Error Handling**: Comprehensive validation and graceful error handling including Invalid Date fixes for print reports
 
@@ -272,11 +171,12 @@ Complete Supabase database with 16 tables:
 - **Modification Integration**: Route delivery reports show modification details, base quantities (strikethrough), and modification summaries
 
 ### Sales Management (`/dashboard/sales`)
-- **Sales Entry**: Cash vs Credit sales with automatic customer validation
+- **Sales Entry**: Cash vs QR vs Credit sales with automatic customer validation
 - **Sales History**: ✅ **ENHANCED** - Professional sortable table with real-time search, advanced filtering (sale type, payment status), CSV export functionality, and instant client-side performance
 - **Product Management**: GST rate configuration and product catalog management
 - **GST Calculations**: Real-time inclusive/exclusive pricing with tax breakdowns
 - **Customer Integration**: Sales history sections on customer detail pages
+- **QR Sales Support**: ✅ **NEW** - QR sale type works identically to Cash sales but tracked separately for reporting
 
 ### Invoice Management (`/dashboard/invoices`)
 - **Invoice Generation**: ✅ **FIXED** - Combined subscription + manual sales invoicing with transaction-based logic
@@ -321,7 +221,6 @@ Complete Supabase database with 16 tables:
 ## Development Notes
 
 - Application currently running at localhost:3000 with Turbopack for optimal development
-- Database: 16 tables with comprehensive relationships and RLS policies
 - Authentication: Admin-only access with Supabase Auth and SSR support
 - All core business features are fully functional and production-ready
 - Complete dairy business management system with subscription and manual sales capabilities
@@ -372,17 +271,19 @@ Complete Supabase database with 16 tables:
   - **Phase 2**: Integrated credit visibility across customer profiles, payments dashboard, and outstanding dashboard with consistent formatting
   - **Phase 3**: Enhanced print reports with three-tier totals system and comprehensive credit sections in customer statements and outstanding reports
   - **Phase 4**: Added "Customers with Credit" filter option in outstanding reports with efficient database filtering and Invalid Date error fixes
+- **QR Sales Type Implementation**: Added new 'QR' sale type that functions identically to Cash sales but provides separate reporting capabilities for payment method analytics (August 29, 2025)
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
 ### Database Schema Extensions
 - **Products Table**: GST rate fields (gst_rate, unit_of_measure, is_subscription_product)
 - **Customers Table**: opening_balance field for historical outstanding tracking
-- **Sales Table**: Cash/Credit sale types with GST amount tracking and payment status
+- **Sales Table**: Cash/Credit/QR sale types with GST amount tracking and payment status
 - **Invoice Metadata**: Financial year-based numbering with file path storage
 
 ### Business Logic Implementation
 - **Cash Sales**: No customer assignment, immediate payment completion
+- **QR Sales**: No customer assignment, immediate payment completion (identical to Cash)
 - **Credit Sales**: Customer required, automatic outstanding amount updates
 - **GST Calculations**: Inclusive pricing with base amount and tax separation
 - **Invoice Numbering**: YYYYYYYYNNNNN format with financial year tracking

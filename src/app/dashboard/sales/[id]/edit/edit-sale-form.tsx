@@ -54,7 +54,7 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
       product_id: sale.product_id,
       quantity: sale.quantity,
       unit_price: sale.unit_price,
-      sale_type: sale.sale_type as 'Cash' | 'Credit',
+      sale_type: sale.sale_type as 'Cash' | 'Credit' | 'QR',
       sale_date: new Date(sale.sale_date),
       notes: sale.notes || '',
     },

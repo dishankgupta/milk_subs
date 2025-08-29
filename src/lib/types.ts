@@ -208,7 +208,7 @@ export interface Sale {
   unit_price: number
   total_amount: number
   gst_amount: number
-  sale_type: 'Cash' | 'Credit'
+  sale_type: 'Cash' | 'Credit' | 'QR'
   sale_date: string
   payment_status: 'Completed' | 'Pending' | 'Billed'
   notes: string | null
@@ -244,7 +244,7 @@ export interface SaleFormData {
   product_id: string
   quantity: number
   unit_price: number
-  sale_type: 'Cash' | 'Credit'
+  sale_type: 'Cash' | 'Credit' | 'QR'
   sale_date: Date
   notes?: string
 }
