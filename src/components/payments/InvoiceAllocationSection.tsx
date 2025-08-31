@@ -58,12 +58,6 @@ export function InvoiceAllocationSection({
   const [loading, setLoading] = useState(false)
   const [autoAllocateMode, setAutoAllocateMode] = useState<'oldest' | 'largest' | 'opening_first' | 'manual'>('opening_first')
 
-  useEffect(() => {
-    if (customerId) {
-      loadUnpaidInvoicesAndOpeningBalance()
-    }
-  }, [customerId])
-
   const loadUnpaidInvoicesAndOpeningBalance = useCallback(async () => {
     try {
       setLoading(true)
@@ -109,12 +103,20 @@ export function InvoiceAllocationSection({
       })
       
       setAllocations(initialAllocations)
+      
     } catch (error) {
-      console.error('Failed to load unpaid invoices and opening balance:', error)
+      console.error('Error loading unpaid invoices:', error)
     } finally {
       setLoading(false)
     }
   }, [customerId])
+
+  useEffect(() => {
+    if (customerId) {
+      loadUnpaidInvoicesAndOpeningBalance()
+    }
+  }, [customerId, loadUnpaidInvoicesAndOpeningBalance])
+
 
   const totalAllocated = useMemo(() => {
     return allocations.reduce((sum, allocation) => sum + allocation.allocatedAmount, 0)

@@ -53,6 +53,17 @@ function CustomerOutstandingDetailComponent({
     }
   }, [customerId, initialData, initialPayments])
 
+  // Memoize expensive calculations (must be called before early returns)
+  const overdueInvoicesCount = useMemo(() => {
+    if (!data?.unpaidInvoices) return 0
+    const currentDate = getCurrentISTDate()
+    return data.unpaidInvoices.filter(invoice => new Date(invoice.due_date) < currentDate).length
+  }, [data?.unpaidInvoices])
+
+  const recentPayments = useMemo(() => {
+    return payments.slice(0, 5)
+  }, [payments])
+
   const handlePrintStatement = () => {
     const printUrl = `/api/print/customer-statement/${customerId}`
     window.open(printUrl, '_blank')
@@ -81,17 +92,6 @@ function CustomerOutstandingDetailComponent({
   }
 
   const { customer, unpaidInvoices, openingBalance, effectiveOpeningBalance, invoiceOutstanding, totalOutstanding } = data
-
-  // Memoize expensive calculations
-  const overdueInvoicesCount = useMemo(() => {
-    if (!unpaidInvoices) return 0
-    const currentDate = getCurrentISTDate()
-    return unpaidInvoices.filter(invoice => new Date(invoice.due_date) < currentDate).length
-  }, [unpaidInvoices])
-
-  const recentPayments = useMemo(() => {
-    return payments.slice(0, 5)
-  }, [payments])
 
   return (
     <div className="space-y-6">

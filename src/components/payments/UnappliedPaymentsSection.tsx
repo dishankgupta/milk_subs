@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,11 +26,7 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
   const [pendingAllocations, setPendingAllocations] = useState<{ id: string; type: 'invoice' | 'opening_balance'; amount: number }[]>([])
   const [isAllocating, setIsAllocating] = useState(false)
 
-  useEffect(() => {
-    loadUnappliedPayments()
-  }, [customerId])
-
-  const loadUnappliedPayments = async () => {
+  const loadUnappliedPayments = useCallback(async () => {
     try {
       setLoading(true)
       const payments = await getUnappliedPayments(customerId)
@@ -40,7 +36,11 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
     } finally {
       setLoading(false)
     }
-  }
+  }, [customerId])
+
+  useEffect(() => {
+    loadUnappliedPayments()
+  }, [loadUnappliedPayments])
 
   const handleAllocatePayment = async (
     paymentId: string, 

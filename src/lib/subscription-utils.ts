@@ -1,5 +1,5 @@
 import { Subscription } from "@/lib/types"
-import { formatDateForDatabase, addDaysIST } from "@/lib/date-utils"
+import { formatDateForDatabase, addDaysIST, parseLocalDateIST } from "@/lib/date-utils"
 
 // Calculate which day in the 2-day pattern cycle for a given date
 export function calculatePatternDay(startDate: Date, targetDate: Date): 1 | 2 {
@@ -14,7 +14,8 @@ export function getPatternQuantity(subscription: Subscription, targetDate: Date)
     return 0
   }
 
-  const startDate = new Date(subscription.pattern_start_date)
+  // Use parseLocalDateIST to ensure consistent midnight-to-midnight date handling
+  const startDate = parseLocalDateIST(subscription.pattern_start_date)
   const patternDay = calculatePatternDay(startDate, targetDate)
   
   if (patternDay === 1) {
@@ -33,7 +34,7 @@ export function generatePatternPreview(subscription: Subscription, startDate: Da
     
     const quantity = getPatternQuantity(subscription, currentDate)
     const patternDay = subscription.pattern_start_date ? 
-      calculatePatternDay(new Date(subscription.pattern_start_date), currentDate) : 1
+      calculatePatternDay(parseLocalDateIST(subscription.pattern_start_date), currentDate) : 1
     
     preview.push({
       date: formatDateForDatabase(currentDate),
@@ -50,7 +51,8 @@ export function generatePatternPreview(subscription: Subscription, startDate: Da
 export function getDaysSincePatternStart(subscription: Subscription, targetDate: Date): number {
   if (!subscription.pattern_start_date) return 0
   
-  const startDate = new Date(subscription.pattern_start_date)
+  // Use parseLocalDateIST to ensure consistent midnight-to-midnight date handling
+  const startDate = parseLocalDateIST(subscription.pattern_start_date)
   const diffTime = targetDate.getTime() - startDate.getTime()
   return Math.floor(diffTime / (1000 * 60 * 60 * 24))
 }
