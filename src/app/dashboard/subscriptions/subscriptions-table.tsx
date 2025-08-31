@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Subscription } from "@/lib/types"
 import { searchSubscriptions, toggleSubscriptionStatus } from "@/lib/actions/subscriptions"
+import { activateCustomer } from "@/lib/actions/customers"
 import { formatCurrency } from "@/lib/utils"
 import { formatDateIST } from "@/lib/date-utils"
 import {
@@ -21,7 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Eye, Edit, MoreHorizontal, Play, Pause } from "lucide-react"
+import { Search, Eye, Edit, MoreHorizontal, Play, Pause, AlertTriangle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 
 interface SubscriptionsTableProps {
@@ -42,6 +53,9 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
   const [typeFilter, setTypeFilter] = useState<"all" | "Daily" | "Pattern">("all")
   const [isLoading, setIsLoading] = useState(false)
+  const [showInactiveWarning, setShowInactiveWarning] = useState(false)
+  const [pendingSubscriptionId, setPendingSubscriptionId] = useState<string | null>(null)
+  const [pendingSubscription, setPendingSubscription] = useState<Subscription | null>(null)
 
   // Search functionality
   useEffect(() => {
@@ -83,6 +97,21 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
   )
 
   const handleToggleStatus = async (subscriptionId: string) => {
+    const subscription = subscriptions.find(s => s.id === subscriptionId)
+    if (!subscription) return
+
+    // Check if we're trying to activate a subscription for an inactive customer
+    if (!subscription.is_active && subscription.customer && subscription.customer.status === "Inactive") {
+      setPendingSubscriptionId(subscriptionId)
+      setPendingSubscription(subscription)
+      setShowInactiveWarning(true)
+      return
+    }
+
+    await processToggleSubscription(subscriptionId)
+  }
+
+  const processToggleSubscription = async (subscriptionId: string) => {
     try {
       const result = await toggleSubscriptionStatus(subscriptionId)
       if (result.success && result.data) {
@@ -98,6 +127,37 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
     } catch {
       toast.error("Failed to update subscription status")
     }
+  }
+
+  const handleActivateCustomerAndSubscription = async () => {
+    if (!pendingSubscriptionId || !pendingSubscription || !pendingSubscription.customer) return
+    
+    setIsLoading(true)
+    try {
+      // First activate the customer
+      const customerResult = await activateCustomer(pendingSubscription.customer.id)
+      if (!customerResult.success) {
+        toast.error("Failed to activate customer")
+        return
+      }
+
+      // Then toggle the subscription
+      await processToggleSubscription(pendingSubscriptionId)
+      toast.success("Customer activated and subscription processed successfully")
+    } catch (error) {
+      toast.error("Failed to activate customer and toggle subscription")
+    } finally {
+      setShowInactiveWarning(false)
+      setPendingSubscriptionId(null)
+      setPendingSubscription(null)
+      setIsLoading(false)
+    }
+  }
+
+  const handleCancelWarning = () => {
+    setShowInactiveWarning(false)
+    setPendingSubscriptionId(null)
+    setPendingSubscription(null)
   }
 
   const getSubscriptionDetails = (subscription: Subscription) => {
@@ -319,6 +379,35 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
           </TableBody>
         </Table>
       </Card>
+
+      <AlertDialog open={showInactiveWarning} onOpenChange={setShowInactiveWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertDialogTitle>Customer is Inactive</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              The customer <strong>{pendingSubscription?.customer?.billing_name}</strong> is currently inactive.
+              <br /><br />
+              Active subscriptions for inactive customers will not generate any orders. 
+              Would you like to activate the customer along with this subscription?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelWarning} disabled={isLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleActivateCustomerAndSubscription} 
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isLoading ? "Activating..." : "Activate Customer & Continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

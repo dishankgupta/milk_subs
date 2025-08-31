@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { subscriptionSchema, type SubscriptionFormData } from "@/lib/validations"
 import { createSubscription, updateSubscription, getProducts } from "@/lib/actions/subscriptions"
-import { getCustomers } from "@/lib/actions/customers"
+import { getCustomers, activateCustomer } from "@/lib/actions/customers"
 import { calculatePatternDay } from "@/lib/subscription-utils"
 import { Product, Customer, Subscription } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
@@ -31,7 +31,17 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calculator } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Calculator, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 interface SubscriptionFormProps {
@@ -46,6 +56,8 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
   const [loading, setLoading] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [showInactiveWarning, setShowInactiveWarning] = useState(false)
+  const [pendingFormData, setPendingFormData] = useState<SubscriptionFormData | null>(null)
 
   const form = useForm<SubscriptionFormData>({
     resolver: zodResolver(subscriptionSchema),
@@ -120,6 +132,18 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
   }, [watchedSubscriptionType, form])
 
   const onSubmit = async (data: SubscriptionFormData) => {
+    // Check if customer is inactive and subscription is being activated
+    const customer = customers.find(c => c.id === data.customer_id)
+    if (customer && customer.status === "Inactive" && data.is_active) {
+      setPendingFormData(data)
+      setShowInactiveWarning(true)
+      return
+    }
+
+    await processSubscription(data)
+  }
+
+  const processSubscription = async (data: SubscriptionFormData) => {
     setLoading(true)
     try {
       const result = subscription 
@@ -137,6 +161,35 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleActivateCustomerAndSubscription = async () => {
+    if (!pendingFormData) return
+    
+    setLoading(true)
+    try {
+      // First activate the customer
+      const customerResult = await activateCustomer(pendingFormData.customer_id)
+      if (!customerResult.success) {
+        toast.error("Failed to activate customer")
+        return
+      }
+
+      // Then process the subscription
+      await processSubscription(pendingFormData)
+      toast.success("Customer activated and subscription processed successfully")
+    } catch (error) {
+      toast.error("Failed to activate customer and create subscription")
+    } finally {
+      setShowInactiveWarning(false)
+      setPendingFormData(null)
+      setLoading(false)
+    }
+  }
+
+  const handleCancelWarning = () => {
+    setShowInactiveWarning(false)
+    setPendingFormData(null)
   }
 
   // Generate pattern preview for next 7 days
@@ -504,6 +557,35 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
           </div>
         </form>
       </Form>
+
+      <AlertDialog open={showInactiveWarning} onOpenChange={setShowInactiveWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertDialogTitle>Customer is Inactive</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              The selected customer <strong>{selectedCustomer?.billing_name}</strong> is currently inactive.
+              <br /><br />
+              Active subscriptions for inactive customers will not generate any orders. 
+              Would you like to activate the customer along with this subscription?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelWarning} disabled={loading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleActivateCustomerAndSubscription} 
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? "Activating..." : "Activate Customer & Continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -130,6 +130,26 @@ export async function createCustomer(customerData: CustomerFormData): Promise<{ 
   return { success: true, data }
 }
 
+export async function activateCustomer(customerId: string): Promise<{ success: boolean; error?: string; data?: Customer }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update({ status: "Active" })
+    .eq("id", customerId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Error activating customer:", error)
+    return { success: false, error: "Failed to activate customer" }
+  }
+
+  revalidatePath("/dashboard/customers")
+  revalidatePath("/dashboard/subscriptions")
+  return { success: true, data }
+}
+
 export async function updateCustomer(id: string, customerData: CustomerFormData): Promise<{ success: boolean; error?: string; data?: Customer }> {
   const supabase = await createClient()
 
