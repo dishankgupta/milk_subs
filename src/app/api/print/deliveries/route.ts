@@ -110,6 +110,12 @@ export async function GET(request: NextRequest) {
     
     // Apply sorting
     const sortedDeliveries = sortDeliveries(filteredDeliveries, sortKey, sortDirection)
+    
+    // Get variance deliveries (only those with non-zero variances)
+    const varianceDeliveries = sortedDeliveries.filter(delivery => {
+      const variance = (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
+      return variance !== 0
+    })
 
     // Generate filter description for title
     const filterParts = []
@@ -369,6 +375,53 @@ export async function GET(request: NextRequest) {
       </div>
     </div>
   </div>
+
+  ${varianceDeliveries.length > 0 ? `
+  <!-- Variance Summary -->
+  <div class="section-title">Variance Summary (${varianceDeliveries.length} deliveries with variances)</div>
+  <table class="deliveries-table">
+    <thead>
+      <tr>
+        <th style="width: 12%;">Date</th>
+        <th style="width: 20%;">Customer</th>
+        <th style="width: 15%;">Product</th>
+        <th style="width: 10%;">Route</th>
+        <th style="width: 8%;">Planned</th>
+        <th style="width: 8%;">Actual</th>
+        <th style="width: 8%;">Variance</th>
+        <th style="width: 8%;">Status</th>
+        <th style="width: 11%;">Delivery Person</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${varianceDeliveries.map(delivery => {
+        const order = delivery.daily_order
+        const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
+        const isDelivered = delivery.actual_quantity !== null
+        
+        return `
+        <tr>
+          <td>${formatDateIST(new Date(order.order_date))}</td>
+          <td>${order.customer.billing_name}</td>
+          <td>${order.product.name}</td>
+          <td class="number">${order.route.name}</td>
+          <td class="number">${order.planned_quantity}L</td>
+          <td class="number">${delivery.actual_quantity || 0}L</td>
+          <td class="number ${quantityVariance > 0 ? 'variance-positive' : quantityVariance < 0 ? 'variance-negative' : 'variance-neutral'}">
+            ${quantityVariance > 0 ? '+' : ''}${quantityVariance}L
+          </td>
+          <td>
+            <span class="delivery-status ${isDelivered ? 'status-delivered' : 'status-pending'}">
+              ${isDelivered ? 'DELIVERED' : 'PENDING'}
+            </span>
+          </td>
+          <td>${delivery.delivery_person || '-'}</td>
+        </tr>
+        `
+      }).join('')}
+    </tbody>
+  </table>
+  ` : ''}
 
   <!-- Deliveries Details -->
   <div class="section-title">Delivery Details</div>
