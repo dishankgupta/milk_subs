@@ -1,16 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { format } from "date-fns"
-import { Plus, Package, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react"
+import { Plus, Package, TrendingUp, AlertTriangle, CheckCircle, Printer } from "lucide-react"
 
-import { getDeliveries, getDeliveryStats } from "@/lib/actions/deliveries"
+import { getDeliveries } from "@/lib/actions/deliveries"
 import { DeliveriesTable } from "./deliveries-table"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
 
 type DeliveryWithOrder = Delivery & { 
@@ -21,34 +19,90 @@ type DeliveryWithOrder = Delivery & {
   } 
 }
 
+interface FilterState {
+  searchQuery: string
+  dateFilter: string
+  routeFilter: string
+}
+
+interface SortState {
+  key: string
+  direction: 'asc' | 'desc'
+}
+
+function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
+  const totalOrders = deliveries.length
+  const deliveredOrders = deliveries.filter(d => d.actual_quantity !== null).length
+  const pendingOrders = totalOrders - deliveredOrders
+  
+  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + d.daily_order.planned_quantity, 0)
+  const totalActualQuantity = deliveries.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
+  
+  const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
+  const quantityVariance = totalActualQuantity - totalPlannedQuantity
+
+  return {
+    totalOrders,
+    deliveredOrders,
+    pendingOrders,
+    totalPlannedQuantity,
+    totalActualQuantity,
+    completionRate,
+    quantityVariance
+  }
+}
+
 
 function DeliveriesContent() {
   const [deliveries, setDeliveries] = useState<DeliveryWithOrder[]>([])
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    deliveredOrders: 0,
-    pendingOrders: 0,
-    totalPlannedQuantity: 0,
-    totalActualQuantity: 0,
-    completionRate: 0,
-    quantityVariance: 0
+  const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryWithOrder[]>([])
+  const [currentFilters, setCurrentFilters] = useState<FilterState>({
+    searchQuery: "",
+    dateFilter: "all",
+    routeFilter: "all"
+  })
+  const [currentSort, setCurrentSort] = useState<SortState>({
+    key: 'daily_order.order_date',
+    direction: 'desc'
   })
   const [loading, setLoading] = useState(true)
+
+  const stats = calculateDeliveryStats(filteredDeliveries)
 
   const loadData = async () => {
     try {
       setLoading(true)
-      const [deliveriesData, statsData] = await Promise.all([
-        getDeliveries(),
-        getDeliveryStats()
-      ])
+      const deliveriesData = await getDeliveries()
       setDeliveries(deliveriesData)
-      setStats(statsData)
+      setFilteredDeliveries(deliveriesData) // Initialize filtered data
     } catch (error) {
       console.error("Failed to load deliveries data:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleFiltersChange = useCallback((filtered: DeliveryWithOrder[], filters: FilterState) => {
+    setFilteredDeliveries(filtered)
+    setCurrentFilters(filters)
+  }, [])
+
+  const handleSortChange = useCallback((sortState: SortState) => {
+    setCurrentSort(sortState)
+  }, [])
+
+  const handlePrintReport = () => {
+    const params = new URLSearchParams()
+    if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
+    if (currentFilters.dateFilter !== 'all') params.append('date', currentFilters.dateFilter)
+    if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
+    
+    // Add sort parameters
+    params.append('sortKey', currentSort.key)
+    params.append('sortDirection', currentSort.direction)
+    
+    const printUrl = `/api/print/deliveries?${params.toString()}`
+    window.open(printUrl, '_blank')
   }
 
   useEffect(() => {
@@ -137,6 +191,10 @@ function DeliveriesContent() {
       {/* Action Buttons */}
       <div className="flex justify-end items-center">
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handlePrintReport}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print Report
+          </Button>
           <Link href="/dashboard/deliveries/new">
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -147,7 +205,12 @@ function DeliveriesContent() {
       </div>
 
       {/* Deliveries Table */}
-      <DeliveriesTable initialDeliveries={deliveries} onDataChange={loadData} />
+      <DeliveriesTable 
+        initialDeliveries={deliveries} 
+        onDataChange={loadData} 
+        onFiltersChange={handleFiltersChange}
+        onSortChange={handleSortChange}
+      />
     </div>
   )
 }

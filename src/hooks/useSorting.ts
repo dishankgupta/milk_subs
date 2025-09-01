@@ -22,6 +22,14 @@ export function useSorting<T>(
       if (customValueGetter) {
         aValue = customValueGetter(a, sortConfig.key as string)
         bValue = customValueGetter(b, sortConfig.key as string)
+        
+        // If custom getter returns undefined, fall back to default behavior
+        if (aValue === undefined) {
+          aValue = getNestedValue(a, sortConfig.key as string)
+        }
+        if (bValue === undefined) {
+          bValue = getNestedValue(b, sortConfig.key as string)
+        }
       } else {
         aValue = getNestedValue(a, sortConfig.key as string)
         bValue = getNestedValue(b, sortConfig.key as string)
