@@ -6,10 +6,11 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { subscriptionSchema, type SubscriptionFormData } from "@/lib/validations"
 import { createSubscription, updateSubscription, getProducts } from "@/lib/actions/subscriptions"
-import { getCustomers } from "@/lib/actions/customers"
+import { getCustomers, activateCustomer } from "@/lib/actions/customers"
 import { calculatePatternDay } from "@/lib/subscription-utils"
 import { Product, Customer, Subscription } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST, formatWithIST } from "@/lib/date-utils"
 import {
   Form,
   FormControl,
@@ -30,7 +31,17 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calculator } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Calculator, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 interface SubscriptionFormProps {
@@ -45,6 +56,8 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
   const [loading, setLoading] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [showInactiveWarning, setShowInactiveWarning] = useState(false)
+  const [pendingFormData, setPendingFormData] = useState<SubscriptionFormData | null>(null)
 
   const form = useForm<SubscriptionFormData>({
     resolver: zodResolver(subscriptionSchema),
@@ -55,7 +68,7 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
       daily_quantity: subscription?.daily_quantity || undefined,
       pattern_day1_quantity: subscription?.pattern_day1_quantity || undefined,
       pattern_day2_quantity: subscription?.pattern_day2_quantity || undefined,
-      pattern_start_date: subscription?.pattern_start_date ? new Date(subscription.pattern_start_date) : undefined,
+      pattern_start_date: subscription?.pattern_start_date ? new Date(subscription.pattern_start_date) : null,
       is_active: subscription?.is_active ?? true,
     },
   })
@@ -112,30 +125,71 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
     if (watchedSubscriptionType === "Daily") {
       form.setValue("pattern_day1_quantity", undefined)
       form.setValue("pattern_day2_quantity", undefined)
-      form.setValue("pattern_start_date", undefined)
+      form.setValue("pattern_start_date", null)
     } else if (watchedSubscriptionType === "Pattern") {
       form.setValue("daily_quantity", undefined)
     }
   }, [watchedSubscriptionType, form])
 
   const onSubmit = async (data: SubscriptionFormData) => {
+    // Check if customer is inactive and subscription is being activated
+    const customer = customers.find(c => c.id === data.customer_id)
+    if (customer && customer.status === "Inactive" && data.is_active) {
+      setPendingFormData(data)
+      setShowInactiveWarning(true)
+      return
+    }
+
+    await processSubscription(data)
+  }
+
+  const processSubscription = async (data: SubscriptionFormData) => {
     setLoading(true)
     try {
       const result = subscription 
         ? await updateSubscription(subscription.id, data)
         : await createSubscription(data)
-
+      
       if (result.success) {
         toast.success(`Subscription ${subscription ? 'updated' : 'created'} successfully`)
         router.push("/dashboard/subscriptions")
       } else {
         toast.error(result.error || `Failed to ${subscription ? 'update' : 'create'} subscription`)
       }
-    } catch {
+    } catch (error) {
       toast.error(`Failed to ${subscription ? 'update' : 'create'} subscription`)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleActivateCustomerAndSubscription = async () => {
+    if (!pendingFormData) return
+    
+    setLoading(true)
+    try {
+      // First activate the customer
+      const customerResult = await activateCustomer(pendingFormData.customer_id)
+      if (!customerResult.success) {
+        toast.error("Failed to activate customer")
+        return
+      }
+
+      // Then process the subscription
+      await processSubscription(pendingFormData)
+      toast.success("Customer activated and subscription processed successfully")
+    } catch (error) {
+      toast.error("Failed to activate customer and create subscription")
+    } finally {
+      setShowInactiveWarning(false)
+      setPendingFormData(null)
+      setLoading(false)
+    }
+  }
+
+  const handleCancelWarning = () => {
+    setShowInactiveWarning(false)
+    setPendingFormData(null)
   }
 
   // Generate pattern preview for next 7 days
@@ -154,8 +208,8 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
       const quantity = patternDay === 1 ? watchedPatternDay1 : watchedPatternDay2
       
       preview.push({
-        date: date.toLocaleDateString(),
-        day: date.toLocaleDateString('en', { weekday: 'short' }),
+        date: formatDateIST(date),
+        day: formatWithIST(date, 'EEE'),
         patternDay,
         quantity
       })
@@ -312,7 +366,18 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                       min="0.1"
                       placeholder="e.g., 1.5"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                      value={field.value !== undefined ? String(field.value) : ''}
+                      onChange={(e) => {
+                        const value = e.target.value.trim()
+                        if (value === '') {
+                          field.onChange(undefined)
+                        } else {
+                          const numValue = parseFloat(value)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            field.onChange(numValue)
+                          }
+                        }
+                      }}
                     />
                   </FormControl>
                   <FormDescription>
@@ -338,10 +403,19 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         <Input
                           type="number"
                           step="0.1"
-                          min="0.1"
-                          placeholder="e.g., 1.0"
+                          min="0"
+                          placeholder="e.g., 1.0 (0 for no delivery)"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          value={field.value !== undefined ? field.value : ''}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === '') {
+                              field.onChange(undefined)
+                            } else {
+                              const numValue = parseFloat(value)
+                              field.onChange(isNaN(numValue) ? undefined : numValue)
+                            }
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -359,10 +433,19 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         <Input
                           type="number"
                           step="0.1"
-                          min="0.1"
-                          placeholder="e.g., 2.0"
+                          min="0"
+                          placeholder="e.g., 2.0 (0 for no delivery)"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          value={field.value !== undefined ? field.value : ''}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === '') {
+                              field.onChange(undefined)
+                            } else {
+                              const numValue = parseFloat(value)
+                              field.onChange(isNaN(numValue) ? undefined : numValue)
+                            }
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -382,7 +465,10 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                         type="date"
                         {...field}
                         value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          field.onChange(value ? new Date(value) : null)
+                        }}
                       />
                     </FormControl>
                     <FormDescription>
@@ -471,6 +557,35 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
           </div>
         </form>
       </Form>
+
+      <AlertDialog open={showInactiveWarning} onOpenChange={setShowInactiveWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertDialogTitle>Customer is Inactive</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              The selected customer <strong>{selectedCustomer?.billing_name}</strong> is currently inactive.
+              <br /><br />
+              Active subscriptions for inactive customers will not generate any orders. 
+              Would you like to activate the customer along with this subscription?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelWarning} disabled={loading}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleActivateCustomerAndSubscription} 
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? "Activating..." : "Activate Customer & Continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

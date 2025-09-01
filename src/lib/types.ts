@@ -1,3 +1,79 @@
+// =============================================================================
+// IST DATE & TIMEZONE TYPES
+// =============================================================================
+
+// IST-specific date types
+export type ISTDate = Date & { __istMarker?: never }
+export type ISTDateString = string // YYYY-MM-DD format
+export type ISTTimestamp = string // ISO string with timezone
+export type ISTBusinessHour = 'morning' | 'evening'
+
+// Date range types
+export interface ISTDateRange {
+  start: Date
+  end: Date
+  timezone: 'Asia/Kolkata'
+}
+
+// Business context types
+export interface ISTBusinessCalendar {
+  businessHours: {
+    morning: { start: string, end: string }
+    evening: { start: string, end: string }
+  }
+  workingDays: number[] // 0-6, Sunday=0
+  holidays: ISTDateString[]
+}
+
+// Utility function types
+export type ISTFormatter = (date: Date) => string
+export type ISTParser = (dateString: string) => Date
+export type ISTValidator = (date: Date) => boolean
+export type ISTComparator = (date1: Date, date2: Date) => number
+
+// Options types
+export interface ISTFormatOptions {
+  includeTime?: boolean
+  includeSeconds?: boolean
+  format?: 'short' | 'long' | 'numeric'
+  business?: boolean
+}
+
+export interface ISTValidationOptions {
+  allowFuture?: boolean
+  allowPast?: boolean
+  businessHoursOnly?: boolean
+  workingDaysOnly?: boolean
+}
+
+// Database operation types
+export interface ISTDatabaseDate {
+  raw: string // UTC timestamp from database
+  ist: Date   // Converted to IST
+  formatted: string // Display format
+}
+
+// API request/response types
+export interface ISTDateFilter {
+  from?: ISTDateString
+  to?: ISTDateString
+  timezone: 'Asia/Kolkata'
+}
+
+export interface ISTTimestampResponse {
+  timestamp: ISTTimestamp
+  formatted: string
+  businessContext?: {
+    isBusinessHour: boolean
+    isWorkingDay: boolean
+    nextBusinessDay: ISTDateString
+  }
+}
+
+// =============================================================================
+// BUSINESS DOMAIN TYPES
+// =============================================================================
+
 export interface Customer {
   id: string
   billing_name: string
@@ -10,7 +86,7 @@ export interface Customer {
   delivery_time: "Morning" | "Evening"
   payment_method: "Monthly" | "Prepaid"
   billing_cycle_day: number
-  outstanding_amount: number
+  opening_balance: number
   status: "Active" | "Inactive"
   created_at: string
   updated_at: string
@@ -32,6 +108,9 @@ export interface Product {
   code: string
   current_price: number
   unit: string
+  gst_rate: number
+  unit_of_measure: string
+  is_subscription_product: boolean
   created_at: string
   updated_at: string
 }
@@ -117,6 +196,90 @@ export interface DashboardStats {
   activeCustomers: number
   totalProducts: number
   totalRoutes: number
+}
+
+// Sales Management System Types
+
+export interface Sale {
+  id: string
+  customer_id: string | null // NULL for cash sales
+  product_id: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  gst_amount: number
+  sale_type: 'Cash' | 'Credit' | 'QR'
+  sale_date: string
+  payment_status: 'Completed' | 'Pending' | 'Billed'
+  notes: string | null
+  created_at: string
+  updated_at: string
+  // Relations
+  customer?: Customer
+  product?: Product
+}
+
+export interface InvoiceMetadata {
+  id: string
+  invoice_number: string
+  customer_id: string
+  invoice_date: string
+  period_start: string
+  period_end: string
+  subscription_amount: number
+  manual_sales_amount: number
+  total_amount: number
+  gst_amount: number
+  file_path: string | null
+  status: 'Generated' | 'Sent' | 'Paid'
+  created_at: string
+  updated_at: string
+  customer?: Customer
+}
+
+// Sales Form Types
+
+export interface SaleFormData {
+  customer_id: string | null
+  product_id: string
+  quantity: number
+  unit_price: number
+  sale_type: 'Cash' | 'Credit' | 'QR'
+  sale_date: Date
+  notes?: string
+}
+
+// Outstanding Report Types
+
+export interface OutstandingReportFilter {
+  start_date: Date
+  end_date: Date
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'selected'
+  selected_customer_ids?: string[]
+}
+
+export interface OutstandingReportData {
+  customer_id: string
+  customer_name: string
+  opening_balance: number
+  subscription_amount: number
+  manual_sales_amount: number
+  payments_amount: number
+  current_outstanding: number
+  // Detailed breakdowns
+  subscription_details: MonthlySubscriptionDetail[]
+  manual_sales_details: Sale[]
+  payment_details: Payment[]
+}
+
+export interface MonthlySubscriptionDetail {
+  month: string // "2025-08"
+  total_amount: number
+  product_details: {
+    product_name: string
+    quantity: number
+    amount: number
+  }[]
 }
 
 // Sort configuration types

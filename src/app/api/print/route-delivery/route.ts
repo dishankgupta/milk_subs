@@ -2,11 +2,12 @@ import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { getRouteDeliveryReport } from '@/lib/actions/reports'
 import { formatCurrency } from '@/lib/utils'
+import { formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
+    const date = searchParams.get('date') || formatDateForDatabase(getCurrentISTDate())
     const routeId = searchParams.get('route')
     const timeSlot = searchParams.get('time_slot') as 'Morning' | 'Evening'
     const sortKey = searchParams.get('sort_key') || 'customerName'
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest) {
     // Apply sorting to the orders
     if (report.orders && report.orders.length > 0) {
       report.orders.sort((a, b) => {
-        let aValue: any
-        let bValue: any
+        let aValue: string | number
+        let bValue: string | number
         
         switch (sortKey) {
           case 'customerName':
@@ -296,6 +297,29 @@ export async function GET(request: NextRequest) {
       background-color: #fffbeb !important;
     }
     
+    .skipped-row {
+      background-color: #fef2f2 !important;
+      opacity: 0.8;
+    }
+    
+    .skipped-row .customer-name,
+    .skipped-row .quantity,
+    .skipped-row .amount {
+      text-decoration: line-through;
+      color: #999 !important;
+    }
+    
+    .skip-indicator {
+      display: inline-block;
+      background-color: #dc2626;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 12px;
+      font-size: 8px;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+    
     .modification-icon {
       display: inline-block;
       width: 12px;
@@ -312,6 +336,15 @@ export async function GET(request: NextRequest) {
     .mod-skip { background-color: #dc2626; }
     .mod-increase { background-color: #059669; }
     .mod-decrease { background-color: #ea580c; }
+    
+    .modification-details {
+      margin-bottom: 15px;
+    }
+    
+    .modification-detail-item {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     
     
     .no-data {
@@ -370,25 +403,58 @@ export async function GET(request: NextRequest) {
   </div>
 
   ${report.summary.modifiedOrders > 0 ? `
-  <!-- Modification Summary -->
+  <!-- Detailed Modification Summary -->
   <div class="product-summary">
-    <h3>Modification Summary</h3>
-    <div class="product-breakdown">
+    <h3>Modification Details</h3>
+    <div class="modification-details">
+      ${report.orders.filter(order => order.isModified).map(order => `
+        <div class="modification-detail-item" style="background: ${order.isSkipped ? '#fee2e2' : '#fffbeb'}; border: 1px solid ${order.isSkipped ? '#fecaca' : '#fed7aa'}; padding: 8px; margin-bottom: 8px; border-radius: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <strong style="color: #333; font-size: 10px;">${order.customerName}</strong>
+            <span style="font-size: 9px; color: #666;">${order.productName}</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            ${order.appliedModifications.map(mod => `
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="modification-icon mod-${mod.type.toLowerCase()}">
+                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : '↓'}
+                </span>
+                <span style="font-size: 9px; color: #333;">
+                  <strong>${mod.type}</strong>
+                  ${mod.quantityChange ? ` (${mod.quantityChange > 0 ? '+' : ''}${mod.quantityChange}L)` : ''}
+                </span>
+              </div>
+              ${mod.reason ? `
+                <div style="font-size: 8px; color: #666; font-style: italic; width: 100%; margin-top: 2px;">
+                  Reason: ${mod.reason}
+                </div>
+              ` : ''}
+            `).join('')}
+          </div>
+          <div style="font-size: 9px; color: #666; margin-top: 4px;">
+            ${order.baseQuantity ? `Base: ${order.baseQuantity}L → ` : ''}Final: <strong>${order.quantity}L</strong>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    
+    <!-- Summary counts -->
+    <div class="product-breakdown" style="margin-top: 15px;">
       ${report.summary.modificationSummary.skip > 0 ? `
       <div class="product-item" style="background: #fee2e2;">
-        <div class="name" style="color: #dc2626;">Skipped Orders</div>
+        <div class="name" style="color: #dc2626;">Total Skipped</div>
         <div class="value" style="color: #dc2626;">${report.summary.modificationSummary.skip}</div>
       </div>
       ` : ''}
       ${report.summary.modificationSummary.increase > 0 ? `
       <div class="product-item" style="background: #dcfce7;">
-        <div class="name" style="color: #059669;">Increased Orders</div>
+        <div class="name" style="color: #059669;">Total Increased</div>
         <div class="value" style="color: #059669;">${report.summary.modificationSummary.increase}</div>
       </div>
       ` : ''}
       ${report.summary.modificationSummary.decrease > 0 ? `
       <div class="product-item" style="background: #fed7aa;">
-        <div class="name" style="color: #ea580c;">Decreased Orders</div>
+        <div class="name" style="color: #ea580c;">Total Decreased</div>
         <div class="value" style="color: #ea580c;">${report.summary.modificationSummary.decrease}</div>
       </div>
       ` : ''}
@@ -427,9 +493,12 @@ export async function GET(request: NextRequest) {
     </thead>
     <tbody>
       ${report.orders.map((order, index) => `
-      <tr ${order.isModified ? 'class="modified-row"' : ''}>
+      <tr ${order.isSkipped ? 'class="skipped-row"' : order.isModified ? 'class="modified-row"' : ''}>
         <td>
-          <div class="customer-name">${order.customerName}</div>
+          <div class="customer-name">
+            ${order.customerName}
+            ${order.isSkipped ? '<span class="skip-indicator">SKIP</span>' : ''}
+          </div>
           ${order.contactPerson ? `<div class="contact-info">Contact: ${order.contactPerson}</div>` : ''}
         </td>
         <td>
@@ -438,12 +507,15 @@ export async function GET(request: NextRequest) {
         <td>
           <div class="phone">${order.phone || 'Not provided'}</div>
         </td>
-        <td>${order.productName}</td>
-        <td class="quantity">
-          ${order.isModified && order.baseQuantity ? `<span class="base-quantity">${order.baseQuantity}L</span>` : ''}
-          <strong>${order.quantity}L</strong>
+        <td>
+          ${order.productName}
+          ${order.isSkipped ? '<div style="color: #dc2626; font-size: 9px; font-weight: bold; margin-top: 2px;">DELIVERY SKIPPED</div>' : ''}
         </td>
-        <td class="amount">${formatCurrency(order.totalAmount)}</td>
+        <td class="quantity">
+          ${order.isModified && order.baseQuantity && !order.isSkipped ? `<span class="base-quantity">${order.baseQuantity}L</span>` : ''}
+          <strong>${order.isSkipped ? '0L' : `${order.quantity}L`}</strong>
+        </td>
+        <td class="amount">${order.isSkipped ? '₹0.00' : formatCurrency(order.totalAmount)}</td>
         <td style="font-size: 8px;">
           ${order.isModified && order.appliedModifications.length > 0 ? 
             order.appliedModifications.map(mod => `
@@ -477,7 +549,7 @@ export async function GET(request: NextRequest) {
     
     return new Response(html, {
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=UTF-8',
       },
     })
     

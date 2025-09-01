@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
+import { formatDateToIST } from "@/lib/utils"
 import { toast } from "sonner"
 
 import { deliverySchema, type DeliveryFormData } from "@/lib/validations"
@@ -110,7 +111,7 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
             Order Details
           </CardTitle>
           <CardDescription>
-            Order for {format(new Date(order.order_date), "PPP")}
+            Order for {formatDateToIST(new Date(order.order_date))}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

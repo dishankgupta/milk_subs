@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -15,12 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
-import { formatCurrency } from "@/lib/utils"
 import { paymentSchema, type PaymentFormData } from "@/lib/validations"
 import { createPayment, updatePayment } from "@/lib/actions/payments"
-import { getCustomers } from "@/lib/actions/customers"
 import { toast } from "sonner"
 import type { Payment, Customer } from "@/lib/types"
+import { InvoiceAllocationSection } from "@/components/payments/InvoiceAllocationSection"
 
 interface PaymentFormProps {
   payment?: Payment
@@ -31,6 +30,11 @@ interface PaymentFormProps {
 export default function PaymentForm({ payment, customers, preSelectedCustomerId }: PaymentFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [paymentAllocations, setPaymentAllocations] = useState<{
+    id: string; 
+    type: 'invoice' | 'opening_balance'; 
+    amount: number 
+  }[]>([])
 
   const form = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
@@ -47,17 +51,20 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
 
   const selectedCustomerId = form.watch("customer_id")
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId)
+  const paymentAmount = form.watch("amount") || 0
 
   async function onSubmit(data: PaymentFormData) {
     setIsSubmitting(true)
     
     try {
       if (payment) {
+        // For payment updates, we'll need to handle reallocation separately
         await updatePayment(payment.id, data)
         toast.success("Payment updated successfully!")
         router.push(`/dashboard/payments/${payment.id}`)
       } else {
-        const newPayment = await createPayment(data)
+        // For new payments, pass the allocations
+        const newPayment = await createPayment(data, paymentAllocations)
         toast.success("Payment created successfully!")
         router.push(`/dashboard/payments/${newPayment.id}`)
       }
@@ -100,7 +107,7 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                               <div className="font-medium">{customer.billing_name}</div>
                               {customer.contact_person && (
                                 <div className="text-sm text-muted-foreground">
-                                  {customer.contact_person} • Outstanding: {formatCurrency(customer.outstanding_amount)}
+                                  {customer.contact_person}
                                 </div>
                               )}
                             </div>
@@ -118,9 +125,9 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                 <Card className="p-4 bg-muted/50">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">Current Outstanding Amount:</span>
-                      <span className={`font-bold ${selectedCustomer.outstanding_amount > 0 ? "text-red-600" : "text-green-600"}`}>
-                        {formatCurrency(selectedCustomer.outstanding_amount)}
+                      <span className="font-medium">Outstanding:</span>
+                      <span className="font-bold text-blue-600">
+                        View in Outstanding Section
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -335,6 +342,15 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                   </FormItem>
                 )}
               />
+
+              {/* Payment Allocation - Only show for new payments with selected customer and amount */}
+              {!payment && selectedCustomerId && paymentAmount > 0 && (
+                <InvoiceAllocationSection
+                  customerId={selectedCustomerId}
+                  paymentAmount={paymentAmount}
+                  onAllocationChange={setPaymentAllocations}
+                />
+              )}
 
               {/* Submit Button */}
               <div className="flex justify-end space-x-2">

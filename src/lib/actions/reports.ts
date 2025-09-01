@@ -1,7 +1,9 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import type { DailyOrder } from '@/lib/types'
+import type { DailyOrder, Customer, Product } from '@/lib/types'
+import { getPatternQuantity } from '@/lib/subscription-utils'
+import { parseLocalDateIST } from '@/lib/date-utils'
 
 export interface ProductionSummary {
   date: string
@@ -53,6 +55,7 @@ export interface RouteDeliveryReport {
     totalAmount: number
     baseQuantity?: number
     isModified: boolean
+    isSkipped: boolean
     appliedModifications: Array<{
       type: 'Skip' | 'Increase' | 'Decrease'
       reason: string | null
@@ -213,47 +216,21 @@ export async function getRouteDeliveryReport(
   try {
     const supabase = await createClient()
     
-    // Fetch orders and active modifications in parallel
-    const [ordersResult, modificationsResult] = await Promise.all([
-      supabase
-        .from('daily_orders')
-        .select(`
-          *,
-          customer:customers(id, billing_name, contact_person, address, phone_primary),
-          product:products(id, name, code),
-          route:routes(name)
-        `)
-        .eq('order_date', date)
-        .eq('route_id', routeId)
-        .eq('delivery_time', deliveryTime)
-        .eq('status', 'Generated')
-        .order('customer_id'),
-      
-      supabase
-        .from('modifications')
-        .select(`
-          *,
-          customer:customers(id, billing_name),
-          product:products(id, name)
-        `)
-        .eq('is_active', true)
-        .lte('start_date', date)
-        .gte('end_date', date)
-    ])
+    // First, check if orders have been generated for this date
+    const { data: existingOrders, error: ordersError } = await supabase
+      .from('daily_orders')
+      .select('id')
+      .eq('order_date', date)
+      .eq('route_id', routeId)
+      .eq('delivery_time', deliveryTime)
+      .limit(1)
 
-    if (ordersResult.error) {
-      throw ordersResult.error
+    if (ordersError) {
+      throw ordersError
     }
 
-    if (modificationsResult.error) {
-      throw modificationsResult.error
-    }
-
-    const orders = ordersResult.data
-    const modifications = modificationsResult.data || []
-
-    if (!orders || orders.length === 0) {
-      // Get route name even if no orders
+    // If no orders generated, return empty report
+    if (!existingOrders || existingOrders.length === 0) {
       const { data: route } = await supabase
         .from('routes')
         .select('name')
@@ -283,8 +260,104 @@ export async function getRouteDeliveryReport(
         }
       }
     }
+    
+    // Fetch active subscriptions for the route/delivery time and modifications in parallel
+    const [subscriptionsResult, modificationsResult] = await Promise.all([
+      supabase
+        .from('base_subscriptions')
+        .select(`
+          *,
+          customer:customers(
+            id, 
+            billing_name, 
+            contact_person, 
+            address, 
+            phone_primary,
+            status,
+            route_id,
+            delivery_time
+          ),
+          product:products(id, name, code, current_price)
+        `)
+        .eq('is_active', true)
+        .eq('customer.status', 'Active')
+        .eq('customer.route_id', routeId)
+        .eq('customer.delivery_time', deliveryTime),
+      
+      supabase
+        .from('modifications')
+        .select(`
+          *,
+          customer:customers(id, billing_name),
+          product:products(id, name)
+        `)
+        .eq('is_active', true)
+        .lte('start_date', date)
+        .gte('end_date', date)
+    ])
 
-    const routeName = orders[0].route?.name || 'Unknown Route'
+    if (subscriptionsResult.error) {
+      throw subscriptionsResult.error
+    }
+
+    if (modificationsResult.error) {
+      throw modificationsResult.error
+    }
+
+    const subscriptions = subscriptionsResult.data || []
+    const modifications = modificationsResult.data || []
+
+    // Get route name
+    const { data: route } = await supabase
+      .from('routes')
+      .select('name')
+      .eq('id', routeId)
+      .single()
+
+    const routeName = route?.name || 'Unknown Route'
+
+    if (subscriptions.length === 0) {
+      return {
+        success: true,
+        data: {
+          date,
+          routeId,
+          routeName,
+          deliveryTime,
+          orders: [],
+          summary: {
+            totalOrders: 0,
+            totalQuantity: 0,
+            totalValue: 0,
+            modifiedOrders: 0,
+            modificationSummary: {
+              skip: 0,
+              increase: 0,
+              decrease: 0
+            },
+            productBreakdown: {}
+          }
+        }
+      }
+    }
+
+    // Create lookup map for modifications
+    const modMap = new Map<string, Array<{
+      customer_id: string;
+      product_id: string;
+      modification_type: string;
+      quantity_change?: number;
+      reason?: string | null;
+    }>>()
+    
+    modifications.forEach(mod => {
+      const key = `${mod.customer_id}_${mod.product_id}`
+      if (!modMap.has(key)) {
+        modMap.set(key, [])
+      }
+      modMap.get(key)!.push(mod)
+    })
+
     const reportOrders = []
     const productBreakdown: RouteDeliveryReport['summary']['productBreakdown'] = {}
     
@@ -294,35 +367,45 @@ export async function getRouteDeliveryReport(
     let modifiedOrders = 0
     const modificationSummary = { skip: 0, increase: 0, decrease: 0 }
 
-    for (const order of orders as DailyOrder[]) {
-      totalOrders++
-      totalQuantity += order.planned_quantity
-      totalValue += order.total_amount
+    // Process all subscriptions (including those that might be skipped)
+    for (const subscription of subscriptions) {
+      const customer = subscription.customer as Customer
+      const product = subscription.product as Product
+      
+      if (!customer || !product) continue
 
-      // Find applicable modifications for this order
-      const orderModifications = modifications.filter(mod => 
-        mod.customer_id === order.customer_id && 
-        mod.product_id === order.product_id
-      )
+      const key = `${customer.id}_${product.id}`
+      
+      // Get base quantity
+      let baseQuantity = 0
+      if (subscription.subscription_type === "Daily") {
+        baseQuantity = subscription.daily_quantity || 0
+      } else if (subscription.subscription_type === "Pattern") {
+        const targetDate = parseLocalDateIST(date)
+        baseQuantity = getPatternQuantity(subscription, targetDate)
+      }
 
-      let baseQuantity = order.planned_quantity
+      // Apply modifications
+      let finalQuantity = baseQuantity
       let isModified = false
+      let isSkipped = false
       const appliedModifications: Array<{
         type: 'Skip' | 'Increase' | 'Decrease'
         reason: string | null
         quantityChange: number | null
       }> = []
-
-      // Calculate base quantity by reversing modifications
-      if (orderModifications.length > 0) {
+      
+      const mods = modMap.get(key) || []
+      
+      if (mods.length > 0) {
         isModified = true
         modifiedOrders++
 
-        for (const mod of orderModifications) {
+        for (const mod of mods) {
           appliedModifications.push({
             type: mod.modification_type as 'Skip' | 'Increase' | 'Decrease',
-            reason: mod.reason,
-            quantityChange: mod.quantity_change
+            reason: mod.reason || null,
+            quantityChange: mod.quantity_change || null
           })
 
           // Count modification types
@@ -331,46 +414,64 @@ export async function getRouteDeliveryReport(
             modificationSummary[modType]++
           }
 
-          // Reverse the modification to calculate base quantity
-          if (mod.modification_type === 'Skip') {
-            // For skip, the base quantity would be non-zero but final is 0
-            // We need to calculate what the base would have been
-            baseQuantity = order.planned_quantity > 0 ? order.planned_quantity : 1
-          } else if (mod.modification_type === 'Increase') {
-            baseQuantity = order.planned_quantity - (mod.quantity_change || 0)
-          } else if (mod.modification_type === 'Decrease') {
-            baseQuantity = order.planned_quantity + Math.abs(mod.quantity_change || 0)
+          // Apply modification
+          switch (mod.modification_type) {
+            case "Skip":
+              finalQuantity = 0
+              isSkipped = true
+              break
+            case "Increase":
+              finalQuantity += mod.quantity_change || 0
+              break
+            case "Decrease":
+              finalQuantity -= mod.quantity_change || 0
+              break
           }
         }
       }
+      
+      // Ensure quantity is not negative
+      finalQuantity = Math.max(0, finalQuantity)
+      
+      // Calculate total amount (0 if skipped)
+      const totalAmount = finalQuantity * product.current_price
 
+      // Include ALL subscriptions in the report (even skipped ones)
       reportOrders.push({
-        customerName: order.customer?.billing_name || 'Unknown Customer',
-        contactPerson: order.customer?.contact_person || '',
-        address: order.customer?.address || '',
-        phone: order.customer?.phone_primary || '',
-        productName: order.product?.name || 'Unknown Product',
-        quantity: order.planned_quantity,
-        totalAmount: order.total_amount,
+        customerName: customer.billing_name,
+        contactPerson: customer.contact_person || '',
+        address: customer.address || '',
+        phone: customer.phone_primary || '',
+        productName: product.name,
+        quantity: finalQuantity,
+        totalAmount: totalAmount,
         baseQuantity: isModified ? baseQuantity : undefined,
         isModified,
+        isSkipped,
         appliedModifications
       })
 
-      // Product breakdown
-      const productCode = order.product?.code || 'Unknown'
-      const productName = order.product?.name || 'Unknown Product'
-      
-      if (!productBreakdown[productCode]) {
-        productBreakdown[productCode] = {
-          name: productName,
-          quantity: 0,
-          value: 0
+      // Only count non-skipped orders in totals
+      if (!isSkipped && finalQuantity > 0) {
+        totalOrders++
+        totalQuantity += finalQuantity
+        totalValue += totalAmount
+
+        // Product breakdown (only for delivered items)
+        const productCode = product.code
+        const productName = product.name
+        
+        if (!productBreakdown[productCode]) {
+          productBreakdown[productCode] = {
+            name: productName,
+            quantity: 0,
+            value: 0
+          }
         }
+        
+        productBreakdown[productCode].quantity += finalQuantity
+        productBreakdown[productCode].value += totalAmount
       }
-      
-      productBreakdown[productCode].quantity += order.planned_quantity
-      productBreakdown[productCode].value += order.total_amount
     }
 
     return {

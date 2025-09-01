@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { Search, MoreHorizontal, Eye, Edit, Trash2, ToggleLeft, ToggleRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { format } from 'date-fns'
+import { formatDateToIST } from '@/lib/utils'
+import { parseLocalDateIST } from '@/lib/date-utils'
 import { useSorting } from '@/hooks/useSorting'
 
 import { Button } from '@/components/ui/button'
@@ -255,10 +257,10 @@ export function ModificationsTable() {
                       <div>
                         <p className="font-medium text-gray-900">Date Range</p>
                         <p className="text-gray-600">
-                          {format(new Date(modification.start_date), 'MMM d, yyyy')}
+                          {formatDateToIST(parseLocalDateIST(modification.start_date))}
                         </p>
                         <p className="text-gray-500 text-xs">
-                          to {format(new Date(modification.end_date), 'MMM d, yyyy')}
+                          to {formatDateToIST(parseLocalDateIST(modification.end_date))}
                         </p>
                       </div>
                       

@@ -21,7 +21,27 @@
       "Bash(cp:*)",
       "Bash(pnpm list:*)",
       "mcp__brave-search__brave_web_search",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "mcp__linear-server__list_teams",
+      "mcp__linear-server__list_projects",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_console_messages",
+      "mcp__linear-server__create_issue",
+      "mcp__linear-server__update_issue",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__list_issues",
+      "mcp__linear-server__create_comment",
+      "Bash(pnpm test:run:*)",
+      "Bash(grep:*)",
+      "mcp__playwright__browser_resize",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_press_key",
+      "Bash(node:*)",
+      "mcp__supabase__search_docs"
     ]
   },
   "enabledMcpjsonServers": [

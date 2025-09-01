@@ -2,11 +2,12 @@ import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { getDailyProductionSummary } from '@/lib/actions/reports'
 import { formatCurrency } from '@/lib/utils'
+import { getCurrentISTDate, formatDateIST, formatDateTimeIST } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
+    const date = searchParams.get('date') || format(getCurrentISTDate(), 'yyyy-MM-dd')
     
     const result = await getDailyProductionSummary(date)
     
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Production Summary - ${format(new Date(date), 'PPP')}</title>
+  <title>Production Summary - ${formatDateIST(new Date(date))}</title>
   <style>
     @page {
       size: A4;
@@ -241,13 +242,14 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="report-info">
       <h2>Daily Production Summary</h2>
-      <p>Report Date: ${format(new Date(date), 'PPPP')}</p>
+      <p>Report Date: ${formatDateIST(new Date(date))}</p>
+      <p>Generated: ${formatDateTimeIST(getCurrentISTDate())}</p>
     </div>
   </div>
 
   ${summary.totalOrders === 0 ? `
   <div class="no-data">
-    <h3>No orders found for ${format(new Date(date), 'PPP')}</h3>
+    <h3>No orders found for ${formatDateIST(new Date(date))}</h3>
     <p>No production data available for the selected date.</p>
   </div>
   ` : `
@@ -354,7 +356,7 @@ export async function GET(request: NextRequest) {
     
     return new Response(html, {
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=UTF-8',
       },
     })
     

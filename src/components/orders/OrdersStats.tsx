@@ -2,12 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
 import { Package, Calendar, TrendingUp, Clock } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { getCurrentISTDate, formatDateForDatabase, addDaysIST } from "@/lib/date-utils"
 
 export async function OrdersStats() {
   const supabase = await createClient()
   
-  // Get today's date
-  const today = new Date().toISOString().split('T')[0]
+  // Get today's date using IST context
+  const today = formatDateForDatabase(getCurrentISTDate())
   
   // Get today's orders
   const { data: todayOrders } = await supabase
@@ -16,9 +17,8 @@ export async function OrdersStats() {
     .eq("order_date", today)
   
   // Get this week's orders (last 7 days)
-  const weekAgo = new Date()
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  const weekAgoStr = weekAgo.toISOString().split('T')[0]
+  const weekAgo = addDaysIST(getCurrentISTDate(), -7)
+  const weekAgoStr = formatDateForDatabase(weekAgo)
   
   const { data: weekOrders } = await supabase
     .from("daily_orders")

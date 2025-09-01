@@ -27,6 +27,8 @@ export function SortableTableHead<T = unknown>({
     return <ArrowDown className="h-4 w-4" />
   }
 
+  const isRightAligned = className?.includes('text-right')
+
   return (
     <TableHead
       className={cn(
@@ -36,7 +38,10 @@ export function SortableTableHead<T = unknown>({
       )}
       onClick={() => onSort(sortKey)}
     >
-      <div className="flex items-center space-x-2">
+      <div className={cn(
+        "flex items-center space-x-2",
+        isRightAligned && "justify-end"
+      )}>
         <span>{children}</span>
         {getSortIcon()}
       </div>

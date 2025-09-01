@@ -11,7 +11,7 @@ export const customerSchema = z.object({
   delivery_time: z.enum(["Morning", "Evening"], { message: "Please select delivery time" }),
   payment_method: z.enum(["Monthly", "Prepaid"], { message: "Please select payment method" }),
   billing_cycle_day: z.number().min(1, "Billing cycle day must be between 1 and 31").max(31, "Billing cycle day must be between 1 and 31"),
-  outstanding_amount: z.number().min(0, "Outstanding amount cannot be negative"),
+  opening_balance: z.number().min(0, "Opening balance cannot be negative"),
   status: z.enum(["Active", "Inactive"]),
 })
 
@@ -20,9 +20,9 @@ export const subscriptionSchema = z.object({
   product_id: z.string().uuid("Please select a valid product"),
   subscription_type: z.enum(["Daily", "Pattern"], { message: "Please select subscription type" }),
   daily_quantity: z.number().positive("Daily quantity must be positive").optional(),
-  pattern_day1_quantity: z.number().positive("Day 1 quantity must be positive").optional(),
-  pattern_day2_quantity: z.number().positive("Day 2 quantity must be positive").optional(),
-  pattern_start_date: z.date({ message: "Pattern start date is required" }).optional(),
+  pattern_day1_quantity: z.number().min(0, "Day 1 quantity cannot be negative").optional(),
+  pattern_day2_quantity: z.number().min(0, "Day 2 quantity cannot be negative").optional(),
+  pattern_start_date: z.date({ message: "Pattern start date is required" }).nullable().optional(),
   is_active: z.boolean(),
 }).refine((data) => {
   if (data.subscription_type === "Daily") {
@@ -31,14 +31,16 @@ export const subscriptionSchema = z.object({
   if (data.subscription_type === "Pattern") {
     return data.pattern_day1_quantity !== undefined && 
            data.pattern_day2_quantity !== undefined && 
-           data.pattern_start_date !== undefined &&
-           data.pattern_day1_quantity > 0 &&
-           data.pattern_day2_quantity > 0
+           data.pattern_start_date !== undefined && 
+           data.pattern_start_date !== null &&
+           data.pattern_day1_quantity >= 0 &&
+           data.pattern_day2_quantity >= 0 &&
+           (data.pattern_day1_quantity > 0 || data.pattern_day2_quantity > 0) // At least one day must have delivery
   }
   return true
 }, {
-  message: "Please provide valid quantities for the selected subscription type",
-  path: ["subscription_type"]
+  message: "For Pattern subscriptions, at least one day must have a delivery quantity greater than 0",
+  path: ["pattern_day1_quantity"]
 })
 
 export const modificationSchema = z.object({
@@ -73,7 +75,7 @@ export type SubscriptionFormData = {
   daily_quantity?: number
   pattern_day1_quantity?: number
   pattern_day2_quantity?: number
-  pattern_start_date?: Date
+  pattern_start_date?: Date | null
   is_active: boolean
 }
 
@@ -122,3 +124,148 @@ export const bulkDeliverySchema = z.object({
 })
 
 export type BulkDeliveryFormData = z.infer<typeof bulkDeliverySchema>
+
+// Sales Management System Validation Schemas
+
+export const saleSchema = z.object({
+  customer_id: z.string().uuid().nullable(),
+  product_id: z.string().uuid("Product selection is required"),
+  quantity: z.number()
+    .min(0.001, "Quantity must be greater than 0")
+    .max(10000, "Quantity too large"),
+  unit_price: z.number()
+    .min(0.01, "Unit price must be greater than 0")
+    .max(100000, "Unit price too high"),
+  sale_type: z.enum(['Cash', 'Credit', 'QR']),
+  sale_date: z.date().refine((date) => {
+    const today = new Date();
+    const saleDate = new Date(date);
+    // Reset time to compare only dates
+    today.setHours(23, 59, 59, 999);
+    return saleDate <= today;
+  }, "Sale date cannot be in the future"),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional()
+}).refine((data) => {
+  // Business rule: Credit sales must have customer_id (Cash and QR sales can optionally have customer for reporting)
+  if (data.sale_type === 'Credit' && data.customer_id === null) {
+    return false
+  }
+  return true
+}, {
+  message: "Credit sales must have a customer selected",
+  path: ["customer_id"]
+})
+
+export type SaleFormData = z.infer<typeof saleSchema>
+
+// Extended product schema with GST fields
+export const productSchema = z.object({
+  name: z.string()
+    .min(2, "Product name must be at least 2 characters")
+    .max(100, "Product name too long"),
+  code: z.string()
+    .min(2, "Product code must be at least 2 characters")
+    .max(10, "Product code too long")
+    .regex(/^[A-Z0-9]+$/, "Product code must be uppercase letters and numbers only"),
+  current_price: z.number()
+    .min(0.01, "Price must be greater than 0")
+    .max(100000, "Price too high"),
+  unit: z.string()
+    .min(1, "Unit is required"),
+  gst_rate: z.number()
+    .min(0, "GST rate cannot be negative")
+    .max(30, "GST rate cannot exceed 30%"),
+  unit_of_measure: z.string()
+    .min(1, "Unit of measure is required")
+    .max(20, "Unit of measure too long"),
+  is_subscription_product: z.boolean()
+})
+
+export type ProductFormData = z.infer<typeof productSchema>
+
+// Outstanding report validation
+export const outstandingReportSchema = z.object({
+  start_date: z.date(),
+  end_date: z.date(),
+  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'with_credit', 'selected']),
+  selected_customer_ids: z.array(z.string().uuid()).optional()
+}).refine((data) => {
+  // End date must be after start date
+  if (data.end_date <= data.start_date) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date",
+  path: ["end_date"]
+}).refine((data) => {
+  // Selected customers must be provided if selection is 'selected'
+  if (data.customer_selection === 'selected' && (!data.selected_customer_ids || data.selected_customer_ids.length === 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one customer must be selected",
+  path: ["selected_customer_ids"]
+})
+
+export type OutstandingReportFormData = z.infer<typeof outstandingReportSchema>
+
+// Invoice Generation Validation Schemas
+
+export const bulkInvoiceSchema = z.object({
+  period_start: z.date(),
+  period_end: z.date(),
+  customer_selection: z.enum(['all', 'with_unbilled_deliveries', 'with_unbilled_credit_sales', 'with_unbilled_transactions', 'selected']),
+  selected_customer_ids: z.array(z.string().uuid()).optional(),
+  output_folder: z.string().min(1, "Output folder is required")
+}).refine((data) => {
+  // End date must be after start date
+  if (data.period_end <= data.period_start) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date", 
+  path: ["period_end"]
+}).refine((data) => {
+  // Selected customers must be provided if selection is 'selected'
+  if (data.customer_selection === 'selected' && (!data.selected_customer_ids || data.selected_customer_ids.length === 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one customer must be selected",
+  path: ["selected_customer_ids"]
+})
+
+export type BulkInvoiceFormData = z.infer<typeof bulkInvoiceSchema>
+
+export const singleInvoiceSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  period_start: z.date(),
+  period_end: z.date(),
+  include_subscriptions: z.boolean(),
+  include_credit_sales: z.boolean(),
+  output_folder: z.string().optional()
+}).refine((data) => {
+  // End date must be after start date
+  if (data.period_end <= data.period_start) {
+    return false
+  }
+  return true
+}, {
+  message: "End date must be after start date",
+  path: ["period_end"]
+}).refine((data) => {
+  // At least one option must be selected
+  if (!data.include_subscriptions && !data.include_credit_sales) {
+    return false
+  }
+  return true
+}, {
+  message: "At least one option (subscriptions or credit sales) must be selected",
+  path: ["include_subscriptions"]
+})
+
+export type SingleInvoiceFormData = z.infer<typeof singleInvoiceSchema>

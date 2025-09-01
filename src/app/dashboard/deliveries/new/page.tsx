@@ -8,6 +8,7 @@ import { Package, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
+import { formatDateToIST } from "@/lib/utils"
 
 interface NewDeliveryPageProps {
   searchParams?: Promise<{
@@ -58,7 +59,7 @@ async function NewDeliveryContent({ searchParams }: NewDeliveryPageProps) {
             <h3 className="text-lg font-semibold mb-2">No Orders Available</h3>
             <p className="mb-4">
               No undelivered orders found
-              {resolvedSearchParams?.date && ` for ${format(new Date(resolvedSearchParams.date), "PP")}`}.
+              {resolvedSearchParams?.date && ` for ${formatDateToIST(new Date(resolvedSearchParams.date))}`}.
             </p>
             <div className="flex justify-center gap-2">
               <Link href="/dashboard/orders/generate">

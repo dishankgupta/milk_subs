@@ -8,6 +8,7 @@ import { Edit, ArrowLeft, User, Calendar, CreditCard, FileText, Clock } from "lu
 import { getPayment } from "@/lib/actions/payments"
 import { formatCurrency } from "@/lib/utils"
 import { format } from "date-fns"
+import { formatWithIST } from "@/lib/date-utils"
 
 export default async function PaymentDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params
@@ -61,7 +62,7 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Payment Date:</span>
                 <span className="font-medium">
-                  {format(new Date(payment.payment_date), "PPP")}
+                  {formatWithIST(new Date(payment.payment_date), "PPP")}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -112,9 +113,9 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
                     <span className="text-sm">{payment.customer.phone_primary}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Outstanding Amount:</span>
-                    <span className={`font-medium ${payment.customer.outstanding_amount > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {formatCurrency(payment.customer.outstanding_amount)}
+                    <span className="text-muted-foreground">Outstanding:</span>
+                    <span className="font-medium text-blue-600">
+                      View in Outstanding Section
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -144,20 +145,20 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Period Start:</span>
                     <span className="font-medium">
-                      {format(new Date(payment.period_start), "PPP")}
+                      {formatWithIST(new Date(payment.period_start), "PPP")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Period End:</span>
                     <span className="font-medium">
-                      {format(new Date(payment.period_end), "PPP")}
+                      {formatWithIST(new Date(payment.period_end), "PPP")}
                     </span>
                   </div>
                   <div className="bg-muted/50 p-3 rounded">
                     <p className="text-sm">
                       This payment covers the period from{" "}
-                      <strong>{format(new Date(payment.period_start), "MMM dd")}</strong> to{" "}
-                      <strong>{format(new Date(payment.period_end), "MMM dd, yyyy")}</strong>
+                      <strong>{formatWithIST(new Date(payment.period_start), "MMM dd")}</strong> to{" "}
+                      <strong>{formatWithIST(new Date(payment.period_end), "MMM dd, yyyy")}</strong>
                     </p>
                   </div>
                 </>
@@ -190,11 +191,11 @@ export default async function PaymentDetailPage(props: { params: Promise<{ id: s
               <div className="space-y-2 text-xs text-muted-foreground">
                 <div className="flex items-center">
                   <Clock className="mr-2 h-3 w-3" />
-                  Created: {format(new Date(payment.created_at), "PPP 'at' p")}
+                  Created: {formatWithIST(new Date(payment.created_at), "PPP 'at' p")}
                 </div>
                 <div className="flex items-center">
                   <Clock className="mr-2 h-3 w-3" />
-                  Last Updated: {format(new Date(payment.updated_at), "PPP 'at' p")}
+                  Last Updated: {formatWithIST(new Date(payment.updated_at), "PPP 'at' p")}
                 </div>
               </div>
             </CardContent>

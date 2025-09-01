@@ -1,11 +1,13 @@
 import { getCustomer } from "@/lib/actions/customers"
 import { getCustomerSubscriptions } from "@/lib/actions/subscriptions"
 import { getCustomerPayments } from "@/lib/actions/payments"
+import { getCustomerOutstanding, calculateCustomerOutstandingAmount, getCustomerCreditInfo } from "@/lib/actions/outstanding"
 import { formatCurrency } from "@/lib/utils"
+import { formatDateIST } from "@/lib/date-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard, Plus, Package, Eye, Receipt, DollarSign } from "lucide-react"
+import { ArrowLeft, Edit, Phone, MapPin, Calendar, CreditCard, Plus, Package, Eye, Receipt, DollarSign, FileText } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -15,10 +17,12 @@ interface CustomerDetailPageProps {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { id } = await params
-  const [customer, subscriptions, payments] = await Promise.all([
+  const [customer, subscriptions, payments, outstandingData, creditInfo] = await Promise.all([
     getCustomer(id),
     getCustomerSubscriptions(id),
-    getCustomerPayments(id)
+    getCustomerPayments(id),
+    getCustomerOutstanding(id).catch(() => ({ totalOutstanding: 0, unpaidInvoices: [] })),
+    getCustomerCreditInfo(id)
   ])
 
   if (!customer) {
@@ -156,11 +160,60 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
               <p>{customer.billing_cycle_day}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Outstanding Amount</p>
-              <p className={`text-lg font-semibold ${customer.outstanding_amount > 0 ? "text-red-600" : "text-green-600"}`}>
-                {formatCurrency(customer.outstanding_amount)}
+              <p className="text-sm font-medium text-muted-foreground">Opening Balance</p>
+              <p className={`font-medium ${customer.opening_balance > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                {formatCurrency(customer.opening_balance)}
               </p>
             </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Outstanding Amount</p>
+              <div className="flex items-center gap-2">
+                <p className={`text-lg font-semibold ${outstandingData.totalOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                  {formatCurrency(outstandingData.totalOutstanding)}
+                </p>
+                <div className="flex gap-2">
+                  {outstandingData.unpaidInvoices && outstandingData.unpaidInvoices.length > 0 && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/outstanding/${customer.id}`}>
+                        <Eye className="h-4 w-4 mr-1" />
+                        View Details
+                      </Link>
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/api/print/customer-statement/${customer.id}`} target="_blank">
+                      <FileText className="h-4 w-4 mr-1" />
+                      Print Statement
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+              {outstandingData.unpaidInvoices && outstandingData.unpaidInvoices.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  From {outstandingData.unpaidInvoices.length} unpaid invoice{outstandingData.unpaidInvoices.length !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+            {/* Available Credit */}
+            {creditInfo.hasCredit && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Available Credit</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-semibold text-green-600">
+                    {formatCurrency(creditInfo.total_amount)} ({creditInfo.payment_count} payment{creditInfo.payment_count !== 1 ? 's' : ''})
+                  </p>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/dashboard/payments?tab=unapplied&customer=${customer.id}`}>
+                      <DollarSign className="h-4 w-4 mr-1" />
+                      Apply Credit
+                    </Link>
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 text-green-700">
+                  Credit available for allocation to invoices or opening balance
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -175,11 +228,11 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
           <CardContent className="space-y-4">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Customer Since</p>
-              <p>{new Date(customer.created_at).toLocaleDateString()}</p>
+              <p>{formatDateIST(new Date(customer.created_at))}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
-              <p>{new Date(customer.updated_at).toLocaleDateString()}</p>
+              <p>{formatDateIST(new Date(customer.updated_at))}</p>
             </div>
           </CardContent>
         </Card>
@@ -303,11 +356,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {new Date(payment.payment_date).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                        {formatDateIST(new Date(payment.payment_date))}
                       </div>
                       {payment.notes && (
                         <div className="text-xs text-muted-foreground mt-1 truncate max-w-[200px]" title={payment.notes}>

@@ -174,13 +174,9 @@ export function CustomersTable() {
               >
                 Delivery
               </SortableTableHead>
-              <SortableTableHead 
-                sortKey="outstanding_amount" 
-                sortConfig={sortConfig} 
-                onSort={handleSort}
-              >
+              <TableHead>
                 Outstanding
-              </SortableTableHead>
+              </TableHead>
               <SortableTableHead 
                 sortKey="status" 
                 sortConfig={sortConfig} 
@@ -226,9 +222,12 @@ export function CustomersTable() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className={customer.outstanding_amount > 0 ? "text-red-600 font-medium" : ""}>
-                      {formatCurrency(customer.outstanding_amount)}
-                    </span>
+                    <Link 
+                      href={`/dashboard/outstanding/${customer.id}`}
+                      className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                    >
+                      View Details
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <Badge variant={customer.status === "Active" ? "default" : "secondary"}>

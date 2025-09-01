@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -11,6 +11,7 @@ import { bulkDeliverySchema, type BulkDeliveryFormData } from "@/lib/validations
 import { createBulkDeliveries } from "@/lib/actions/deliveries"
 import type { DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { useSorting } from "@/hooks/useSorting"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +20,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Package, CheckCircle2, ArrowLeft } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { CalendarIcon, Package, CheckCircle2, ArrowLeft, Search } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
@@ -36,6 +39,7 @@ interface BulkDeliveryFormProps {
 export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(new Date())
+  const [searchTerm, setSearchTerm] = useState("")
   const router = useRouter()
 
   const {
@@ -67,11 +71,36 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
 
   const deliveryMode = watch("delivery_mode")
 
-  const handleQuantityChange = (index: number, value: number) => {
-    update(index, { 
-      order_id: fields[index].order_id, 
-      actual_quantity: value 
-    })
+  // Filter orders based on search term
+  const filteredOrders = useMemo(() => {
+    if (!searchTerm.trim()) return orders
+
+    const searchLower = searchTerm.toLowerCase()
+    return orders.filter(order =>
+      order.customer.billing_name.toLowerCase().includes(searchLower) ||
+      order.product.name.toLowerCase().includes(searchLower) ||
+      order.route.name.toLowerCase().includes(searchLower)
+    )
+  }, [orders, searchTerm])
+
+  // Setup sorting for filtered orders
+  const { sortedData: sortedOrders, sortConfig, handleSort } = useSorting(
+    filteredOrders,
+    'customer.billing_name', // default sort by customer name
+    'asc'
+  )
+
+  const handleQuantityChange = (orderIndex: number, value: number) => {
+    // Find the original index of this order in the unfiltered/unsorted array
+    const originalOrderId = sortedOrders[orderIndex]?.id
+    const originalIndex = orders.findIndex(order => order.id === originalOrderId)
+    
+    if (originalIndex !== -1) {
+      update(originalIndex, { 
+        order_id: fields[originalIndex].order_id, 
+        actual_quantity: value 
+      })
+    }
   }
 
   async function onSubmit(data: BulkDeliveryFormData) {
@@ -322,45 +351,138 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
             <CardHeader>
               <CardTitle>Custom Quantities</CardTitle>
               <CardDescription>
-                Adjust individual quantities for each order
+                Adjust individual quantities for each order ({sortedOrders.length} of {orders.length} orders shown)
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {orders.map((order, index) => (
-                  <div key={order.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center p-4 border rounded-lg">
-                    <div className="md:col-span-2">
-                      <div className="font-medium">{order.customer.billing_name}</div>
-                      <div className="text-sm text-muted-foreground">{order.product.name}</div>
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Search by customer name, product, or route..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              {/* Orders Table */}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <SortableTableHead
+                        sortKey="customer.billing_name"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                        className="w-[200px]"
+                      >
+                        Customer
+                      </SortableTableHead>
+                      <SortableTableHead
+                        sortKey="product.name"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                        className="w-[150px]"
+                      >
+                        Product
+                      </SortableTableHead>
+                      <SortableTableHead
+                        sortKey="route.name"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                        className="w-[120px]"
+                      >
+                        Route
+                      </SortableTableHead>
+                      <SortableTableHead
+                        sortKey="planned_quantity"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                        className="w-[100px] text-right"
+                      >
+                        Planned (L)
+                      </SortableTableHead>
+                      <TableHead className="w-[120px] text-right">Actual (L)</TableHead>
+                      <TableHead className="w-[120px] text-right">Variance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedOrders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          No orders found matching your search criteria
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedOrders.map((order, index) => {
+                        const originalIndex = orders.findIndex(o => o.id === order.id)
+                        const actualQuantity = fields[originalIndex]?.actual_quantity || 0
+                        const variance = actualQuantity - order.planned_quantity
+                        
+                        return (
+                          <TableRow key={order.id}>
+                            <TableCell className="font-medium">
+                              {order.customer.billing_name}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {order.product.name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{order.route.name}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {order.planned_quantity}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={actualQuantity}
+                                onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
+                                className="w-20 text-right font-mono"
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className={`font-medium font-mono ${variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {variance >= 0 ? '+' : ''}{variance.toFixed(1)}L
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Quick Stats for Filtered Data */}
+              {searchTerm && (
+                <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-2">Filtered Results:</div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">{sortedOrders.length}</span> orders shown
                     </div>
                     <div>
-                      <div className="text-sm text-muted-foreground">Route</div>
-                      <div className="font-medium">{order.route.name}</div>
+                      <span className="font-medium">
+                        {sortedOrders.reduce((sum, order) => sum + order.planned_quantity, 0)}L
+                      </span> planned total
                     </div>
                     <div>
-                      <div className="text-sm text-muted-foreground">Planned</div>
-                      <div className="font-medium">{order.planned_quantity}L</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Actual</div>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={fields[index]?.actual_quantity || 0}
-                        onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Variance</div>
-                      <div className={`font-medium ${(fields[index]?.actual_quantity || 0) - order.planned_quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {((fields[index]?.actual_quantity || 0) - order.planned_quantity) >= 0 ? '+' : ''}{(fields[index]?.actual_quantity || 0) - order.planned_quantity}L
-                      </div>
+                      <span className="font-medium">
+                        {sortedOrders.reduce((sum, order) => {
+                          const originalIndex = orders.findIndex(o => o.id === order.id)
+                          return sum + (fields[originalIndex]?.actual_quantity || 0)
+                        }, 0)}L
+                      </span> actual total
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

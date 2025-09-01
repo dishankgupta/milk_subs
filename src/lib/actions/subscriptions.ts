@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Subscription, Product } from "@/lib/types"
 import { SubscriptionFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
+import { formatTimestampForDatabase, getCurrentISTDate } from "@/lib/date-utils"
 
 export async function getSubscriptions(): Promise<Subscription[]> {
   const supabase = await createClient()
@@ -12,7 +13,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .order("created_at", { ascending: false })
@@ -32,7 +33,7 @@ export async function getSubscription(id: string): Promise<Subscription | null> 
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .eq("id", id)
@@ -53,7 +54,7 @@ export async function getCustomerSubscriptions(customerId: string): Promise<Subs
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .eq("customer_id", customerId)
@@ -108,7 +109,7 @@ export async function createSubscription(subscriptionData: SubscriptionFormData)
     .insert(insertData)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -146,7 +147,7 @@ export async function updateSubscription(id: string, subscriptionData: Subscript
     product_id: subscriptionData.product_id,
     subscription_type: subscriptionData.subscription_type,
     is_active: subscriptionData.is_active,
-    updated_at: new Date().toISOString(),
+    updated_at: formatTimestampForDatabase(getCurrentISTDate()),
   }
 
   if (subscriptionData.subscription_type === "Daily") {
@@ -167,7 +168,7 @@ export async function updateSubscription(id: string, subscriptionData: Subscript
     .eq("id", id)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -227,12 +228,12 @@ export async function toggleSubscriptionStatus(id: string): Promise<{ success: b
     .from("base_subscriptions")
     .update({ 
       is_active: !current.is_active,
-      updated_at: new Date().toISOString()
+      updated_at: formatTimestampForDatabase(getCurrentISTDate())
     })
     .eq("id", id)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -253,6 +254,7 @@ export async function getProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
     .select("*")
+    .eq("is_subscription_product", true)
     .order("name")
 
   if (error) {
@@ -271,7 +273,7 @@ export async function searchSubscriptions(query: string): Promise<Subscription[]
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .order("created_at", { ascending: false })

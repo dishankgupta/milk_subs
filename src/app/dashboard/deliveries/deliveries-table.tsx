@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { format } from "date-fns"
+import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
 
@@ -25,18 +25,33 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 
-interface DeliveriesTableProps {
-  initialDeliveries: (Delivery & {
-    daily_order: DailyOrder & {
-      customer: Customer
-      product: Product
-      route: Route
-    }
-  })[]
-  onDataChange?: () => void
+type DeliveryWithOrder = Delivery & {
+  daily_order: DailyOrder & {
+    customer: Customer
+    product: Product
+    route: Route
+  }
 }
 
-export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesTableProps) {
+interface FilterState {
+  searchQuery: string
+  dateFilter: string
+  routeFilter: string
+}
+
+interface SortState {
+  key: string
+  direction: 'asc' | 'desc'
+}
+
+interface DeliveriesTableProps {
+  initialDeliveries: DeliveryWithOrder[]
+  onDataChange?: () => void
+  onFiltersChange?: (filtered: DeliveryWithOrder[], filters: FilterState) => void
+  onSortChange?: (sortState: SortState) => void
+}
+
+export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChange, onSortChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [dateFilter, setDateFilter] = useState<string>("all")
@@ -70,9 +85,35 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
       if (key === 'variance') {
         return (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
       }
-      return null // Use default behavior for other keys
+      if (key === 'delivered_at') {
+        return delivery.delivered_at ? new Date(delivery.delivered_at) : new Date(0)
+      }
+      // Return undefined to use default getNestedValue for other keys
+      return undefined
     }
   )
+
+  // Notify parent component when filters change (only on filter state changes, not filtered data)
+  useEffect(() => {
+    if (onFiltersChange) {
+      const currentFilters = {
+        searchQuery,
+        dateFilter,
+        routeFilter
+      }
+      onFiltersChange(filteredDeliveries, currentFilters)
+    }
+  }, [searchQuery, dateFilter, routeFilter])
+
+  // Notify parent component when sort changes
+  useEffect(() => {
+    if (onSortChange && sortConfig) {
+      onSortChange({
+        key: sortConfig.key,
+        direction: sortConfig.direction
+      })
+    }
+  }, [sortConfig, onSortChange])
 
   // Handle search functionality (client-side filtering)
   const handleSearch = (query: string) => {
@@ -176,7 +217,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                 <SelectItem value="all">All Dates</SelectItem>
                 {uniqueDates.map(date => (
                   <SelectItem key={date} value={date}>
-                    {format(new Date(date), "PP")}
+                    {formatDateToIST(new Date(date))}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -350,7 +391,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {format(new Date(order.order_date), "PP")}
+                            {formatDateToIST(new Date(order.order_date))}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
@@ -377,7 +418,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange }: DeliveriesT
                           {delivery.delivered_at && (
                             <div className="flex items-center gap-2 text-sm">
                               <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{format(new Date(delivery.delivered_at), "PP 'at' p")}</span>
+                              <span>{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
                             </div>
                           )}
                           

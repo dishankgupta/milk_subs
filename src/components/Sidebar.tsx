@@ -7,12 +7,16 @@ import { createClient } from '@/lib/supabase/client'
 import { 
   Home, 
   Users, 
+  Package,
   Calendar, 
   ClipboardList, 
   Edit,
   FileText,
   Truck, 
   CreditCard, 
+  ShoppingCart,
+  Receipt,
+  DollarSign,
   Settings, 
   LogOut,
   Menu,
@@ -22,12 +26,16 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Customers', href: '/dashboard/customers', icon: Users },
+  { name: 'Products', href: '/dashboard/products', icon: Package },
   { name: 'Subscriptions', href: '/dashboard/subscriptions', icon: Calendar },
   { name: 'Modifications', href: '/dashboard/modifications', icon: Edit },
   { name: 'Daily Orders', href: '/dashboard/orders', icon: ClipboardList },
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
   { name: 'Delivery Routes', href: '/dashboard/deliveries', icon: Truck },
+  { name: 'Sales', href: '/dashboard/sales', icon: ShoppingCart },
   { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
+  { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt },
+  { name: 'Outstanding', href: '/dashboard/outstanding', icon: DollarSign },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
