@@ -13,7 +13,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .order("created_at", { ascending: false })
@@ -33,7 +33,7 @@ export async function getSubscription(id: string): Promise<Subscription | null> 
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .eq("id", id)
@@ -54,7 +54,7 @@ export async function getCustomerSubscriptions(customerId: string): Promise<Subs
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .eq("customer_id", customerId)
@@ -109,7 +109,7 @@ export async function createSubscription(subscriptionData: SubscriptionFormData)
     .insert(insertData)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -168,7 +168,7 @@ export async function updateSubscription(id: string, subscriptionData: Subscript
     .eq("id", id)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -233,7 +233,7 @@ export async function toggleSubscriptionStatus(id: string): Promise<{ success: b
     .eq("id", id)
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .single()
@@ -273,7 +273,7 @@ export async function searchSubscriptions(query: string): Promise<Subscription[]
     .from("base_subscriptions")
     .select(`
       *,
-      customer:customers(*),
+      customer:customers(*, route:routes(*)),
       product:products(*)
     `)
     .order("created_at", { ascending: false })

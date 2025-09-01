@@ -52,6 +52,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
   const [typeFilter, setTypeFilter] = useState<"all" | "Daily" | "Pattern">("all")
+  const [routeFilter, setRouteFilter] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(false)
   const [showInactiveWarning, setShowInactiveWarning] = useState(false)
   const [pendingSubscriptionId, setPendingSubscriptionId] = useState<string | null>(null)
@@ -78,7 +79,12 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
     return () => clearTimeout(delayedSearch)
   }, [searchQuery, initialSubscriptions])
 
-  // Filter subscriptions based on status and type
+  // Extract unique routes from subscriptions
+  const uniqueRoutes = Array.from(
+    new Set(subscriptions.map(s => s.customer?.route?.name).filter(Boolean))
+  )
+
+  // Filter subscriptions based on status, type, and route
   const filteredSubscriptions = subscriptions.filter((subscription) => {
     const statusMatch = statusFilter === "all" || 
       (statusFilter === "active" && subscription.is_active) ||
@@ -86,7 +92,9 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
     
     const typeMatch = typeFilter === "all" || subscription.subscription_type === typeFilter
     
-    return statusMatch && typeMatch
+    const routeMatch = routeFilter === "all" || subscription.customer?.route?.name === routeFilter
+    
+    return statusMatch && typeMatch && routeMatch
   })
 
   // Apply sorting to filtered subscriptions
@@ -217,6 +225,17 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                 <SelectItem value="Pattern">Pattern</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={routeFilter} onValueChange={setRouteFilter}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Filter by route" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Routes</SelectItem>
+                {uniqueRoutes.map(route => (
+                  <SelectItem key={route} value={route}>{route}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -240,6 +259,13 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                 onSort={handleSort}
               >
                 Customer
+              </SortableTableHead>
+              <SortableTableHead 
+                sortKey="customer.route.name" 
+                sortConfig={sortConfig} 
+                onSort={handleSort}
+              >
+                Route
               </SortableTableHead>
               <SortableTableHead 
                 sortKey="product.name" 
@@ -276,14 +302,14 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto"></div>
                   <p className="mt-2 text-sm text-gray-600">Searching...</p>
                 </TableCell>
               </TableRow>
             ) : sortedSubscriptions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <p className="text-muted-foreground">
                     {searchQuery ? `No subscriptions found for "${searchQuery}"` : "No subscriptions found"}
                   </p>
@@ -298,6 +324,11 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
                       <div className="text-sm text-muted-foreground">
                         {subscription.customer?.contact_person}
                       </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">
+                      {subscription.customer?.route?.name || "No Route"}
                     </div>
                   </TableCell>
                   <TableCell>
