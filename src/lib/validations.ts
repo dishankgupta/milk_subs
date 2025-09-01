@@ -75,7 +75,7 @@ export type SubscriptionFormData = {
   daily_quantity?: number
   pattern_day1_quantity?: number
   pattern_day2_quantity?: number
-  pattern_start_date?: Date
+  pattern_start_date?: Date | null
   is_active: boolean
 }
 

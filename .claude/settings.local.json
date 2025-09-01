@@ -40,7 +40,8 @@
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_handle_dialog",
       "mcp__playwright__browser_press_key",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "mcp__supabase__search_docs"
     ]
   },
   "enabledMcpjsonServers": [

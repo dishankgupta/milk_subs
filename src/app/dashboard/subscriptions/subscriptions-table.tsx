@@ -81,7 +81,7 @@ export function SubscriptionsTable({ initialSubscriptions }: SubscriptionsTableP
 
   // Extract unique routes from subscriptions
   const uniqueRoutes = Array.from(
-    new Set(subscriptions.map(s => s.customer?.route?.name).filter(Boolean))
+    new Set(subscriptions.map(s => s.customer?.route?.name).filter(Boolean) as string[])
   )
 
   // Filter subscriptions based on status, type, and route
