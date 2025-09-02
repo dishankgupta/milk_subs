@@ -393,32 +393,33 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
             return (
               <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''} ${isAdditional ? 'border-l-4 border-l-orange-500' : 'border-l-4 border-l-blue-500'}`}>
                 <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox 
-                        checked={selectedDeliveries.has(delivery.id)}
-                        onCheckedChange={(checked) => handleSelectDelivery(delivery.id, checked as boolean)}
-                        className="mt-1"
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                  <div className="flex items-start gap-4">
+                    <Checkbox 
+                      checked={selectedDeliveries.has(delivery.id)}
+                      onCheckedChange={(checked) => handleSelectDelivery(delivery.id, checked as boolean)}
+                      className="mt-1 shrink-0"
+                    />
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Customer & Product Info */}
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{delivery.customer?.billing_name || 'N/A'}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="font-medium truncate">{delivery.customer?.billing_name || 'N/A'}</span>
                             <Badge 
                               variant={isAdditional ? "outline" : "secondary"}
-                              className={isAdditional ? "text-orange-600 border-orange-300" : "text-blue-600 bg-blue-100"}
+                              className={`shrink-0 ${isAdditional ? "text-orange-600 border-orange-300" : "text-blue-600 bg-blue-100"}`}
                             >
                               {isAdditional ? "Additional" : "Subscription"}
                             </Badge>
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground truncate">
                             {delivery.customer?.contact_person || 'N/A'}
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            <span>{delivery.product?.name || 'N/A'}</span>
+                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="truncate">{delivery.product?.name || 'N/A'}</span>
                           </div>
                         </div>
 
@@ -426,15 +427,15 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {formatDateToIST(new Date(delivery.order_date))}
+                            <span className="whitespace-nowrap">{formatDateToIST(new Date(delivery.order_date))}</span>
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
-                            {delivery.route?.name || 'N/A'} • {delivery.delivery_time}
+                            <span className="truncate">{delivery.route?.name || 'N/A'} • {delivery.delivery_time}</span>
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Planned:</span>{" "}
-                            {delivery.planned_quantity || 0}L @ {formatCurrency(delivery.unit_price)}/L
+                            <span className="whitespace-nowrap">{delivery.planned_quantity || 0}L @ {formatCurrency(delivery.unit_price)}/L</span>
                           </div>
                         </div>
 
@@ -442,31 +443,33 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Actual:</span>{" "}
-                            {delivery.actual_quantity || 0}L
-                            {quantityVariance !== 0 && (
-                              <span className={quantityVariance > 0 ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
-                                ({quantityVariance > 0 ? "+" : ""}{quantityVariance}L)
-                              </span>
-                            )}
+                            <span className="whitespace-nowrap">
+                              {delivery.actual_quantity || 0}L
+                              {quantityVariance !== 0 && (
+                                <span className={quantityVariance > 0 ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
+                                  ({quantityVariance > 0 ? "+" : ""}{quantityVariance}L)
+                                </span>
+                              )}
+                            </span>
                           </div>
                           
                           {delivery.delivered_at && (
                             <div className="flex items-center gap-2 text-sm">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
+                              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="whitespace-nowrap">{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
                             </div>
                           )}
                           
                           {delivery.delivery_person && (
                             <div className="text-sm">
                               <span className="font-medium">Delivered by:</span>{" "}
-                              {delivery.delivery_person}
+                              <span className="truncate">{delivery.delivery_person}</span>
                             </div>
                           )}
 
                           {/* Amount Variance Badge */}
                           {amountVariance !== 0 && (
-                            <Badge variant={amountVariance > 0 ? "default" : "destructive"} className="w-fit">
+                            <Badge variant={amountVariance > 0 ? "default" : "destructive"} className="w-fit shrink-0">
                               {amountVariance > 0 ? "+" : ""}{formatCurrency(amountVariance)}
                             </Badge>
                           )}
@@ -475,7 +478,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="shrink-0 ml-auto">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
