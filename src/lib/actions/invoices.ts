@@ -103,20 +103,21 @@ export async function prepareInvoiceData(
     throw new Error("Customer not found")
   }
 
-  // Get subscription data (from daily_orders that have been delivered)
-  const { data: dailyOrders, error: ordersError } = await supabase
-    .from("daily_orders")
+  // Get subscription data (from self-contained deliveries table)
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from("deliveries")
     .select(`
       *,
-      product:products(*),
-      deliveries!inner(actual_quantity)
+      product:products(*)
     `)
     .eq("customer_id", customerId)
+    .eq("delivery_status", "delivered")
+    .not("daily_order_id", "is", null) // Only subscription deliveries
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
-  if (ordersError) {
-    throw new Error("Failed to fetch subscription orders")
+  if (deliveriesError) {
+    throw new Error("Failed to fetch subscription deliveries")
   }
 
   // Get manual sales data (credit sales only, unbilled)
@@ -142,25 +143,25 @@ export async function prepareInvoiceData(
   // Process subscription items (group by product)
   const subscriptionItemsMap = new Map<string, InvoiceSubscriptionItem>()
   
-  dailyOrders?.forEach(order => {
-    const key = order.product.id
+  deliveries?.forEach(delivery => {
+    const key = delivery.product.id
     const existing = subscriptionItemsMap.get(key)
     
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
-    const actualTotalAmount = actualQuantity * Number(order.unit_price)
+    // Use actual delivered quantity (self-contained delivery data)
+    const actualQuantity = Number(delivery.actual_quantity || 0)
+    const actualTotalAmount = actualQuantity * Number(delivery.unit_price)
     
     if (existing) {
       existing.quantity += actualQuantity
       existing.totalAmount += actualTotalAmount
     } else {
       subscriptionItemsMap.set(key, {
-        productName: order.product.name,
-        productCode: order.product.code,
+        productName: delivery.product.name,
+        productCode: delivery.product.code,
         quantity: actualQuantity,
-        unitPrice: Number(order.unit_price),
+        unitPrice: Number(delivery.unit_price),
         totalAmount: actualTotalAmount,
-        unitOfMeasure: order.product.unit_of_measure || order.product.unit
+        unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
       })
     }
   })
@@ -183,17 +184,17 @@ export async function prepareInvoiceData(
   const dailySummaryMap = new Map<string, InvoiceDailySummaryItem>()
   
   // Add subscription deliveries to daily summary
-  dailyOrders?.forEach(order => {
-    const dateKey = order.order_date
+  deliveries?.forEach(delivery => {
+    const dateKey = delivery.order_date
     const existing = dailySummaryMap.get(dateKey)
     
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
+    // Use actual delivered quantity (self-contained delivery data)
+    const actualQuantity = Number(delivery.actual_quantity || 0)
     
     const item = {
-      productName: order.product.name,
+      productName: delivery.product.name,
       quantity: actualQuantity,
-      unitOfMeasure: order.product.unit_of_measure || order.product.unit
+      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
     }
     
     if (existing) {
@@ -326,25 +327,31 @@ async function getUnbilledDeliveryAmount(
     period_end: periodEnd
   })
   
-  // Fallback to manual query if RPC function doesn't exist
+  // Fallback to manual query using self-contained deliveries table
   if (!data) {
-    // Get all delivered orders for the customer in the period
-    const { data: deliveredOrders } = await supabase
-      .from("daily_orders")
+    // Get all delivered subscription deliveries for the customer in the period
+    const { data: deliveredDeliveries } = await supabase
+      .from("deliveries")
       .select(`
         id,
-        total_amount,
+        daily_order_id,
+        actual_quantity,
         unit_price,
-        deliveries!inner(actual_quantity)
+        total_amount
       `)
       .eq("customer_id", customerId)
+      .eq("delivery_status", "delivered")
+      .not("daily_order_id", "is", null) // Only subscription deliveries
       .gte("order_date", periodStart)
       .lte("order_date", periodEnd)
     
-    if (!deliveredOrders || deliveredOrders.length === 0) return 0
+    if (!deliveredDeliveries || deliveredDeliveries.length === 0) return 0
     
-    // Get order IDs that are already billed
-    const orderIds = deliveredOrders.map(order => order.id)
+    // Get delivery IDs that are already billed (check via order_id)
+    const orderIds = deliveredDeliveries
+      .map(delivery => delivery.daily_order_id)
+      .filter(id => id !== null)
+      
     const { data: billedOrders } = await supabase
       .from("invoice_line_items")
       .select("order_id")
@@ -353,13 +360,13 @@ async function getUnbilledDeliveryAmount(
     
     const billedOrderIds = new Set(billedOrders?.map(item => item.order_id) || [])
     
-    // Calculate total amount for unbilled orders using actual delivered quantities
-    return deliveredOrders
-      .filter(order => !billedOrderIds.has(order.id))
-      .reduce((sum, order) => {
-        // Use actual delivered quantity instead of planned quantity
-        const actualQuantity = Number(order.deliveries[0]?.actual_quantity || 0)
-        const actualAmount = actualQuantity * Number(order.unit_price)
+    // Calculate total amount for unbilled deliveries using actual delivered quantities
+    return deliveredDeliveries
+      .filter(delivery => !billedOrderIds.has(delivery.daily_order_id))
+      .reduce((sum, delivery) => {
+        // Use self-contained delivery data
+        const actualQuantity = Number(delivery.actual_quantity || 0)
+        const actualAmount = actualQuantity * Number(delivery.unit_price)
         return sum + actualAmount
       }, 0)
   }
@@ -869,18 +876,21 @@ export async function getInvoiceStats() {
       .select("customer_id")
       .gt("total_outstanding", 0)
 
-    // Get all customers who have delivered subscription orders this month
+    // Get all customers who have delivered subscription deliveries this month
     const { data: customersWithDeliveries } = await supabase
       .from("customers")
       .select(`
-        id,
-        daily_orders!inner(
-          id,
-          deliveries!inner(id)
-        )
+        id
       `)
-      .gte("daily_orders.order_date", startOfMonth)
-      .lte("daily_orders.order_date", today)
+      .in("id", 
+        supabase
+          .from("deliveries")
+          .select("customer_id")
+          .eq("delivery_status", "delivered")
+          .not("daily_order_id", "is", null) // Only subscription deliveries
+          .gte("order_date", startOfMonth)
+          .lte("order_date", today)
+      )
 
     // Combine both sets of customers (subscription dues OR outstanding amounts)
     const eligibleCustomerIds = new Set([
@@ -1081,44 +1091,46 @@ async function createSubscriptionLineItems(
 ): Promise<Array<{order_id: string; invoice_id: string}>> {
   const supabase = await createClient()
 
-  // Get delivered orders for this period with ALL required data
-  const { data: deliveredOrders } = await supabase
-    .from("daily_orders")
+  // Get delivered subscription deliveries for this period with ALL required data
+  const { data: deliveredDeliveries } = await supabase
+    .from("deliveries")
     .select(`
       id,
-      planned_quantity,
+      daily_order_id,
+      actual_quantity,
       unit_price,
       total_amount,
       product:products(
         id,
         name,
         gst_rate
-      ),
-      deliveries!inner(id, actual_quantity)
+      )
     `)
     .eq("customer_id", customerId)
+    .eq("delivery_status", "delivered")
+    .not("daily_order_id", "is", null) // Only subscription deliveries
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
-  if (!deliveredOrders?.length) return []
+  if (!deliveredDeliveries?.length) return []
 
-  // Create line items for each delivered order with ALL required fields
-  const lineItemsData = deliveredOrders.map(order => {
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
-    const actualLineTotal = actualQuantity * Number(order.unit_price)
+  // Create line items for each delivered delivery with ALL required fields
+  const lineItemsData = deliveredDeliveries.map(delivery => {
+    // Use actual delivered quantity from self-contained delivery data
+    const actualQuantity = Number(delivery.actual_quantity || 0)
+    const actualLineTotal = actualQuantity * Number(delivery.unit_price)
     
     // Handle product data - it should be a single object, not array
-    const product = Array.isArray(order.product) ? order.product[0] : order.product
+    const product = Array.isArray(delivery.product) ? delivery.product[0] : delivery.product
     
     return {
       invoice_id: invoiceId,
-      order_id: order.id,
+      order_id: delivery.daily_order_id, // Link to original order for tracking
       line_item_type: 'subscription',
       product_id: product.id,
       product_name: product.name,
       quantity: actualQuantity,
-      unit_price: Number(order.unit_price),
+      unit_price: Number(delivery.unit_price),
       line_total: actualLineTotal,
       gst_rate: Number(product.gst_rate || 0),
       gst_amount: 0 // Subscriptions typically don't have GST

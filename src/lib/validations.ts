@@ -102,14 +102,67 @@ export const paymentSchema = z.object({
 export type PaymentFormData = z.infer<typeof paymentSchema>
 
 export const deliverySchema = z.object({
-  daily_order_id: z.string().uuid("Please select a valid order"),
+  // MODIFIED: Now optional for additional items
+  daily_order_id: z.string().uuid("Please select a valid order").optional(),
+  
+  // NEW: Required fields for self-contained deliveries
+  customer_id: z.string().uuid("Please select a valid customer"),
+  product_id: z.string().uuid("Please select a valid product"),
+  route_id: z.string().uuid("Please select a valid route"),
+  order_date: z.date({ message: "Order date is required" }),
+  delivery_time: z.enum(["Morning", "Evening"], { message: "Please select delivery time" }),
+  
+  // NEW: Pricing fields
+  unit_price: z.number().positive("Unit price must be positive"),
+  total_amount: z.number().positive("Total amount must be positive"),
+  
+  // MODIFIED: Now optional for additional items
+  planned_quantity: z.number().min(0, "Planned quantity cannot be negative").optional(),
+  
+  // NEW: Status field
+  delivery_status: z.enum(["pending", "delivered", "cancelled"]).default("pending").optional(),
+  
+  // Existing fields remain unchanged
   actual_quantity: z.number().min(0, "Actual quantity cannot be negative"),
   delivery_notes: z.string().max(500, "Delivery notes must be less than 500 characters").optional(),
   delivery_person: z.string().max(100, "Delivery person name must be less than 100 characters").optional(),
   delivered_at: z.date({ message: "Delivery time is required" }).optional(),
+}).refine((data) => {
+  // Business rule: Additional items (no daily_order_id) must have actual_quantity
+  if (!data.daily_order_id && (!data.actual_quantity || data.actual_quantity <= 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "Additional items must have a positive actual quantity",
+  path: ["actual_quantity"]
+}).refine((data) => {
+  // Business rule: Planned deliveries should have planned_quantity
+  if (data.daily_order_id && (!data.planned_quantity || data.planned_quantity < 0)) {
+    return false
+  }
+  return true
+}, {
+  message: "Planned deliveries must have a planned quantity",
+  path: ["planned_quantity"]
 })
 
 export type DeliveryFormData = z.infer<typeof deliverySchema>
+
+// New Additional Items Schema
+export const additionalItemSchema = z.object({
+  product_id: z.string().uuid("Please select a valid product"),
+  quantity: z.number().positive("Quantity must be positive"),
+  unit_price: z.number().positive("Unit price must be positive"),
+  notes: z.string().max(200, "Notes must be less than 200 characters").optional(),
+})
+
+export const deliveryWithAdditionalItemsSchema = deliverySchema.extend({
+  additional_items: z.array(additionalItemSchema).optional()
+})
+
+export type AdditionalItemFormData = z.infer<typeof additionalItemSchema>
+export type DeliveryWithAdditionalItemsFormData = z.infer<typeof deliveryWithAdditionalItemsSchema>
 
 export const bulkDeliverySchema = z.object({
   order_ids: z.array(z.string().uuid("Invalid order ID")).min(1, "At least one order must be selected"),
@@ -121,6 +174,13 @@ export const bulkDeliverySchema = z.object({
     order_id: z.string().uuid(),
     actual_quantity: z.number().min(0, "Actual quantity cannot be negative")
   })).optional(),
+  
+  // NEW: Support for additional items in bulk operations
+  additional_items_by_customer: z.array(z.object({
+    customer_id: z.string().uuid(),
+    route_id: z.string().uuid(),
+    items: z.array(additionalItemSchema)
+  })).optional()
 })
 
 export type BulkDeliveryFormData = z.infer<typeof bulkDeliverySchema>

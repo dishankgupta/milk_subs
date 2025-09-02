@@ -112,7 +112,7 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
         }
 
         const result = await createBulkDeliveries(formData)
-        toast.success(`Successfully confirmed ${result.count} deliveries!`)
+        toast.success(`Successfully confirmed ${result.totalCount} deliveries!`)
         
         router.push("/dashboard/deliveries")
         router.refresh()

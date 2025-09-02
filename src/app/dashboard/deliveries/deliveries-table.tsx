@@ -6,7 +6,7 @@ import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
 
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
+import type { DeliveryExtended } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { deleteDelivery, bulkDeleteDeliveries } from "@/lib/actions/deliveries"
 
@@ -25,13 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 
-type DeliveryWithOrder = Delivery & {
-  daily_order: DailyOrder & {
-    customer: Customer
-    product: Product
-    route: Route
-  }
-}
+// Using DeliveryExtended which contains all necessary fields directly
 
 interface FilterState {
   searchQuery: string
@@ -45,9 +39,9 @@ interface SortState {
 }
 
 interface DeliveriesTableProps {
-  initialDeliveries: DeliveryWithOrder[]
+  initialDeliveries: DeliveryExtended[]
   onDataChange?: () => void
-  onFiltersChange?: (filtered: DeliveryWithOrder[], filters: FilterState) => void
+  onFiltersChange?: (filtered: DeliveryExtended[], filters: FilterState) => void
   onSortChange?: (sortState: SortState) => void
 }
 
@@ -64,14 +58,14 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     const matchesSearch = !searchQuery || 
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
+      delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
     
     const matchesDate = dateFilter === "all" || 
-      delivery.daily_order.order_date === dateFilter
+      delivery.order_date === dateFilter
     
     const matchesRoute = routeFilter === "all" || 
-      delivery.daily_order.route.name === routeFilter
+      delivery.route?.name === routeFilter
 
     return matchesSearch && matchesDate && matchesRoute
   })
@@ -79,11 +73,11 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   // Apply sorting to filtered deliveries with default sort by order date descending
   const { sortedData: sortedDeliveries, sortConfig, handleSort } = useSorting(
     filteredDeliveries,
-    'daily_order.order_date',
+    'order_date',
     'desc',
     (delivery, key) => {
       if (key === 'variance') {
-        return (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
+        return (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
       }
       if (key === 'delivered_at') {
         return delivery.delivered_at ? new Date(delivery.delivered_at) : new Date(0)
@@ -121,8 +115,8 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   }
 
   // Get unique dates and routes for filters
-  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.daily_order.order_date))).sort().reverse()
-  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.daily_order.route.name)))
+  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
+  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
 
   async function handleDelete(id: string, customerName: string) {
     if (!confirm(`Are you sure you want to delete the delivery for ${customerName}?`)) {
@@ -230,7 +224,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               <SelectContent>
                 <SelectItem value="all">All Routes</SelectItem>
                 {uniqueRoutes.map(route => (
-                  <SelectItem key={route} value={route}>{route}</SelectItem>
+                  <SelectItem key={route} value={route || ''}>{route}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -265,26 +259,26 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Sort by:</span>
           <Button
-            variant={sortConfig?.key === 'daily_order.customer.billing_name' ? 'default' : 'outline'}
+            variant={sortConfig?.key === 'customer.billing_name' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleSort('daily_order.customer.billing_name')}
+            onClick={() => handleSort('customer.billing_name')}
             className="text-xs h-7"
           >
             Customer
-            {sortConfig?.key === 'daily_order.customer.billing_name' && (
+            {sortConfig?.key === 'customer.billing_name' && (
               sortConfig.direction === 'asc' ? 
                 <ArrowUp className="ml-1 h-3 w-3" /> : 
                 <ArrowDown className="ml-1 h-3 w-3" />
             )}
           </Button>
           <Button
-            variant={sortConfig?.key === 'daily_order.order_date' ? 'default' : 'outline'}
+            variant={sortConfig?.key === 'order_date' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleSort('daily_order.order_date')}
+            onClick={() => handleSort('order_date')}
             className="text-xs h-7"
           >
             Order Date
-            {sortConfig?.key === 'daily_order.order_date' && (
+            {sortConfig?.key === 'order_date' && (
               sortConfig.direction === 'asc' ? 
                 <ArrowUp className="ml-1 h-3 w-3" /> : 
                 <ArrowDown className="ml-1 h-3 w-3" />
@@ -357,9 +351,8 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
           </div>
           
           {sortedDeliveries.map((delivery) => {
-            const order = delivery.daily_order
-            const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
-            const amountVariance = quantityVariance * order.unit_price
+            const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
+            const amountVariance = quantityVariance * delivery.unit_price
 
             return (
               <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''}`}>
@@ -376,14 +369,14 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{order.customer.billing_name}</span>
+                            <span className="font-medium">{delivery.customer?.billing_name || 'N/A'}</span>
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {order.customer.contact_person}
+                            {delivery.customer?.contact_person || 'N/A'}
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <Package className="h-4 w-4 text-muted-foreground" />
-                            <span>{order.product.name}</span>
+                            <span>{delivery.product?.name || 'N/A'}</span>
                           </div>
                         </div>
 
@@ -391,15 +384,15 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {formatDateToIST(new Date(order.order_date))}
+                            {formatDateToIST(new Date(delivery.order_date))}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
-                            {order.route.name} • {order.delivery_time}
+                            {delivery.route?.name || 'N/A'} • {delivery.delivery_time}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Planned:</span>{" "}
-                            {order.planned_quantity}L @ {formatCurrency(order.unit_price)}/L
+                            {delivery.planned_quantity || 0}L @ {formatCurrency(delivery.unit_price)}/L
                           </div>
                         </div>
 
@@ -467,7 +460,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                           </Link>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleDelete(delivery.id, order.customer.billing_name)}
+                            onClick={() => handleDelete(delivery.id, delivery.customer?.billing_name || 'Unknown')}
                             className="text-red-600 focus:text-red-600"
                             disabled={deletingId === delivery.id}
                           >

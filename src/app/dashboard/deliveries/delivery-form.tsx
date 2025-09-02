@@ -10,7 +10,7 @@ import { toast } from "sonner"
 
 import { deliverySchema, type DeliveryFormData } from "@/lib/validations"
 import { createDelivery, updateDelivery } from "@/lib/actions/deliveries"
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
+import type { DeliveryExtended, Product, Customer, Route } from "@/lib/types"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,22 +23,24 @@ import { Calendar } from "@/components/ui/calendar"
 import { cn, formatCurrency } from "@/lib/utils"
 
 interface DeliveryFormProps {
-  delivery?: Delivery & {
-    daily_order: DailyOrder & {
-      customer: Customer
-      product: Product
-      route: Route
-    }
-  }
-  dailyOrder?: DailyOrder & {
+  delivery?: DeliveryExtended
+  // For backward compatibility when creating new deliveries from orders
+  initialData?: {
     customer: Customer
     product: Product
     route: Route
+    order_date: string
+    delivery_time: string
+    unit_price: number
+    total_amount: number
+    planned_quantity: number
+    daily_order_id?: string
   }
 }
 
-export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
-  const order = delivery?.daily_order || dailyOrder
+export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
+  // Use delivery data directly if editing, otherwise use initialData for new deliveries
+  const orderData = delivery || initialData
   
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(
@@ -55,8 +57,19 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
   } = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
-      daily_order_id: order?.id || "",
-      actual_quantity: delivery?.actual_quantity || order?.planned_quantity || 0,
+      // Handle both old and new delivery structures
+      daily_order_id: delivery?.daily_order_id || initialData?.daily_order_id || undefined,
+      // Required fields for self-contained delivery - provide defaults for new deliveries
+      customer_id: delivery?.customer_id || initialData?.customer?.id || "",
+      product_id: delivery?.product_id || initialData?.product?.id || "",
+      route_id: delivery?.route_id || initialData?.route?.id || "",
+      order_date: delivery?.order_date ? new Date(delivery.order_date) : new Date(initialData?.order_date || Date.now()),
+      delivery_time: (delivery?.delivery_time || initialData?.delivery_time || "Morning") as "Morning" | "Evening",
+      unit_price: delivery?.unit_price || initialData?.unit_price || 0,
+      total_amount: delivery?.total_amount || initialData?.total_amount || 0,
+      planned_quantity: delivery?.planned_quantity || initialData?.planned_quantity || undefined,
+      delivery_status: delivery?.delivery_status || undefined, // Let default in schema handle this
+      actual_quantity: delivery?.actual_quantity || orderData?.planned_quantity || 0,
       delivery_notes: delivery?.delivery_notes || "",
       delivery_person: delivery?.delivery_person || "",
       delivered_at: deliveredAt,
@@ -65,15 +78,15 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
 
   const actualQuantity = watch("actual_quantity")
 
-  if (!order) {
+  if (!orderData) {
     return (
       <div className="text-center text-muted-foreground">
-        <p>Order not found</p>
+        <p>Order data not found</p>
       </div>
     )
   }
 
-  async function onSubmit(data: DeliveryFormData) {
+  const onSubmit = async (data: DeliveryFormData) => {
     startTransition(async () => {
       try {
         const formData = {
@@ -98,8 +111,8 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
     })
   }
 
-  const quantityVariance = actualQuantity - order.planned_quantity
-  const amountVariance = quantityVariance * order.unit_price
+  const quantityVariance = actualQuantity - (orderData.planned_quantity || 0)
+  const amountVariance = quantityVariance * orderData.unit_price
 
   return (
     <div className="space-y-6">
@@ -111,7 +124,7 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
             Order Details
           </CardTitle>
           <CardDescription>
-            Order for {formatDateToIST(new Date(order.order_date))}
+            {delivery ? 'Delivery' : 'Order'} for {formatDateToIST(new Date(orderData.order_date))}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -120,8 +133,8 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <User className="h-4 w-4" />
               Customer
             </div>
-            <div className="font-medium">{order.customer.billing_name}</div>
-            <div className="text-sm text-muted-foreground">{order.customer.contact_person}</div>
+            <div className="font-medium">{orderData.customer?.billing_name}</div>
+            <div className="text-sm text-muted-foreground">{orderData.customer?.contact_person}</div>
           </div>
           
           <div className="space-y-2">
@@ -129,9 +142,9 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <Package className="h-4 w-4" />
               Product
             </div>
-            <div className="font-medium">{order.product.name}</div>
+            <div className="font-medium">{orderData.product?.name}</div>
             <div className="text-sm text-muted-foreground">
-              Planned: {order.planned_quantity}L @ {formatCurrency(order.unit_price)}/L
+              Planned: {orderData.planned_quantity || 0}L @ {formatCurrency(orderData.unit_price)}/L
             </div>
           </div>
 
@@ -140,8 +153,8 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <MapPin className="h-4 w-4" />
               Route & Time
             </div>
-            <div className="font-medium">{order.route.name}</div>
-            <div className="text-sm text-muted-foreground">{order.delivery_time}</div>
+            <div className="font-medium">{orderData.route?.name}</div>
+            <div className="text-sm text-muted-foreground">{orderData.delivery_time}</div>
           </div>
 
           <div className="space-y-2">
@@ -149,9 +162,9 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <Package className="h-4 w-4" />
               Planned Amount
             </div>
-            <div className="font-medium">{formatCurrency(order.total_amount)}</div>
+            <div className="font-medium">{formatCurrency(orderData.total_amount)}</div>
             <div className="text-sm text-muted-foreground">
-              Status: <span className="capitalize">{order.status}</span>
+              Status: <span className="capitalize">{delivery?.delivery_status || 'pending'}</span>
             </div>
           </div>
         </CardContent>
@@ -285,14 +298,14 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground">Planned</div>
-                <div className="font-medium">{order.planned_quantity}L</div>
-                <div className="text-sm text-muted-foreground">{formatCurrency(order.total_amount)}</div>
+                <div className="font-medium">{orderData.planned_quantity || 0}L</div>
+                <div className="text-sm text-muted-foreground">{formatCurrency(orderData.total_amount)}</div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Actual</div>
                 <div className="font-medium">{actualQuantity}L</div>
                 <div className="text-sm text-muted-foreground">
-                  {formatCurrency(actualQuantity * order.unit_price)}
+                  {formatCurrency(actualQuantity * orderData.unit_price)}
                 </div>
               </div>
               <div>

@@ -9,15 +9,7 @@ import { DeliveriesTable } from "./deliveries-table"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
-
-type DeliveryWithOrder = Delivery & { 
-  daily_order: DailyOrder & { 
-    customer: Customer, 
-    product: Product, 
-    route: Route 
-  } 
-}
+import type { DeliveryExtended } from "@/lib/types"
 
 interface FilterState {
   searchQuery: string
@@ -30,12 +22,12 @@ interface SortState {
   direction: 'asc' | 'desc'
 }
 
-function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
+function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   const totalOrders = deliveries.length
   const deliveredOrders = deliveries.filter(d => d.actual_quantity !== null).length
   const pendingOrders = totalOrders - deliveredOrders
   
-  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + d.daily_order.planned_quantity, 0)
+  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + (d.planned_quantity || 0), 0)
   const totalActualQuantity = deliveries.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
   
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
@@ -54,8 +46,8 @@ function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
 
 
 function DeliveriesContent() {
-  const [deliveries, setDeliveries] = useState<DeliveryWithOrder[]>([])
-  const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryWithOrder[]>([])
+  const [deliveries, setDeliveries] = useState<DeliveryExtended[]>([])
+  const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryExtended[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
     dateFilter: "all",
@@ -82,7 +74,7 @@ function DeliveriesContent() {
     }
   }
 
-  const handleFiltersChange = useCallback((filtered: DeliveryWithOrder[], filters: FilterState) => {
+  const handleFiltersChange = useCallback((filtered: DeliveryExtended[], filters: FilterState) => {
     setFilteredDeliveries(filtered)
     setCurrentFilters(filters)
   }, [])

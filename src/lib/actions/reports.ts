@@ -668,7 +668,8 @@ export async function getDeliveryPerformanceReport(
       if (isDelivered) {
         customerStats[customerName].deliveredOrders++
         customerStats[customerName].quantityVariances.push(quantityVariance)
-        customerStats[customerName].valueVariances.push(quantityVariance * order.unit_price)
+        const unitPrice = delivery?.unit_price || order.unit_price
+        customerStats[customerName].valueVariances.push(quantityVariance * unitPrice)
       }
 
       // Product performance
