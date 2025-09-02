@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { categorizeDeliveries, type DeliveryType } from "@/components/deliveries/delivery-type-toggle"
 
 // Using DeliveryExtended which contains all necessary fields directly
 
@@ -31,6 +32,7 @@ interface FilterState {
   searchQuery: string
   dateFilter: string
   routeFilter: string
+  deliveryTypeFilter: DeliveryType
 }
 
 interface SortState {
@@ -50,11 +52,30 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   const [searchQuery, setSearchQuery] = useState("")
   const [dateFilter, setDateFilter] = useState<string>("all")
   const [routeFilter, setRouteFilter] = useState<string>("all")
+  const [deliveryTypeFilter, setDeliveryTypeFilter] = useState<DeliveryType>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  // Memoize the delivery type filter change handler
+  const handleDeliveryTypeChange = useCallback((type: DeliveryType) => {
+    setDeliveryTypeFilter(type)
+  }, [])
+
+  // Categorize deliveries for type filtering - memoize to prevent unnecessary recalculations
+  const { all: allDeliveries, subscription: subscriptionDeliveries, additional: additionalDeliveries, counts } = useMemo(
+    () => categorizeDeliveries(initialDeliveries),
+    [initialDeliveries]
+  )
+  
+  // Get deliveries based on type filter
+  const typeFilteredDeliveries = deliveryTypeFilter === 'subscription' 
+    ? subscriptionDeliveries
+    : deliveryTypeFilter === 'additional'
+    ? additionalDeliveries
+    : allDeliveries
+
   // Filter deliveries based on search and filters (client-side only)
-  const filteredDeliveries = initialDeliveries.filter(delivery => {
+  const filteredDeliveries = typeFilteredDeliveries.filter(delivery => {
     const matchesSearch = !searchQuery || 
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -93,11 +114,12 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       const currentFilters = {
         searchQuery,
         dateFilter,
-        routeFilter
+        routeFilter,
+        deliveryTypeFilter
       }
       onFiltersChange(filteredDeliveries, currentFilters)
     }
-  }, [searchQuery, dateFilter, routeFilter])
+  }, [searchQuery, dateFilter, routeFilter, deliveryTypeFilter, onFiltersChange])
 
   // Notify parent component when sort changes
   useEffect(() => {
@@ -193,6 +215,19 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       {/* Search and Filters */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
+          {/* Delivery Type Filter */}
+          <div className="w-full sm:w-48">
+            <Select value={deliveryTypeFilter} onValueChange={handleDeliveryTypeChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Deliveries ({counts.all})</SelectItem>
+                <SelectItem value="subscription">Subscription ({counts.subscription})</SelectItem>
+                <SelectItem value="additional">Additional Items ({counts.additional})</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -353,9 +388,10 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
           {sortedDeliveries.map((delivery) => {
             const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
             const amountVariance = quantityVariance * delivery.unit_price
+            const isAdditional = delivery.daily_order_id === null || delivery.planned_quantity === null
 
             return (
-              <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''}`}>
+              <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''} ${isAdditional ? 'border-l-4 border-l-orange-500' : 'border-l-4 border-l-blue-500'}`}>
                 <CardContent className="pt-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
@@ -370,6 +406,12 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{delivery.customer?.billing_name || 'N/A'}</span>
+                            <Badge 
+                              variant={isAdditional ? "outline" : "secondary"}
+                              className={isAdditional ? "text-orange-600 border-orange-300" : "text-blue-600 bg-blue-100"}
+                            >
+                              {isAdditional ? "Additional" : "Subscription"}
+                            </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {delivery.customer?.contact_person || 'N/A'}

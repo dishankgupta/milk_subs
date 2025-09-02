@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { Plus, Package, TrendingUp, AlertTriangle, CheckCircle, Printer } from "lucide-react"
+import { Plus, Package, Package2, TrendingUp, AlertTriangle, CheckCircle, Printer } from "lucide-react"
+import { categorizeDeliveries } from "@/components/deliveries/delivery-type-toggle"
 
 import { getDeliveries } from "@/lib/actions/deliveries"
 import { DeliveriesTable } from "./deliveries-table"
@@ -15,6 +16,7 @@ interface FilterState {
   searchQuery: string
   dateFilter: string
   routeFilter: string
+  deliveryTypeFilter?: string
 }
 
 interface SortState {
@@ -23,6 +25,8 @@ interface SortState {
 }
 
 function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
+  const { subscription, additional, counts } = categorizeDeliveries(deliveries)
+  
   const totalOrders = deliveries.length
   const deliveredOrders = deliveries.filter(d => d.actual_quantity !== null).length
   const pendingOrders = totalOrders - deliveredOrders
@@ -32,6 +36,15 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   const quantityVariance = totalActualQuantity - totalPlannedQuantity
+  
+  // Additional items specific stats
+  const additionalItemsQuantity = additional.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
+  const additionalItemsValue = additional.reduce((sum, d) => 
+    sum + ((d.actual_quantity || 0) * d.unit_price), 0
+  )
+  const subscriptionValue = subscription.reduce((sum, d) => 
+    sum + ((d.actual_quantity || 0) * d.unit_price), 0
+  )
 
   return {
     totalOrders,
@@ -40,7 +53,13 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
     totalPlannedQuantity,
     totalActualQuantity,
     completionRate,
-    quantityVariance
+    quantityVariance,
+    subscriptionCount: counts.subscription,
+    additionalCount: counts.additional,
+    additionalItemsQuantity,
+    additionalItemsValue,
+    subscriptionValue,
+    additionalPercentage: totalOrders > 0 ? Math.round((counts.additional / totalOrders) * 100) : 0
   }
 }
 
@@ -51,7 +70,8 @@ function DeliveriesContent() {
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
     dateFilter: "all",
-    routeFilter: "all"
+    routeFilter: "all",
+    deliveryTypeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
     key: 'daily_order.order_date',
@@ -122,7 +142,7 @@ function DeliveriesContent() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -131,7 +151,20 @@ function DeliveriesContent() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalOrders}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.deliveredOrders} delivered, {stats.pendingOrders} pending
+              {stats.subscriptionCount} subscription, {stats.additionalCount} additional
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Additional Items</CardTitle>
+            <Package2 className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{stats.additionalCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.additionalPercentage}% of total deliveries
             </p>
           </CardContent>
         </Card>
@@ -187,6 +220,12 @@ function DeliveriesContent() {
             <Printer className="mr-2 h-4 w-4" />
             Print Report
           </Button>
+          <Link href="/dashboard/deliveries/additional/new">
+            <Button variant="secondary" className="bg-orange-600 hover:bg-orange-700 text-white">
+              <Package2 className="mr-2 h-4 w-4" />
+              Record Additional Delivery
+            </Button>
+          </Link>
           <Link href="/dashboard/deliveries/new">
             <Button>
               <Plus className="mr-2 h-4 w-4" />

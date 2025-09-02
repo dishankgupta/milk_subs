@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -8,9 +8,11 @@ import { format } from "date-fns"
 import { formatDateToIST } from "@/lib/utils"
 import { toast } from "sonner"
 
-import { deliverySchema, type DeliveryFormData } from "@/lib/validations"
-import { createDelivery, updateDelivery } from "@/lib/actions/deliveries"
+import { deliveryWithAdditionalItemsSchema, type DeliveryWithAdditionalItemsFormData } from "@/lib/validations"
+import { createDelivery, updateDelivery, createDeliveryWithAdditionalItems } from "@/lib/actions/deliveries"
+import { getProducts } from "@/lib/actions/products"
 import type { DeliveryExtended, Product, Customer, Route } from "@/lib/types"
+import { AdditionalItemsFormSection } from "@/components/deliveries/additional-items-form-section"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,16 +48,33 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(
     delivery?.delivered_at ? new Date(delivery.delivered_at) : new Date()
   )
+  const [products, setProducts] = useState<Product[]>([])
+  const [additionalTotal, setAdditionalTotal] = useState(0)
   const router = useRouter()
+  
+  // Fetch products for additional items selection
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const productsData = await getProducts()
+        setProducts(productsData)
+      } catch (error) {
+        console.error('Error loading products:', error)
+        toast.error('Failed to load products')
+      }
+    }
+    loadProducts()
+  }, [])
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    watch
-  } = useForm<DeliveryFormData>({
-    resolver: zodResolver(deliverySchema),
+    watch,
+    control
+  } = useForm<DeliveryWithAdditionalItemsFormData>({
+    resolver: zodResolver(deliveryWithAdditionalItemsSchema),
     defaultValues: {
       // Handle both old and new delivery structures
       daily_order_id: delivery?.daily_order_id || initialData?.daily_order_id || undefined,
@@ -73,6 +92,7 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
       delivery_notes: delivery?.delivery_notes || "",
       delivery_person: delivery?.delivery_person || "",
       delivered_at: deliveredAt,
+      additional_items: []
     },
   })
 
@@ -86,7 +106,7 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
     )
   }
 
-  const onSubmit = async (data: DeliveryFormData) => {
+  const onSubmit = async (data: DeliveryWithAdditionalItemsFormData) => {
     startTransition(async () => {
       try {
         const formData = {
@@ -95,11 +115,26 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
         }
 
         if (delivery) {
+          // For editing existing deliveries, use the original update function
+          // TODO: Implement updateDeliveryWithAdditionalItems for editing
           await updateDelivery(delivery.id, formData)
           toast.success("Delivery updated successfully!")
         } else {
-          await createDelivery(formData)
-          toast.success("Delivery confirmed successfully!")
+          // For new deliveries, check if we have additional items
+          const validAdditionalItems = data.additional_items?.filter(item => 
+            item.product_id && item.quantity > 0
+          ) || []
+          
+          if (validAdditionalItems.length > 0) {
+            await createDeliveryWithAdditionalItems({
+              ...formData,
+              additional_items: validAdditionalItems
+            })
+            toast.success(`Delivery confirmed with ${validAdditionalItems.length} additional item(s)!`)
+          } else {
+            await createDelivery(formData)
+            toast.success("Delivery confirmed successfully!")
+          }
         }
         
         router.push("/dashboard/deliveries")
@@ -113,6 +148,8 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
 
   const quantityVariance = actualQuantity - (orderData.planned_quantity || 0)
   const amountVariance = quantityVariance * orderData.unit_price
+  const subscriptionTotal = actualQuantity * orderData.unit_price
+  const grandTotal = subscriptionTotal + additionalTotal
 
   return (
     <div className="space-y-6">
@@ -289,38 +326,100 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
           </CardContent>
         </Card>
 
-        {/* Summary Card */}
+        {/* Additional Items Section */}
+        <AdditionalItemsFormSection
+          control={control}
+          watch={watch}
+          products={products}
+          onTotalUpdate={setAdditionalTotal}
+        />
+
+        {/* Enhanced Summary Card */}
         <Card>
           <CardHeader>
             <CardTitle>Delivery Summary</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Planned</div>
-                <div className="font-medium">{orderData.planned_quantity || 0}L</div>
-                <div className="text-sm text-muted-foreground">{formatCurrency(orderData.total_amount)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Actual</div>
-                <div className="font-medium">{actualQuantity}L</div>
-                <div className="text-sm text-muted-foreground">
-                  {formatCurrency(actualQuantity * orderData.unit_price)}
+            {/* Subscription Delivery Summary */}
+            <div className="space-y-4">
+              <div className="border-b pb-4">
+                <h4 className="text-sm font-medium text-blue-600 mb-3">Subscription Delivery</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Planned</div>
+                    <div className="font-medium">{orderData.planned_quantity || 0}L</div>
+                    <div className="text-sm text-muted-foreground">{formatCurrency(orderData.total_amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Actual</div>
+                    <div className="font-medium">{actualQuantity}L</div>
+                    <div className="text-sm text-muted-foreground">
+                      {formatCurrency(subscriptionTotal)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Variance</div>
+                    <div className={`font-medium ${quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {quantityVariance > 0 ? '+' : ''}{quantityVariance}L
+                    </div>
+                    <div className={`text-sm ${amountVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {amountVariance > 0 ? '+' : ''}{formatCurrency(amountVariance)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Status</div>
+                    <div className="font-medium">
+                      {delivery ? "Delivered" : "Confirming"}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Variance</div>
-                <div className={`font-medium ${quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {quantityVariance > 0 ? '+' : ''}{quantityVariance}L
+
+              {/* Additional Items Summary */}
+              {additionalTotal > 0 && (
+                <div className="border-b pb-4">
+                  <h4 className="text-sm font-medium text-orange-600 mb-3">Additional Items</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Items</div>
+                      <div className="font-medium">
+                        {watch("additional_items")?.filter(item => item?.product_id && (item?.quantity || 0) > 0).length || 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Total Amount</div>
+                      <div className="font-medium text-orange-600">
+                        {formatCurrency(additionalTotal)}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="text-sm text-muted-foreground">Type</div>
+                      <div className="font-medium">Extra Products</div>
+                    </div>
+                  </div>
                 </div>
-                <div className={`text-sm ${amountVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {amountVariance > 0 ? '+' : ''}{formatCurrency(amountVariance)}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Status</div>
-                <div className="font-medium">
-                  {delivery ? "Delivered" : "Confirming"}
+              )}
+
+              {/* Grand Total */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4 className="text-lg font-semibold">Total Delivery Value</h4>
+                    <div className="text-sm text-muted-foreground">
+                      Subscription: {formatCurrency(subscriptionTotal)}
+                      {additionalTotal > 0 && (
+                        <> + Additional: {formatCurrency(additionalTotal)}</>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(grandTotal)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {additionalTotal > 0 ? 'Combined Total' : 'Subscription Only'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

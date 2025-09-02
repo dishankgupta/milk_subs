@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SortableTableHead } from "@/components/ui/sortable-table-head"
@@ -27,6 +27,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { BulkAdditionalItemsManager } from "@/components/deliveries/bulk-additional-items-manager"
+
+interface AdditionalItem {
+  product_id: string
+  product: Product
+  quantity: number
+  notes: string
+}
+
+interface CustomerAdditionalItems {
+  customer_id: string
+  customer: Customer
+  items: AdditionalItem[]
+  isExpanded: boolean
+}
 
 interface BulkDeliveryFormProps {
   orders: (DailyOrder & {
@@ -34,12 +49,14 @@ interface BulkDeliveryFormProps {
     product: Product
     route: Route
   })[]
+  products: Product[]
 }
 
-export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
+export function BulkDeliveryForm({ orders, products }: BulkDeliveryFormProps) {
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(new Date())
   const [searchTerm, setSearchTerm] = useState("")
+  const [additionalItems, setAdditionalItems] = useState<CustomerAdditionalItems[]>([])
   const router = useRouter()
 
   const {
@@ -103,16 +120,41 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
     }
   }
 
+  // Handle additional items change
+  const handleAdditionalItemsChange = (customerItems: CustomerAdditionalItems[]) => {
+    setAdditionalItems(customerItems)
+  }
+
   async function onSubmit(data: BulkDeliveryFormData) {
     startTransition(async () => {
       try {
+        // Transform additional items to match schema
+        const additional_items_by_customer = additionalItems
+          .filter(customer => customer.items.length > 0)
+          .map(customer => ({
+            customer_id: customer.customer_id,
+            route_id: customer.customer.route_id,
+            items: customer.items.map((item: AdditionalItem) => ({
+              product_id: item.product_id,
+              quantity: item.quantity,
+              unit_price: item.product.current_price,
+              notes: item.notes || undefined
+            }))
+          }))
+
         const formData = {
           ...data,
           delivered_at: deliveredAt || new Date(),
+          additional_items_by_customer: additional_items_by_customer.length > 0 ? additional_items_by_customer : undefined
         }
 
         const result = await createBulkDeliveries(formData)
-        toast.success(`Successfully confirmed ${result.totalCount} deliveries!`)
+        const additionalItemsCount = additional_items_by_customer.reduce((sum, customer) => sum + customer.items.length, 0)
+        
+        toast.success(
+          `Successfully confirmed ${result.subscriptionCount} subscription deliveries` + 
+          (additionalItemsCount > 0 ? ` and ${additionalItemsCount} additional items!` : '!')
+        )
         
         router.push("/dashboard/deliveries")
         router.refresh()
@@ -233,30 +275,28 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
             {/* Delivery Mode */}
             <div className="space-y-3">
               <Label className="text-base font-medium">Delivery Mode</Label>
-              <RadioGroup
+              <Select
                 value={deliveryMode}
                 onValueChange={(value) => setValue("delivery_mode", value as "as_planned" | "custom")}
-                className="grid grid-cols-1 md:grid-cols-2 gap-4"
               >
-                <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                  <RadioGroupItem value="as_planned" id="as_planned" />
-                  <div className="space-y-1">
-                    <Label htmlFor="as_planned" className="font-medium">Delivered as Planned</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Use planned quantities for all orders
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                  <RadioGroupItem value="custom" id="custom" />
-                  <div className="space-y-1">
-                    <Label htmlFor="custom" className="font-medium">Custom Quantities</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Adjust individual quantities as needed
-                    </p>
-                  </div>
-                </div>
-              </RadioGroup>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select delivery mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="as_planned">
+                    <div className="space-y-1">
+                      <div className="font-medium">Delivered as Planned</div>
+                      <div className="text-sm text-muted-foreground">Use planned quantities for all orders</div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="custom">
+                    <div className="space-y-1">
+                      <div className="font-medium">Custom Quantities</div>
+                      <div className="text-sm text-muted-foreground">Adjust individual quantities as needed</div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -487,40 +527,118 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
           </Card>
         )}
 
+        {/* Additional Items Manager */}
+        <BulkAdditionalItemsManager 
+          customers={orders.map(order => order.customer).filter((customer, index, self) => 
+            self.findIndex(c => c.id === customer.id) === index // Remove duplicates
+          )}
+          products={products}
+          onAdditionalItemsChange={handleAdditionalItemsChange}
+        />
+
         {/* Final Summary */}
         <Card>
           <CardHeader>
             <CardTitle>Final Summary</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Orders</div>
-                <div className="font-medium">{orders.length}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Total Quantity</div>
-                <div className="font-medium">{totals.actualQuantity}L</div>
-                {variance.quantity !== 0 && (
-                  <div className={`text-sm ${variance.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ({variance.quantity >= 0 ? '+' : ''}{variance.quantity}L variance)
+            {(() => {
+              const additionalItemsCount = additionalItems.reduce((sum, customer) => sum + customer.items.length, 0)
+              const additionalQuantity = additionalItems.reduce((sum, customer) => 
+                sum + customer.items.reduce((itemSum: number, item: AdditionalItem) => itemSum + item.quantity, 0), 0
+              )
+              const additionalAmount = additionalItems.reduce((sum, customer) => 
+                sum + customer.items.reduce((itemSum: number, item: AdditionalItem) => 
+                  itemSum + (item.quantity * item.product.current_price), 0
+                ), 0
+              )
+              
+              return (
+                <div className="space-y-6">
+                  {/* Subscription Deliveries Summary */}
+                  <div>
+                    <h4 className="font-medium mb-3 text-blue-600">Subscription Deliveries</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Orders</div>
+                        <div className="font-medium">{orders.length}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Total Quantity</div>
+                        <div className="font-medium">{totals.actualQuantity}L</div>
+                        {variance.quantity !== 0 && (
+                          <div className={`text-sm ${variance.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            ({variance.quantity >= 0 ? '+' : ''}{variance.quantity}L variance)
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Total Amount</div>
+                        <div className="font-medium">{formatCurrency(totals.actualAmount)}</div>
+                        {variance.amount !== 0 && (
+                          <div className={`text-sm ${variance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            ({variance.amount >= 0 ? '+' : ''}{formatCurrency(variance.amount)} variance)
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Status</div>
+                        <div className="font-medium">Ready to Confirm</div>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Total Amount</div>
-                <div className="font-medium">{formatCurrency(totals.actualAmount)}</div>
-                {variance.amount !== 0 && (
-                  <div className={`text-sm ${variance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ({variance.amount >= 0 ? '+' : ''}{formatCurrency(variance.amount)} variance)
+                  
+                  {/* Additional Items Summary */}
+                  {additionalItemsCount > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3 text-orange-600">Additional Items</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Items</div>
+                          <div className="font-medium text-orange-600">{additionalItemsCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Total Quantity</div>
+                          <div className="font-medium text-orange-600">{additionalQuantity.toFixed(1)}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Total Amount</div>
+                          <div className="font-medium text-orange-600">{formatCurrency(additionalAmount)}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Customers</div>
+                          <div className="font-medium text-orange-600">
+                            {additionalItems.filter(customer => customer.items.length > 0).length}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Grand Total */}
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h4 className="font-semibold mb-3 text-green-800">Grand Total</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <div className="text-sm text-green-700">Total Deliveries</div>
+                        <div className="font-bold text-green-800">{orders.length + additionalItemsCount}</div>
+                        <div className="text-xs text-green-600">
+                          {orders.length} subscription + {additionalItemsCount} additional
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-green-700">Total Quantity</div>
+                        <div className="font-bold text-green-800">{(totals.actualQuantity + additionalQuantity).toFixed(1)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-green-700">Total Value</div>
+                        <div className="font-bold text-green-800">{formatCurrency(totals.actualAmount + additionalAmount)}</div>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Status</div>
-                <div className="font-medium">Ready to Confirm</div>
-              </div>
-            </div>
+                </div>
+              )
+            })()}
           </CardContent>
         </Card>
 
@@ -531,7 +649,12 @@ export function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
             className="flex-1 md:flex-none"
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
-            {isPending ? "Processing..." : `Confirm ${orders.length} Deliveries`}
+            {isPending ? "Processing..." : (() => {
+              const additionalItemsCount = additionalItems.reduce((sum, customer) => sum + customer.items.length, 0)
+              const totalDeliveries = orders.length + additionalItemsCount
+              return `Confirm ${totalDeliveries} Deliveries` + 
+                     (additionalItemsCount > 0 ? ` (${orders.length} subscription + ${additionalItemsCount} additional)` : '')
+            })()}
           </Button>
           
           <Link href="/dashboard/deliveries/new">
