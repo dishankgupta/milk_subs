@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,8 @@ export function BulkAdditionalItemsManager({
 }: BulkAdditionalItemsManagerProps) {
   const [customerItems, setCustomerItems] = useState<CustomerAdditionalItems[]>([])
   const [quickSelectProducts, setQuickSelectProducts] = useState<Product[]>([])
+  const previousCustomerItemsRef = useRef<CustomerAdditionalItems[]>([])
+  const onAdditionalItemsChangeRef = useRef(onAdditionalItemsChange)
 
   // Initialize customer items structure with useCallback to prevent unnecessary re-renders
   const initializeCustomerItems = useCallback(() => {
@@ -71,14 +73,21 @@ export function BulkAdditionalItemsManager({
     setQuickSelectProducts(commonProducts)
   }, [commonProducts])
 
-  // Notify parent of changes with useCallback to prevent infinite loops
-  const notifyParentOfChanges = useCallback(() => {
-    onAdditionalItemsChange(customerItems)
-  }, [customerItems, onAdditionalItemsChange])
-
+  // Update the ref when callback changes
   useEffect(() => {
-    notifyParentOfChanges()
-  }, [notifyParentOfChanges])
+    onAdditionalItemsChangeRef.current = onAdditionalItemsChange
+  })
+
+  // Notify parent of changes - only when customerItems actually changes
+  useEffect(() => {
+    // Deep comparison to check if customerItems actually changed
+    const hasChanged = JSON.stringify(customerItems) !== JSON.stringify(previousCustomerItemsRef.current)
+    
+    if (hasChanged) {
+      previousCustomerItemsRef.current = customerItems
+      onAdditionalItemsChangeRef.current(customerItems)
+    }
+  }, [customerItems])
 
   // Toggle customer section expansion with useCallback to prevent re-renders
   const toggleCustomerExpansion = useCallback((customerId: string) => {

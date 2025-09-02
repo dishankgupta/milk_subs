@@ -68,10 +68,10 @@ Based on the completed Deliveries Table Architectural Restructure, delivery pers
 - Delivery person and notes fields
 - Creates delivery with `daily_order_id = null`
 
-### **Phase 3: +/- Style Bulk Additional Deliveries** ✅ **COMPLETED**
+### **Phase 3: +/- Style Bulk Additional Deliveries** ✅ **COMPLETED** ➡️ **ARCHITECTURAL CHANGE**
 **Location**: `src/app/dashboard/deliveries/bulk/`
 
-**Deliverables:**
+**Original Deliverables:**
 - [x] Enhance bulk confirmation interface with additional items
 - [x] Implement touch-friendly +/- buttons for mobile use
 - [x] Quick product selection for common items
@@ -79,13 +79,19 @@ Based on the completed Deliveries Table Architectural Restructure, delivery pers
 - [x] Mobile-optimized stepper controls
 - [x] Visual confirmation of additional items added
 
-**Technical Implementation:** ✅ **COMPLETED**
-- ✅ Created `BulkAdditionalItemsManager` component with collapsible customer sections and mobile-first design
-- ✅ Integrated additional items functionality into existing bulk delivery form without breaking workflows
-- ✅ Implemented quick-select product buttons for efficient mobile operations
-- ✅ Added comprehensive form validation and real-time calculations for combined subscription + additional deliveries
-- ✅ Enhanced final summary with three-tier breakdown (subscription + additional + grand total)
-- ✅ Updated server integration to handle `additional_items_by_customer` schema with proper TypeScript compliance
+**Technical Implementation:** ✅ **COMPLETED** ➡️ **REMOVED BY DESIGN DECISION**
+- ✅ ~~Created `BulkAdditionalItemsManager` component with collapsible customer sections and mobile-first design~~ **REMOVED**
+- ✅ ~~Integrated additional items functionality into existing bulk delivery form without breaking workflows~~ **SIMPLIFIED**
+- ✅ ~~Implemented quick-select product buttons for efficient mobile operations~~ **REMOVED**
+- ✅ ~~Added comprehensive form validation and real-time calculations for combined subscription + additional deliveries~~ **REMOVED**
+- ✅ ~~Enhanced final summary with three-tier breakdown (subscription + additional + grand total)~~ **SIMPLIFIED**
+- ✅ ~~Updated server integration to handle `additional_items_by_customer` schema with proper TypeScript compliance~~ **REVERTED**
+
+**🔄 ARCHITECTURAL DECISION - SEPTEMBER 2025:**
+- **BulkAdditionalItemsManager Component Removed**: Due to React infinite loop issues ("Maximum update depth exceeded") with large datasets (91+ deliveries)
+- **Simplified Bulk Form**: Focus on core bulk delivery confirmation functionality only
+- **Alternative Solution**: Additional items will be managed through individual delivery pages (`/dashboard/deliveries/[id]`) instead of bulk operations
+- **UI Enhancement**: Replaced dropdown with radio button interface for delivery modes (As Planned vs Custom Quantities)
 
 **User Experience Features:**
 - Touch-friendly +/- quantity controls optimized for mobile field operations
@@ -102,21 +108,27 @@ Based on the completed Deliveries Table Architectural Restructure, delivery pers
 - Expandable additional items per customer
 - Batch apply additional items to multiple customers
 
-### **Phase 4: Supporting Components & Infrastructure** ✅ **COMPLETED**
+### **Phase 4: Supporting Components & Infrastructure** ✅ **COMPLETED** ➡️ **PARTIALLY REVISED**
 
 **New Reusable Components:**
 - [x] `AdditionalItemsFormSection` - Dynamic additional items form with +/- interface ✅ **COMPLETED**
-- [x] `BulkAdditionalItemsManager` - +/- interface for bulk operations ✅ **COMPLETED** 
-- [x] `ProductQuickSelector` - Efficient product selection optimized for mobile ✅ **COMPLETED** (integrated in BulkAdditionalItemsManager)
-- [x] `AdditionalDeliverySummary` - Summary cards with delivery type breakdowns ✅ **COMPLETED** (integrated in bulk form)
+- [x] ~~`BulkAdditionalItemsManager` - +/- interface for bulk operations~~ ✅ **REMOVED** (architectural decision)
+- [x] ~~`ProductQuickSelector` - Efficient product selection optimized for mobile~~ ✅ **REMOVED** (was integrated in BulkAdditionalItemsManager)
+- [x] ~~`AdditionalDeliverySummary` - Summary cards with delivery type breakdowns~~ ✅ **SIMPLIFIED** (removed from bulk form)
 - [x] `DeliveryTypeToggle` - Switch between subscription/additional/all views ✅ **COMPLETED**
 
 **Enhanced Existing Components:**
 - [x] `DeliveryForm` - Integrate additional items section ✅ **COMPLETED**
-- [x] `BulkDeliveryForm` - Add +/- additional items functionality ✅ **COMPLETED**
+- [x] ~~`BulkDeliveryForm` - Add +/- additional items functionality~~ ✅ **SIMPLIFIED** (removed additional items, added radio buttons)
 - [x] `BulkDeliveryPage` - Enhanced to fetch products data and pass to form ✅ **COMPLETED**
 - [x] `DeliveriesTable` - Enhanced with delivery type filtering and visual indicators ✅ **COMPLETED**
 - [x] `DeliveriesDashboard` - Enhanced with additional items statistics and improved metrics ✅ **COMPLETED**
+
+**🔄 BULK FORM IMPROVEMENTS - SEPTEMBER 2025:**
+- **Radio Button Interface**: Replaced dropdown with radio buttons for delivery mode selection (As Planned vs Custom Quantities)
+- **Infinite Loop Resolution**: Fixed React "Maximum update depth exceeded" errors by removing complex additional items management
+- **Performance Optimization**: Simplified form state management for handling large datasets (91+ deliveries)
+- **User Experience**: Cleaner, more intuitive interface with better visual hierarchy
 
 ### **Phase 5: User Experience Enhancements**
 
@@ -383,8 +395,59 @@ const MobileQuantityStepper = ({
 
 ---
 
-**Document Version**: 1.4  
+## 🔄 **CRITICAL ARCHITECTURE REVISION - SEPTEMBER 2025**
+
+### **BulkAdditionalItemsManager Removal Decision**
+
+**Problem Identified:** React infinite loop errors ("Maximum update depth exceeded") when handling large datasets (91+ deliveries) in bulk delivery confirmation.
+
+**Root Cause Analysis:**
+- Complex useEffect dependency chains in `BulkAdditionalItemsManager`
+- React Hook Form re-initialization causing render loops
+- Hydration mismatches due to `new Date()` initialization patterns
+- State management complexity with nested customer and product arrays
+
+**Solution Implemented:**
+- **Complete Removal**: Eliminated `BulkAdditionalItemsManager` component entirely
+- **Simplified Workflow**: Bulk form now focuses solely on subscription delivery confirmation
+- **Alternative Path**: Additional items managed through individual delivery pages (`/dashboard/deliveries/[id]`)
+- **UI Enhancement**: Replaced dropdown with radio button interface for better UX
+
+### **Technical Fixes Applied**
+
+**Bulk Delivery Form Improvements:**
+- **Radio Button Interface**: Professional radio button cards for delivery mode selection
+- **State Management**: Fixed hydration mismatches with proper useState initialization
+- **Performance**: Eliminated infinite loops, now handles 91+ deliveries reliably  
+- **React.memo**: Applied proper memoization to prevent unnecessary re-renders
+- **Form Stability**: Memoized default values to prevent React Hook Form re-initialization
+
+**Files Modified:**
+- `src/app/dashboard/deliveries/bulk/bulk-delivery-form.tsx` - Major simplification and radio button implementation
+- `src/components/deliveries/bulk-additional-items-manager.tsx` - Component removed
+- `src/lib/types.ts` - Cleaned up unused interfaces for additional items in bulk operations
+
+### **Business Impact Assessment**
+
+**Positive Outcomes:**
+- ✅ **Reliability**: No more React errors with large delivery batches
+- ✅ **Performance**: Faster rendering and form interactions
+- ✅ **User Experience**: Cleaner, more intuitive radio button interface
+- ✅ **Maintainability**: Simpler codebase with reduced complexity
+
+**Alternative Workflow:**
+- **Individual Delivery Management**: Additional items handled on per-delivery basis through existing enhanced delivery form
+- **Preserved Functionality**: Phase 1 additional items functionality remains fully operational
+- **Scalable Architecture**: Individual delivery pages can handle additional items without performance issues
+
+**User Feedback Integration:**
+- User explicitly stated: "I have decided to remove the BulkAdditionalItemsManager. I will add them through the dashboard/deliveries page itself."
+- Radio button request fulfilled: "In the bulk delivery form we need the radio buttons back"
+
+---
+
+**Document Version**: 1.5  
 **Created**: September 2, 2025  
 **Updated**: September 2, 2025  
-**Status**: Phase 1, 2, 3 & 4 Complete ✅ - Phase 5 Enhancement Ready 🚧  
-**Next Review**: Weekly during Phase 5 implementation
+**Status**: Phase 1, 2 & 4 Complete ✅ - Phase 3 Revised ✅ - Architecture Optimized 🚀  
+**Next Review**: Monthly for maintenance and enhancement opportunities

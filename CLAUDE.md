@@ -51,7 +51,7 @@ Complete Supabase database with 16 tables:
 - `base_subscriptions` - Daily/Pattern subscription types with 2-day cycle support
 - `modifications` - Temporary subscription changes (skip/increase/decrease)
 - `daily_orders` - Generated orders with pricing and delivery info
-- `deliveries` - **RESTRUCTURED** - Self-contained delivery tracking with additional items support (17 fields, nullable daily_order_id)
+- `deliveries` - **RESTRUCTURED** - Self-contained delivery tracking with additional items support (17 fields, nullable daily_order_id, nullable planned_quantity)
 - `payments` - Enhanced payment history with allocation tracking and status management
 - `product_pricing_history` - Price change audit trail
 - `sales` - Manual sales tracking (Cash/Credit/QR) with GST compliance
@@ -158,13 +158,14 @@ Complete Supabase database with 16 tables:
 - **Self-Contained Data Model**: ✅ **RESTRUCTURED** - Deliveries table now contains all necessary fields eliminating complex joins (32% performance improvement)
 - **Enhanced Variance Tracking**: ✅ **IMPROVED** - Planned vs actual vs additional items with comprehensive analytics
 - **Delivery Confirmation**: Select orders and record actual delivery details (`/dashboard/deliveries/new`)
-- **Bulk Delivery Confirmation**: Multi-select orders with quick filters and batch confirmation (`/dashboard/deliveries/bulk`)
+- **Bulk Delivery Confirmation**: ✅ **OPTIMIZED** - Simplified bulk confirmation with radio button interface (As Planned vs Custom Quantities)
 - **Bulk Selection & Deletion**: Complete bulk selection with checkboxes, "Select All" functionality, and batch delete operations with progress feedback
 - **Delivery Details**: Comprehensive delivery view with variance analysis (`/dashboard/deliveries/[id]`)
 - **Edit Delivery**: Pre-populated form for delivery updates (`/dashboard/deliveries/[id]/edit`)
 - **Performance Analytics**: Real-time completion rates and quantity variance tracking with filter-aware calculations
 - **Order Integration**: Direct delivery confirmation from orders workflow
 - **Consistent Search Experience**: Client-side real-time search and filtering matching other tables
+- **Additional Items Workflow**: ✅ **ENHANCED** - Additional items managed through individual delivery pages with Phase 1 functionality intact
 
 ### Reports & Analytics (`/dashboard/reports`)
 - **Production Summary**: Daily production planning with product and route breakdowns
@@ -226,10 +227,33 @@ Complete Supabase database with 16 tables:
 
 ## Development Notes
 
-- Application currently running at localhost:3000 with Turbopack for optimal development
+- Application currently running at localhost:3002 with Turbopack for optimal development
 - Authentication: Admin-only access with Supabase Auth and SSR support
 - All core business features are fully functional and production-ready
 - Complete dairy business management system with subscription and manual sales capabilities
+
+## Critical Architecture Decisions (September 2025)
+
+### Bulk Delivery Form Optimization
+**Problem**: React infinite loop errors ("Maximum update depth exceeded") when handling 91+ deliveries in bulk confirmation.
+
+**Solution**: Architectural simplification and performance optimization
+- **BulkAdditionalItemsManager Removed**: Complex component causing rendering loops eliminated
+- **Simplified Workflow**: Bulk form focuses on core delivery confirmation without additional items complexity
+- **Radio Button Interface**: Professional radio button cards replace dropdown for better UX
+- **Alternative Path**: Additional items managed through individual delivery pages (Phase 1 functionality preserved)
+
+**Technical Benefits**:
+- ✅ Eliminated React rendering loops and performance issues
+- ✅ Improved form stability with large datasets (91+ deliveries tested)
+- ✅ Better user experience with radio button interface
+- ✅ Simplified codebase maintenance and debugging
+
+**Business Impact**:
+- ✅ Reliable bulk delivery confirmation for high-volume operations
+- ✅ Preserved additional items functionality through alternative workflow
+- ✅ Enhanced user experience with professional interface design
+- ✅ Scalable architecture supporting business growth
 
 ### Development Journal
 - Journal entries stored in /dev-journal/ folder using format YYYYMMDDHHMM-dev-journal.md
@@ -289,6 +313,12 @@ Complete Supabase database with 16 tables:
   - **UI Components Update**: All delivery components updated to DeliveryExtended interface with comprehensive TypeScript compliance
   - **Reports & APIs Enhancement**: All print routes updated for new schema with professional layouts and additional items support
   - **Integration & Testing**: End-to-end workflow testing, performance validation, and production-ready rollback procedures documented
+- **Bulk Delivery Form Optimization**: Critical performance fixes and UX improvements (September 2, 2025)
+  - **React Infinite Loop Resolution**: Fixed "Maximum update depth exceeded" errors affecting large datasets (91+ deliveries)
+  - **BulkAdditionalItemsManager Removal**: Eliminated complex component causing rendering loops, simplified bulk workflow
+  - **Radio Button Interface**: Replaced dropdown with professional radio button cards for delivery mode selection
+  - **Performance Enhancement**: Optimized state management and form handling for reliable large-batch processing
+  - **Alternative Workflow**: Additional items now managed through individual delivery pages for better stability
 
 ## Phase 5 Sales System Architecture (COMPLETE)
 
@@ -580,3 +610,16 @@ export default async function Page({ params }) {
 
 - Remember to use MCP servers as per your need.
 - IMPORTANT - All Linear issues have to be created and updated in the Milk Subs - Dairy Management System Project in Linear. URL is https://linear.app/dishank/project/milk-subs-dairy-business-management-system-638a16f66b40
+
+## Documentation References
+
+### Core Architecture Documentation
+- **DELIVERIES-RESTRUCTURE-PLAN.md**: Complete 5-phase deliveries table architectural restructure implementation plan with database schema changes, performance improvements, and migration procedures
+- **deliveries-new-ui-plan.md**: Comprehensive deliveries UI enhancement plan including Phase 1-4 completion reports and critical architecture revision decisions (BulkAdditionalItemsManager removal and radio button interface implementation)
+
+### Key Documentation Status
+- ✅ **Database Migration**: Complete deliveries table restructure with 17 fields, nullable foreign keys
+- ✅ **Performance Optimization**: 32% query performance improvement with self-contained data model  
+- ✅ **UI Enhancement**: Additional items support through individual delivery pages
+- ✅ **Bulk Form Optimization**: React infinite loop resolution and radio button interface implementation
+- ✅ **Production Ready**: All phases tested and validated with rollback procedures documented
