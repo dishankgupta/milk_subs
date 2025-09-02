@@ -99,20 +99,25 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
     )
   }, [orders, searchTerm])
 
-  // Temporarily disable sorting to debug infinite loop
-  const sortedOrders = filteredOrders
-  const sortConfig = null
-  const handleSort = () => {}
+  // Sorting functionality with stable references
+  const { sortedData: sortedOrders, sortConfig, handleSort } = useSorting(
+    filteredOrders,
+    'customer.billing_name',
+    'asc'
+  )
 
-  const handleQuantityChange = useCallback((orderIndex: number, value: number) => {
-    // Simplified - direct order index mapping since sorting is disabled
-    if (fields[orderIndex]) {
-      update(orderIndex, { 
-        order_id: fields[orderIndex].order_id, 
+  const handleQuantityChange = useCallback((sortedIndex: number, value: number) => {
+    // Find the original order index in the unsorted array
+    const sortedOrder = sortedOrders[sortedIndex]
+    const originalIndex = orders.findIndex(order => order.id === sortedOrder.id)
+    
+    if (originalIndex !== -1 && fields[originalIndex]) {
+      update(originalIndex, { 
+        order_id: fields[originalIndex].order_id, 
         actual_quantity: value 
       })
     }
-  }, [fields, update])
+  }, [sortedOrders, orders, fields, update])
 
 
   async function onSubmit(data: BulkDeliveryFormData) {
@@ -441,9 +446,9 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedOrders.map((order, index) => {
+                      sortedOrders.map((order, sortedIndex) => {
                         const originalIndex = orders.findIndex(o => o.id === order.id)
-                        const actualQuantity = fields[originalIndex]?.actual_quantity || 0
+                        const actualQuantity = fields[originalIndex]?.actual_quantity ?? order.planned_quantity
                         const variance = actualQuantity - order.planned_quantity
                         
                         return (
@@ -466,7 +471,11 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
                                 step="0.1"
                                 min="0"
                                 value={actualQuantity}
-                                onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  const numValue = value === '' ? 0 : parseFloat(value)
+                                  handleQuantityChange(sortedIndex, isNaN(numValue) ? 0 : numValue)
+                                }}
                                 className="w-20 text-right font-mono"
                               />
                             </TableCell>
@@ -500,7 +509,7 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
                       <span className="font-medium">
                         {sortedOrders.reduce((sum, order) => {
                           const originalIndex = orders.findIndex(o => o.id === order.id)
-                          return sum + (fields[originalIndex]?.actual_quantity || 0)
+                          return sum + (fields[originalIndex]?.actual_quantity ?? order.planned_quantity)
                         }, 0)}L
                       </span> actual total
                     </div>

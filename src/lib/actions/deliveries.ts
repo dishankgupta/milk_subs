@@ -76,11 +76,7 @@ export async function getDeliveryById(id: string) {
       *,
       customer:customers (*),
       product:products (*),
-      route:routes (*),
-      additional_items:additional_delivery_items (
-        *,
-        product:products (*)
-      )
+      route:routes (*)
     `)
     .eq('id', id)
     .single()
@@ -90,11 +86,10 @@ export async function getDeliveryById(id: string) {
     throw new Error('Failed to fetch delivery')
   }
 
-  return delivery as DeliveryWithItems & { 
+  return delivery as DeliveryExtended & { 
     customer: Customer, 
     product: Product, 
-    route: Route,
-    additional_items: (AdditionalDeliveryItem & { product: Product })[]
+    route: Route
   }
 }
 
@@ -205,31 +200,12 @@ export async function createDelivery(data: DeliveryFormData) {
 }
 
 export async function createDeliveryWithAdditionalItems(data: DeliveryWithAdditionalItemsFormData) {
-  const supabase = await createClient()
-  
+  // With the new self-contained deliveries structure, additional items are created as separate deliveries
   // Create main delivery
   const mainDelivery = await createDelivery(data)
   
-  // Create additional items if provided
-  if (data.additional_items && data.additional_items.length > 0) {
-    const additionalItemsData = data.additional_items.map(item => ({
-      delivery_id: mainDelivery.id,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_amount: item.quantity * item.unit_price,
-      notes: item.notes || null
-    }))
-
-    const { error: itemsError } = await supabase
-      .from('additional_delivery_items')
-      .insert(additionalItemsData)
-
-    if (itemsError) {
-      console.error('Error creating additional items:', itemsError)
-      // Don't throw error as main delivery was created successfully
-    }
-  }
+  // Additional items would now be created as separate delivery entries with daily_order_id = NULL
+  // This is handled through the individual delivery pages workflow as per the restructure
   
   return mainDelivery
 }
@@ -417,16 +393,7 @@ export async function deleteDelivery(id: string) {
     throw new Error('Failed to find delivery')
   }
 
-  // Delete any additional items first
-  const { error: deleteItemsError } = await supabase
-    .from('additional_delivery_items')
-    .delete()
-    .eq('delivery_id', id)
-
-  if (deleteItemsError) {
-    console.error('Error deleting additional items:', deleteItemsError)
-    // Continue with delivery deletion
-  }
+  // No need to delete additional items as they are now part of the deliveries table structure
 
   // Delete the delivery
   const { error } = await supabase
@@ -478,16 +445,7 @@ export async function bulkDeleteDeliveries(deliveryIds: string[]) {
     return { successCount: 0, failureCount: 0 }
   }
 
-  // Delete additional items for all deliveries
-  const { error: deleteItemsError } = await supabase
-    .from('additional_delivery_items')
-    .delete()
-    .in('delivery_id', deliveryIds)
-
-  if (deleteItemsError) {
-    console.error('Error deleting additional items:', deleteItemsError)
-    // Continue with delivery deletion
-  }
+  // No need to delete additional items as they are now part of the deliveries table structure
 
   // Bulk delete deliveries
   const { error: deleteError } = await supabase
@@ -635,54 +593,8 @@ export async function getDeliveryStats(date?: string) {
 // ADDITIONAL ITEMS MANAGEMENT
 // ============================================================================
 
-export async function addAdditionalItems(deliveryId: string, items: Array<{
-  product_id: string
-  quantity: number
-  unit_price: number
-  notes?: string
-}>) {
-  const supabase = await createClient()
-  
-  const additionalItemsData = items.map(item => ({
-    delivery_id: deliveryId,
-    product_id: item.product_id,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    total_amount: item.quantity * item.unit_price,
-    notes: item.notes || null
-  }))
+// Additional items are now managed as separate deliveries with daily_order_id = NULL
+// This function has been replaced with individual delivery creation
 
-  const { data, error } = await supabase
-    .from('additional_delivery_items')
-    .insert(additionalItemsData)
-    .select(`
-      *,
-      product:products (*)
-    `)
-
-  if (error) {
-    console.error('Error adding additional items:', error)
-    throw new Error('Failed to add additional items')
-  }
-
-  revalidatePath('/dashboard/deliveries')
-  revalidatePath(`/dashboard/deliveries/${deliveryId}`)
-  
-  return data as (AdditionalDeliveryItem & { product: Product })[]
-}
-
-export async function removeAdditionalItem(itemId: string) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase
-    .from('additional_delivery_items')
-    .delete()
-    .eq('id', itemId)
-
-  if (error) {
-    console.error('Error removing additional item:', error)
-    throw new Error('Failed to remove additional item')
-  }
-
-  revalidatePath('/dashboard/deliveries')
-}
+// Additional items are now managed through individual delivery pages
+// This function has been removed as part of the deliveries table restructure

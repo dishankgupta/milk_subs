@@ -26,8 +26,9 @@ interface ProductSelectionCardProps {
 export function ProductSelectionCard({ products, selectedProducts, onProductsChange }: ProductSelectionCardProps) {
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Filter products based on search and exclude already selected ones
+  // Filter products based on search, subscription products only, and exclude already selected ones
   const filteredProducts = products.filter(product => 
+    product.is_subscription_product && // Only show subscription products
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
     !selectedProducts.some(item => item.product.id === product.id)
   ).slice(0, 8) // Limit for performance
@@ -77,7 +78,7 @@ export function ProductSelectionCard({ products, selectedProducts, onProductsCha
           )}
         </CardTitle>
         <CardDescription>
-          Select products to deliver and specify quantities
+          Select subscription products to deliver and specify quantities
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -89,7 +90,7 @@ export function ProductSelectionCard({ products, selectedProducts, onProductsCha
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search products..."
+              placeholder="Search subscription products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -102,7 +103,7 @@ export function ProductSelectionCard({ products, selectedProducts, onProductsCha
               {filteredProducts.length === 0 ? (
                 <div className="col-span-2 text-center py-4 text-muted-foreground">
                   <Package2 className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                  <p>No products found matching &quot;{searchQuery}&quot;</p>
+                  <p>No subscription products found matching &quot;{searchQuery}&quot;</p>
                 </div>
               ) : (
                 filteredProducts.map((product) => (
@@ -245,7 +246,7 @@ export function ProductSelectionCard({ products, selectedProducts, onProductsCha
           <div className="text-center py-8 text-muted-foreground">
             <Package2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No products selected yet</p>
-            <p className="text-sm">Search for products above to add them to the delivery</p>
+            <p className="text-sm">Search for subscription products above to add them to the delivery</p>
           </div>
         )}
       </CardContent>
