@@ -58,7 +58,7 @@ Complete Supabase database with 16 tables:
 
 ### Invoice & Outstanding Management Tables
 - `invoice_metadata` - Enhanced invoice generation with status tracking, payment tracking, and financial year numbering
-- `invoice_line_items` - Detailed line items for each invoice (subscriptions, manual sales, adjustments)
+- `invoice_line_items` - **ENHANCED** - Detailed line items with direct delivery_id references for cleaner architecture (subscriptions, additional deliveries, manual sales, adjustments)
 - `invoice_payments` - Payment allocation tracking for invoice-to-payment mapping
 - `unapplied_payments` - Payments not yet allocated to specific invoices
 - `opening_balance_payments` - **NEW** - Tracks payments allocated to opening balance (immutable historical data)
@@ -185,15 +185,19 @@ Complete Supabase database with 16 tables:
 - **Customer Integration**: Sales history sections on customer detail pages
 - **QR Sales Support**: ✅ **NEW** - QR sale type works identically to Cash sales but tracked separately for reporting
 
-### Invoice Management (`/dashboard/invoices`)
-- **Invoice Generation**: ✅ **FIXED** - Combined subscription + manual sales invoicing with transaction-based logic
+### Invoice Management (`/dashboard/invoices`) ⭐ **COMPLETE ARCHITECTURAL REFACTOR**
+- **Additional Deliveries Integration**: ✅ **NEW** - All deliveries (subscription + additional) now properly included in invoicing for complete revenue capture
+- **Cleaner Architecture**: ✅ **REFACTORED** - Direct delivery→invoice relationships via delivery_id field, eliminated complex order/subscription dependencies  
+- **Simplified Data Model**: ✅ **OPTIMIZED** - Single "Delivered products" category instead of subscription/additional split, cleaner invoice presentation
+- **Invoice Generation**: ✅ **ENHANCED** - Combined all deliveries + manual sales invoicing with streamlined transaction-based logic
 - **Bulk Processing**: ✅ **ENHANCED** - Real-time progress updates with EventSource, cancellation support, and improved user feedback during invoice generation
 - **Invoice Management**: ✅ **NEW** - Date filtering by invoice generation date with intuitive range picker, bulk selection with checkboxes, and bulk delete functionality with comprehensive safety warnings
-- **Customer Selection**: ✅ **IMPROVED** - Transaction-based selection (unbilled deliveries, credit sales, any transactions) instead of circular outstanding logic
-- **Preview System**: ✅ **RESTORED** - Invoice preview now loads correctly with accurate customer statistics and selection filters
+- **Customer Selection**: ✅ **IMPROVED** - Transaction-based selection (all unbilled deliveries, credit sales, any transactions) with complete billing coverage
+- **Preview System**: ✅ **FIXED** - Invoice preview now includes additional deliveries with accurate customer statistics and selection filters
+- **Business Process**: ✅ **STREAMLINED** - Additional deliveries default to "delivered" status for immediate billing capability
 - **Financial Year Management**: Automatic invoice numbering (YYYYYYYYNNNNN format)
 - **PDF Storage**: Organized file structure with dated subfolders
-- **Professional Layouts**: PureDairy branding with GST-compliant formatting
+- **Professional Layouts**: PureDairy branding with GST-compliant formatting, clean totals breakdown
 - **Robust PDF Generation**: Automatic retry mechanism with up to 3 attempts for transient failures
 - **Enhanced Stability**: Chrome browser integration with proper timeout handling and error recovery
 - **Data Integrity**: Complete invoice deletion with proper cleanup of invoice_line_items for transaction tracking accuracy
@@ -234,7 +238,28 @@ Complete Supabase database with 16 tables:
 
 ## Critical Architecture Decisions (September 2025)
 
-### Bulk Delivery Form Optimization
+### Invoice System Complete Refactor (September 3, 2025)
+**Problem**: Additional deliveries (daily_order_id = NULL) were excluded from invoicing, creating revenue leakage and complex billing logic.
+
+**Solution**: Revolutionary architectural simplification with complete revenue capture
+- **Direct Delivery-Invoice Relationships**: Added delivery_id field to invoice_line_items, eliminated complex order/subscription dependencies
+- **Unified Delivery Processing**: Single deliveryItems grouping instead of separate subscription/additional categories
+- **Business Process Streamlining**: Additional deliveries default to "delivered" status for immediate billing
+- **Database Function Optimization**: Updated get_bulk_invoice_preview_optimized() for complete delivery inclusion
+
+**Technical Benefits**:
+- ✅ Eliminated ~50+ lines of complex separation logic
+- ✅ Cleaner invoice architecture with direct delivery references
+- ✅ Simplified data model with single delivery category
+- ✅ Improved database query performance with self-contained delivery data
+
+**Business Impact**:
+- ✅ **Complete Revenue Capture**: All delivered products now properly billed regardless of source
+- ✅ **Simplified Billing Process**: No manual status changes required for additional deliveries
+- ✅ **Professional Invoice Layout**: Clean "Delivered products" presentation with simplified totals
+- ✅ **Accurate Financial Reporting**: Invoice previews show complete customer billing amounts
+
+### Bulk Delivery Form Optimization (September 2, 2025)
 **Problem**: React infinite loop errors ("Maximum update depth exceeded") when handling 91+ deliveries in bulk confirmation.
 
 **Solution**: Architectural simplification and performance optimization
@@ -319,39 +344,15 @@ Complete Supabase database with 16 tables:
   - **Radio Button Interface**: Replaced dropdown with professional radio button cards for delivery mode selection
   - **Performance Enhancement**: Optimized state management and form handling for reliable large-batch processing
   - **Alternative Workflow**: Additional items now managed through individual delivery pages for better stability
-
-## Phase 5 Sales System Architecture (COMPLETE)
-
-### Database Schema Extensions
-- **Products Table**: GST rate fields (gst_rate, unit_of_measure, is_subscription_product)
-- **Customers Table**: opening_balance field for historical outstanding tracking
-- **Sales Table**: Cash/Credit/QR sale types with GST amount tracking and payment status
-- **Invoice Metadata**: Financial year-based numbering with file path storage
-
-### Business Logic Implementation
-- **Cash Sales**: No customer assignment, immediate payment completion
-- **QR Sales**: No customer assignment, immediate payment completion (identical to Cash)
-- **Credit Sales**: Customer required, automatic outstanding amount updates
-- **GST Calculations**: Inclusive pricing with base amount and tax separation
-- **Invoice Numbering**: YYYYYYYYNNNNN format with financial year tracking
-
-### UI Integration Plan
-- **Enhanced Navigation**: Sales and Invoices sections with sub-menus
-- **Dashboard Extensions**: Sales metrics cards and pending invoice indicators
-- **Customer Profiles**: Sales history sections with enhanced outstanding display
-- **Outstanding Reports**: Triple-level expandable tables (Customer → Transaction Type → Details)
-
-### Professional Invoice System
-- **PDF Generation**: Professional layouts with PureDairy branding
-- **Bulk Processing**: Date range selection with progress tracking
-- **File Organization**: Dated subfolders with individual and combined PDFs
-- **GST Compliance**: Proper tax breakdowns and regulatory formatting
-
-### Critical Features
-- **Outstanding Report Enhancement**: Most critical feature - comprehensive customer balance tracking
-- **Opening Balance Integration**: Historical outstanding amounts + current period = total
-- **Real-time Calculations**: Automatic updates to customer outstanding on credit sales
-- **Print System Integration**: Leveraging existing print infrastructure for consistency
+- **Invoice System Complete Refactor**: Revolutionary architectural improvements for additional deliveries billing (September 3, 2025)
+  - **Additional Deliveries Integration**: Fixed critical business logic gap where additional deliveries (daily_order_id = NULL) were excluded from invoicing
+  - **Cleaner Invoice Architecture**: Eliminated complex order/subscription dependencies, direct delivery→invoice relationships via delivery_id field
+  - **Database Schema Enhancement**: Added delivery_id field to invoice_line_items table for clean delivery-invoice mapping
+  - **Simplified Data Model**: Single deliveryItems grouping instead of separate subscription/additional categories, ~50+ lines code reduction
+  - **Business Process Fix**: Additional deliveries now default to "delivered" status for immediate billing capability
+  - **Database Function Update**: Fixed get_bulk_invoice_preview_optimized() to include all deliveries using self-contained delivery data
+  - **Revenue Capture**: Complete billing coverage - customers now pay for all products received regardless of source
+  - **Professional Invoice Layout**: Clean "Delivered products" presentation with simplified totals (Delivery Total + Manual Sales = Grand Total)
 
 ## Development Workflow
 
@@ -418,98 +419,12 @@ Complete Supabase database with 16 tables:
 - `formatBusinessDate(date)` - Format for business documents (DD-MM-YYYY)
 - `getRelativeTimeIST(date)` - Get relative time strings ("2 days ago", "in 3 hours")
 
-### PROHIBITED Patterns - NEVER USE THESE:
-
-❌ **Forbidden Date Patterns:**
-```typescript
-// NEVER use these patterns - they cause timezone inconsistencies
-new Date()                           // Use getCurrentISTDate()
-new Date(dateString)                 // Use parseLocalDateIST(dateString)
-date.toISOString().split('T')[0]     // Use formatDateForDatabase(date)
-new Date().toISOString()             // Use formatTimestampForDatabase(getCurrentISTDate())
-Date.now()                           // Use getCurrentISTDate().getTime()
-```
-
-### Required Patterns - ALWAYS USE THESE:
-
-✅ **Correct IST Patterns:**
-```typescript
-// Server Actions - Date Operations
-import { getCurrentISTDate, formatDateForDatabase, parseLocalDateIST } from '@/lib/date-utils'
-
-// Get current date
-const now = getCurrentISTDate()
-
-// Format date for database
-const dbDate = formatDateForDatabase(getCurrentISTDate())
-
-// Parse user input
-const userDate = parseLocalDateIST(formData.dateString)
-
-// Format for display
-const displayDate = formatDateIST(date)
-```
-
-### TypeScript Types for IST
-
-**Use IST-specific types from `/src/lib/types.ts`:**
-- `ISTDateString` - For date strings in IST format
-- `ISTTimestamp` - For timestamp strings with IST context
-- `ISTDateRange` - For date range objects with IST dates
-
-### Code Review Checklist
-
-**Before committing any code with date operations, verify:**
-- [ ] No usage of `new Date()` without IST context
-- [ ] No `toISOString().split('T')[0]` patterns
-- [ ] All date formatting uses IST utilities
-- [ ] Database operations use `formatDateForDatabase()` or `formatTimestampForDatabase()`
-- [ ] Display dates use `formatDateIST()` or appropriate display functions
-- [ ] User input parsing uses `parseLocalDateIST()`
-- [ ] Business logic uses IST-aware calculation functions
+### Code Review Checklist ✅❌
+- [ ] NEVER use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
+- [ ] ALWAYS use IST utilities: `getCurrentISTDate()`, `formatDateForDatabase()`, `parseLocalDateIST()`
+- [ ] Database operations use proper formatting functions
+- [ ] Display dates use `formatDateIST()` for consistency
 - [ ] Financial year calculations use `calculateFinancialYear()`
-
-### Common Pitfalls & Solutions
-
-**1. Database Date Storage:**
-```typescript
-// ❌ Wrong - timezone inconsistency
-const date = new Date().toISOString().split('T')[0]
-
-// ✅ Correct - IST context maintained
-const date = formatDateForDatabase(getCurrentISTDate())
-```
-
-**2. User Input Processing:**
-```typescript
-// ❌ Wrong - loses IST context
-const userDate = new Date(formData.date)
-
-// ✅ Correct - maintains IST context
-const userDate = parseLocalDateIST(formData.date)
-```
-
-**3. Display Formatting:**
-```typescript
-// ❌ Wrong - inconsistent formatting
-const display = date.toLocaleDateString()
-
-// ✅ Correct - consistent dd/MM/yyyy format
-const display = formatDateIST(date)
-```
-
-### Testing Requirements
-
-**All date-dependent code MUST include:**
-- Unit tests for IST utility usage
-- Edge case testing (month boundaries, leap years, financial year transitions)
-- Performance validation for bulk date operations
-- Integration tests for business workflows with dates
-
-**Run comprehensive test suite:**
-```bash
-pnpm test  # All IST tests must pass before deployment
-```
 
 ## Testing & Validation
 

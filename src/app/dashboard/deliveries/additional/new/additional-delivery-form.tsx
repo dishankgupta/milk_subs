@@ -55,7 +55,7 @@ export function AdditionalDeliveryForm({ products, customers, routes }: Addition
       unit_price: 0,
       total_amount: 0,
       planned_quantity: undefined, // No planned quantity for additional items
-      delivery_status: "pending",
+      delivery_status: "delivered",
       actual_quantity: 0, // Will be sum of additional items
       delivery_notes: "",
       delivery_person: "",

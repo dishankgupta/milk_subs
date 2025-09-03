@@ -21,7 +21,7 @@ export interface InvoiceData {
   invoiceDate: string
   periodStart: string
   periodEnd: string
-  subscriptionItems: InvoiceSubscriptionItem[]
+  deliveryItems: InvoiceSubscriptionItem[]
   manualSalesItems: InvoiceManualSaleItem[]
   dailySummary: InvoiceDailySummaryItem[]
   totals: InvoiceTotals
@@ -57,7 +57,7 @@ export interface InvoiceDailySummaryItem {
 }
 
 export interface InvoiceTotals {
-  subscriptionAmount: number
+  deliveryAmount: number
   manualSalesAmount: number
   totalGstAmount: number
   grandTotal: number
@@ -103,7 +103,7 @@ export async function prepareInvoiceData(
     throw new Error("Customer not found")
   }
 
-  // Get subscription data (from self-contained deliveries table)
+  // Get all delivery data (both subscription and additional deliveries)
   const { data: deliveries, error: deliveriesError } = await supabase
     .from("deliveries")
     .select(`
@@ -112,7 +112,6 @@ export async function prepareInvoiceData(
     `)
     .eq("customer_id", customerId)
     .eq("delivery_status", "delivered")
-    .not("daily_order_id", "is", null) // Only subscription deliveries
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
@@ -140,12 +139,12 @@ export async function prepareInvoiceData(
   // Generate invoice number
   const { invoiceNumber } = await getNextInvoiceNumber()
 
-  // Process subscription items (group by product)
-  const subscriptionItemsMap = new Map<string, InvoiceSubscriptionItem>()
+  // Process all delivery items (both subscription and additional deliveries)
+  const deliveryItemsMap = new Map<string, InvoiceSubscriptionItem>()
   
   deliveries?.forEach(delivery => {
     const key = delivery.product.id
-    const existing = subscriptionItemsMap.get(key)
+    const existing = deliveryItemsMap.get(key)
     
     // Use actual delivered quantity (self-contained delivery data)
     const actualQuantity = Number(delivery.actual_quantity || 0)
@@ -155,7 +154,7 @@ export async function prepareInvoiceData(
       existing.quantity += actualQuantity
       existing.totalAmount += actualTotalAmount
     } else {
-      subscriptionItemsMap.set(key, {
+      deliveryItemsMap.set(key, {
         productName: delivery.product.name,
         productCode: delivery.product.code,
         quantity: actualQuantity,
@@ -166,7 +165,7 @@ export async function prepareInvoiceData(
     }
   })
 
-  const subscriptionItems = Array.from(subscriptionItemsMap.values())
+  const deliveryItems = Array.from(deliveryItemsMap.values())
 
   // Process manual sales items
   const manualSalesItems: InvoiceManualSaleItem[] = manualSales?.map(sale => ({
@@ -232,10 +231,10 @@ export async function prepareInvoiceData(
     .sort((a, b) => a.date.localeCompare(b.date))
 
   // Calculate totals
-  const subscriptionAmount = subscriptionItems.reduce((sum, item) => sum + item.totalAmount, 0)
+  const deliveryAmount = deliveryItems.reduce((sum, item) => sum + item.totalAmount, 0)
   const manualSalesAmount = manualSalesItems.reduce((sum, item) => sum + item.totalAmount, 0)
   const totalGstAmount = manualSalesItems.reduce((sum, item) => sum + item.gstAmount, 0)
-  const grandTotal = subscriptionAmount + manualSalesAmount
+  const grandTotal = deliveryAmount + manualSalesAmount
 
   return {
     customer,
@@ -243,11 +242,11 @@ export async function prepareInvoiceData(
     invoiceDate: formatDateForDatabase(getCurrentISTDate()),
     periodStart,
     periodEnd,
-    subscriptionItems,
+    deliveryItems,
     manualSalesItems,
     dailySummary,
     totals: {
-      subscriptionAmount,
+      deliveryAmount,
       manualSalesAmount,
       totalGstAmount,
       grandTotal
@@ -267,7 +266,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
       invoice_date: invoiceData.invoiceDate,
       period_start: invoiceData.periodStart,
       period_end: invoiceData.periodEnd,
-      subscription_amount: invoiceData.totals.subscriptionAmount,
+      subscription_amount: invoiceData.totals.deliveryAmount,
       manual_sales_amount: invoiceData.totals.manualSalesAmount,
       total_amount: invoiceData.totals.grandTotal,
       gst_amount: invoiceData.totals.totalGstAmount,
@@ -285,8 +284,8 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
     throw new Error(`Failed to save invoice metadata: ${error?.message}`)
   }
 
-  // Create invoice line items for subscription orders
-  const orderLineItems = await createSubscriptionLineItems(
+  // Create invoice line items for delivery orders
+  await createDeliveryLineItems(
     invoiceMetadata.id, 
     invoiceData.customer.id, 
     invoiceData.periodStart, 
@@ -329,7 +328,7 @@ async function getUnbilledDeliveryAmount(
   
   // Fallback to manual query using self-contained deliveries table
   if (!data) {
-    // Get all delivered subscription deliveries for the customer in the period
+    // Get all delivered deliveries for the customer in the period (including additional deliveries)
     const { data: deliveredDeliveries } = await supabase
       .from("deliveries")
       .select(`
@@ -341,28 +340,28 @@ async function getUnbilledDeliveryAmount(
       `)
       .eq("customer_id", customerId)
       .eq("delivery_status", "delivered")
-      .not("daily_order_id", "is", null) // Only subscription deliveries
       .gte("order_date", periodStart)
       .lte("order_date", periodEnd)
     
     if (!deliveredDeliveries || deliveredDeliveries.length === 0) return 0
     
-    // Get delivery IDs that are already billed (check via order_id)
-    const orderIds = deliveredDeliveries
-      .map(delivery => delivery.daily_order_id)
-      .filter(id => id !== null)
-      
-    const { data: billedOrders } = await supabase
-      .from("invoice_line_items")
-      .select("order_id")
-      .in("order_id", orderIds)
-      .not("order_id", "is", null)
+    // Get deliveries that are already billed (cleaner approach - only check delivery_id)
+    const deliveryIds = deliveredDeliveries.map(delivery => delivery.id)
     
-    const billedOrderIds = new Set(billedOrders?.map(item => item.order_id) || [])
+    if (deliveryIds.length === 0) return 0
+      
+    // Check for billed deliveries using direct delivery_id reference
+    const { data: billedItems } = await supabase
+      .from("invoice_line_items")
+      .select("delivery_id")
+      .in("delivery_id", deliveryIds)
+      .not("delivery_id", "is", null)
+    
+    const billedDeliveryIds = new Set(billedItems?.map(item => item.delivery_id) || [])
     
     // Calculate total amount for unbilled deliveries using actual delivered quantities
     return deliveredDeliveries
-      .filter(delivery => !billedOrderIds.has(delivery.daily_order_id))
+      .filter(delivery => !billedDeliveryIds.has(delivery.id))
       .reduce((sum, delivery) => {
         // Use self-contained delivery data
         const actualQuantity = Number(delivery.actual_quantity || 0)
@@ -876,21 +875,23 @@ export async function getInvoiceStats() {
       .select("customer_id")
       .gt("total_outstanding", 0)
 
-    // Get all customers who have delivered subscription deliveries this month
-    const { data: customersWithDeliveries } = await supabase
-      .from("customers")
-      .select(`
-        id
-      `)
-      .in("id", 
-        supabase
-          .from("deliveries")
-          .select("customer_id")
-          .eq("delivery_status", "delivered")
-          .not("daily_order_id", "is", null) // Only subscription deliveries
-          .gte("order_date", startOfMonth)
-          .lte("order_date", today)
-      )
+    // Get all customers who have any delivered items this month (subscription + additional)
+    // First get customer IDs from deliveries
+    const { data: deliveryCustomerIds } = await supabase
+      .from("deliveries")
+      .select("customer_id")
+      .eq("delivery_status", "delivered")
+      .gte("order_date", startOfMonth)
+      .lte("order_date", today)
+    
+    const uniqueCustomerIds = [...new Set(deliveryCustomerIds?.map(d => d.customer_id) || [])]
+    
+    const { data: customersWithDeliveries } = uniqueCustomerIds.length > 0 
+      ? await supabase
+          .from("customers")
+          .select("id")
+          .in("id", uniqueCustomerIds)
+      : { data: [] }
 
     // Combine both sets of customers (subscription dues OR outstanding amounts)
     const eligibleCustomerIds = new Set([
@@ -1083,15 +1084,15 @@ export async function bulkDeleteInvoices(invoiceIds: string[]): Promise<{
   return results
 }
 
-async function createSubscriptionLineItems(
+async function createDeliveryLineItems(
   invoiceId: string, 
   customerId: string, 
   periodStart: string, 
   periodEnd: string
-): Promise<Array<{order_id: string; invoice_id: string}>> {
+): Promise<Array<{delivery_id: string; invoice_id: string}>> {
   const supabase = await createClient()
 
-  // Get delivered subscription deliveries for this period with ALL required data
+  // Get all delivered deliveries for this period (both subscription and additional)
   const { data: deliveredDeliveries } = await supabase
     .from("deliveries")
     .select(`
@@ -1108,7 +1109,6 @@ async function createSubscriptionLineItems(
     `)
     .eq("customer_id", customerId)
     .eq("delivery_status", "delivered")
-    .not("daily_order_id", "is", null) // Only subscription deliveries
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
@@ -1123,17 +1123,20 @@ async function createSubscriptionLineItems(
     // Handle product data - it should be a single object, not array
     const product = Array.isArray(delivery.product) ? delivery.product[0] : delivery.product
     
+    // All deliveries use 'subscription' type (simplified architecture post-refactor)
+    const lineItemType = 'subscription'
+    
     return {
       invoice_id: invoiceId,
-      order_id: delivery.daily_order_id, // Link to original order for tracking
-      line_item_type: 'subscription',
+      delivery_id: delivery.id, // Direct reference to delivery record (cleaner architecture)
+      line_item_type: lineItemType,
       product_id: product.id,
       product_name: product.name,
       quantity: actualQuantity,
       unit_price: Number(delivery.unit_price),
       line_total: actualLineTotal,
       gst_rate: Number(product.gst_rate || 0),
-      gst_amount: 0 // Subscriptions typically don't have GST
+      gst_amount: 0 // Deliveries typically don't have GST
     }
   })
 
@@ -1143,7 +1146,7 @@ async function createSubscriptionLineItems(
     .select()
 
   if (error) {
-    console.error('Error creating subscription line items:', error)
+    console.error('Error creating delivery line items:', error)
     return []
   }
 
@@ -1489,11 +1492,11 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
       </tr>
     </thead>
     <tbody>
-      ${invoiceData.subscriptionItems.map(item => `
+      ${invoiceData.deliveryItems.map(item => `
         <tr>
           <td>
             <strong>${item.productName}</strong><br>
-            <small>Subscription deliveries</small>
+            <small>Delivered products</small>
           </td>
           <td>${item.quantity} ${item.unitOfMeasure}</td>
           <td>${formatCurrency(item.unitPrice)}/${item.unitOfMeasure}</td>
@@ -1518,9 +1521,21 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
   <!-- Totals -->
   <div class="totals-section">
     <table class="totals-table">
+      ${invoiceData.totals.deliveryAmount > 0 ? `
+      <tr>
+        <td class="label">Delivery Total:</td>
+        <td class="amount">${formatCurrency(invoiceData.totals.deliveryAmount)}</td>
+      </tr>
+      ` : ''}
+      ${invoiceData.totals.manualSalesAmount > 0 ? `
+      <tr>
+        <td class="label">Manual Sales:</td>
+        <td class="amount">${formatCurrency(invoiceData.totals.manualSalesAmount)}</td>
+      </tr>
+      ` : ''}
       <tr>
         <td class="label">Sub Total:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.subscriptionAmount + invoiceData.totals.manualSalesAmount)}</td>
+        <td class="amount">${formatCurrency(invoiceData.totals.deliveryAmount + invoiceData.totals.manualSalesAmount)}</td>
       </tr>
       ${invoiceData.totals.totalGstAmount > 0 ? `
       <tr>
