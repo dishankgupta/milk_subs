@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trash2, Edit, MoreVertical, Search, Download } from 'lucide-react'
+import { Trash2, Edit, Eye, MoreVertical, Search, Download } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatDateIST, formatWithIST } from '@/lib/date-utils'
@@ -367,6 +367,12 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/sales/${sale.id}`}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <Link href={`/dashboard/sales/${sale.id}/edit`}>
                             <Edit className="h-4 w-4 mr-2" />
