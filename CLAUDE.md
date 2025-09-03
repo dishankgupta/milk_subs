@@ -180,6 +180,9 @@ Complete Supabase database with 16 tables:
 ### Sales Management (`/dashboard/sales`)
 - **Sales Entry**: Cash vs QR vs Credit sales with automatic customer validation
 - **Sales History**: ✅ **ENHANCED** - Professional sortable table with real-time search, advanced filtering (sale type, payment status), CSV export functionality, and instant client-side performance
+- **Advanced Filtering**: ✅ **NEW** - QR filter option, intelligent date range filtering with current month defaults and smart filter state tracking
+- **Professional Print System**: ✅ **NEW** - Print API route generates comprehensive sales reports with filter integration and PureDairy branding
+- **Sale Details & Editing**: ✅ **NEW** - Complete view/edit workflow with GST-inclusive pricing corrections and edit restrictions for billed credit sales
 - **Product Management**: GST rate configuration and product catalog management
 - **GST Calculations**: Real-time inclusive/exclusive pricing with tax breakdowns
 - **Customer Integration**: Sales history sections on customer detail pages
@@ -353,6 +356,13 @@ Complete Supabase database with 16 tables:
   - **Database Function Update**: Fixed get_bulk_invoice_preview_optimized() to include all deliveries using self-contained delivery data
   - **Revenue Capture**: Complete billing coverage - customers now pay for all products received regardless of source
   - **Professional Invoice Layout**: Clean "Delivered products" presentation with simplified totals (Delivery Total + Manual Sales = Grand Total)
+- **Sales History Management Enhancement**: Complete sales workflow and reporting implementation (September 3, 2025)
+  - **QR Filter Integration**: Added QR sale type to dropdown filters for complete sales type coverage
+  - **Smart Date Range Filtering**: Implemented intelligent current month defaults with filter state tracking to distinguish user modifications from system defaults
+  - **Professional Print Reports**: New `/api/print/sales-history` route with comprehensive filtering, statistics, and PureDairy branding
+  - **View/Edit Workflow**: Complete sale details viewing system with edit restrictions for billed credit sales maintaining accounting integrity
+  - **GST Calculation Fixes**: Corrected edit form to use GST-inclusive pricing matching new sales form behavior
+  - **Enhanced User Experience**: Clean filter alignment, smart reset functionality, and filter-aware print reports showing only user-applied filters
 
 ## Development Workflow
 
@@ -378,6 +388,7 @@ Complete Supabase database with 16 tables:
 7. **Database**: Supabase with MCP server integration for CLI operations
 8. **Print System**: Dedicated API routes under `/src/app/api/print/` for professional report printing
    - `/src/app/api/print/deliveries/` - **NEW** - Professional deliveries report with filter and sort integration
+   - `/src/app/api/print/sales-history/` - **NEW** - Comprehensive sales history reports with advanced filtering and statistics
 9. **PDF Generation**: Puppeteer-based PDF generation with Chrome browser integration
    - `/src/lib/file-utils.ts` - PDF generation utilities with retry mechanisms and timeout handling
    - `/scripts/test-pdf.js` - PDF generation testing script for validation

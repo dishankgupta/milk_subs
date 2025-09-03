@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trash2, Edit, Eye, MoreVertical, Search, Download } from 'lucide-react'
+import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { formatDateIST, formatWithIST } from '@/lib/date-utils'
+import { formatDateIST, formatWithIST, parseLocalDateIST, formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,9 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
+  const [dateFromFilter, setDateFromFilter] = useState<string>('')
+  const [dateToFilter, setDateToFilter] = useState<string>('')
+  const [dateFiltersModified, setDateFiltersModified] = useState(false) // Track user modifications
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -64,6 +67,16 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Set default date range to current month
+  useEffect(() => {
+    if (isClient && !dateFiltersModified) {
+      const today = getCurrentISTDate()
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      setDateFromFilter(formatDateForDatabase(firstDay))
+      setDateToFilter(formatDateForDatabase(today))
+    }
+  }, [isClient, dateFiltersModified])
 
   // Filter sales based on search and filters
   const filteredSales = sales.filter(sale => {
@@ -77,7 +90,35 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     const matchesSaleType = saleTypeFilter === 'all' || sale.sale_type === saleTypeFilter
     const matchesPaymentStatus = paymentStatusFilter === 'all' || sale.payment_status === paymentStatusFilter
 
-    return matchesSearch && matchesSaleType && matchesPaymentStatus
+    // Date range filtering
+    let matchesDateRange = true
+    if (dateFromFilter || dateToFilter) {
+      const saleDate = new Date(sale.sale_date)
+      
+      if (dateFromFilter && dateFromFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
+        try {
+          const fromDate = parseLocalDateIST(dateFromFilter)
+          if (saleDate < fromDate) matchesDateRange = false
+        } catch (error) {
+          // Invalid date format, skip filtering
+          console.warn('Invalid from date format:', dateFromFilter)
+        }
+      }
+      
+      if (dateToFilter && dateToFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
+        try {
+          const toDate = parseLocalDateIST(dateToFilter)
+          // Set time to end of day for inclusive filtering
+          toDate.setHours(23, 59, 59, 999)
+          if (saleDate > toDate) matchesDateRange = false
+        } catch (error) {
+          // Invalid date format, skip filtering
+          console.warn('Invalid to date format:', dateToFilter)
+        }
+      }
+    }
+
+    return matchesSearch && matchesSaleType && matchesPaymentStatus && matchesDateRange
   })
 
   // Apply sorting to filtered sales
@@ -113,6 +154,56 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
       setIsDeleting(false)
       setDeleteDialogOpen(false)
       setSaleToDelete(null)
+    }
+  }
+
+  // Date filter handlers with modification tracking
+  const handleDateFromChange = (value: string) => {
+    setDateFromFilter(value)
+    setDateFiltersModified(true)
+  }
+
+  const handleDateToChange = (value: string) => {
+    setDateToFilter(value)
+    setDateFiltersModified(true)
+  }
+
+  const handleClearDates = () => {
+    // Reset to default current month range
+    const today = getCurrentISTDate()
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+    setDateFromFilter(formatDateForDatabase(firstDay))
+    setDateToFilter(formatDateForDatabase(today))
+    setDateFiltersModified(false) // Back to system defaults
+  }
+
+  const handlePrint = () => {
+    try {
+      // Build query parameters from current filters
+      const params = new URLSearchParams()
+      
+      if (searchQuery) params.set('search', searchQuery)
+      if (saleTypeFilter !== 'all') params.set('sale_type', saleTypeFilter)
+      if (paymentStatusFilter !== 'all') params.set('payment_status', paymentStatusFilter)
+      
+      // Only add date parameters if user explicitly modified them
+      if (dateFiltersModified) {
+        if (dateFromFilter) params.set('date_from', dateFromFilter)
+        if (dateToFilter) params.set('date_to', dateToFilter)
+      }
+      
+      // Add sorting parameters
+      if (sortConfig.key) params.set('sort_by', sortConfig.key)
+      if (sortConfig.direction) params.set('sort_order', sortConfig.direction)
+      
+      // Open print page in new window
+      const printUrl = `/api/print/sales-history?${params.toString()}`
+      window.open(printUrl, '_blank')
+      
+      toast.success('Print report generated successfully')
+    } catch (error) {
+      console.error('Error generating print report:', error)
+      toast.error('Failed to generate print report')
     }
   }
 
@@ -195,6 +286,10 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
               className="pl-10"
             />
           </div>
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             Export
@@ -210,6 +305,7 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
               <SelectItem value="Credit">Credit</SelectItem>
+              <SelectItem value="QR">QR</SelectItem>
             </SelectContent>
           </Select>
 
@@ -224,6 +320,36 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
               <SelectItem value="Billed">Billed</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Date Range Filters */}
+          <div className="flex gap-2 items-center">
+            <Input
+              type="date"
+              placeholder="From Date"
+              value={dateFromFilter}
+              onChange={(e) => handleDateFromChange(e.target.value)}
+              className="w-[150px]"
+            />
+            <span className="text-muted-foreground text-sm">to</span>
+            <Input
+              type="date"
+              placeholder="To Date"
+              value={dateToFilter}
+              onChange={(e) => handleDateToChange(e.target.value)}
+              className="w-[150px]"
+            />
+          </div>
+
+          {/* Reset Date Filter Button */}
+          {dateFiltersModified && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearDates}
+            >
+              Reset to Current Month
+            </Button>
+          )}
 
           <div className="text-sm text-muted-foreground">
             Showing {sortedSales.length} of {sales.length} sales
