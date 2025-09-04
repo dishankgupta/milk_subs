@@ -69,7 +69,10 @@ Complete Supabase database with 16 tables:
 **Functions:**
 - `calculate_customer_outstanding()` - **ENHANCED** - Function to calculate outstanding using immutable opening balance logic
 - `update_invoice_status()` - Function to automatically update invoice status based on payments
+- `update_invoice_status_with_sales_completion()` - **NEW** - Enhanced version with automatic sales completion (Sep 4)
 - `getEffectiveOpeningBalance()` - **NEW** - Function to calculate remaining opening balance after payments
+- `process_invoice_payment_atomic()` - **NEW** - Atomic function for invoice payment with sales completion (Sep 4)
+- `delete_invoice_and_revert_sales()` - **NEW** - Atomic function for safe invoice deletion with sales reversion (Sep 4)
 
 **Views:**
 - `customer_outstanding_summary` - **UPDATED** - Performance view with corrected invoice status filtering ('sent' included)
@@ -230,6 +233,7 @@ Complete Supabase database with 16 tables:
 - **QR Sales Implementation**: New payment method tracking identical to Cash but separate reporting (Aug 29)
 - **Sales History Enhancement**: Professional reporting with advanced filtering and print integration (Sep 3)
 - **Filter-Responsive Dashboards**: Dynamic statistics with print system integration (Sep 1)
+- **Credit Sales Status Completion**: ⭐ **NEW** - Automated status flow from 'Billed' to 'Completed' when invoices are paid (Sep 4)
 
 ## Development Workflow
 
@@ -238,12 +242,12 @@ Complete Supabase database with 16 tables:
    - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
    - `/src/lib/actions/orders.ts` - Order generation and management operations
    - `/src/lib/actions/modifications.ts` - Modification CRUD operations
-   - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and unapplied payment management
+   - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and sales completion integration
    - `/src/lib/actions/deliveries.ts` - **RESTRUCTURED** - Individual and bulk delivery confirmation with additional items support (684 lines rewritten)
    - `/src/lib/actions/reports.ts` - Production and delivery report generation
    - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations
-   - `/src/lib/actions/invoices.ts` - Invoice generation, bulk processing, and line item management
-   - `/src/lib/actions/outstanding.ts` - Outstanding calculations, invoice-based tracking, and payment allocation
+   - `/src/lib/actions/invoices.ts` - **ENHANCED** - Invoice generation with automatic sales completion and safe deletion (Sep 4)
+   - `/src/lib/actions/outstanding.ts` - Outstanding calculations with enhanced payment allocation and sales completion
 2. **Validation**: Zod schemas in `/src/lib/validations.ts` (includes sales and invoice schemas)
 3. **Types**: TypeScript interfaces in `/src/lib/types.ts` (extended for sales system)
 4. **Utilities**: Helper functions for business logic
@@ -381,10 +385,48 @@ export default async function Page({ params }) {
 ### Core Architecture Documentation
 - **DELIVERIES-RESTRUCTURE-PLAN.md**: Complete 5-phase deliveries table architectural restructure implementation plan with database schema changes, performance improvements, and migration procedures
 - **deliveries-new-ui-plan.md**: Comprehensive deliveries UI enhancement plan including Phase 1-4 completion reports and critical architecture revision decisions (BulkAdditionalItemsManager removal and radio button interface implementation)
+- **sales_status_plan.md**: ⭐ **NEW** - Complete credit sales status completion implementation plan with automated 'Billed' to 'Completed' transitions (Sep 4)
 
 ### Key Documentation Status
 - ✅ **Database Migration**: Complete deliveries table restructure with 17 fields, nullable foreign keys
 - ✅ **Performance Optimization**: 32% query performance improvement with self-contained data model  
 - ✅ **UI Enhancement**: Additional items support through individual delivery pages
 - ✅ **Bulk Form Optimization**: React infinite loop resolution and radio button interface implementation
+- ✅ **Credit Sales Automation**: Complete 4-phase implementation with database RPC functions and enhanced server actions
 - ✅ **Production Ready**: All phases tested and validated with rollback procedures documented
+
+## Credit Sales Status Completion System (Sep 4, 2025)
+
+### Implementation Overview
+**Problem Solved**: Credit sales remained in 'Billed' status indefinitely, even after invoice payment, causing data inconsistencies and manual overhead.
+
+**Solution Architecture**: Hybrid server action + database RPC approach for atomic operations with comprehensive error handling.
+
+### Key Components Implemented
+1. **Database RPC Functions**:
+   - `process_invoice_payment_atomic()` - Atomic invoice payment with sales completion
+   - `delete_invoice_and_revert_sales()` - Safe invoice deletion with sales reversion
+
+2. **Enhanced Server Actions**:
+   - `markInvoiceAsPaid()` in `invoices.ts` - Enhanced payment processing with automatic sales completion
+   - `deleteInvoiceWithSalesRevert()` in `invoices.ts` - Safe deletion with sales reversion
+   - `bulkDeleteInvoicesWithSalesRevert()` in `invoices.ts` - Bulk operations support
+
+3. **Integrated Payment Flow**:
+   - `payments.ts` enhanced with `update_invoice_status_with_sales_completion()` integration
+   - `outstanding.ts` updated for enhanced payment allocation workflows
+   - All UI components updated with comprehensive user feedback
+
+### Business Impact
+- ✅ **Automated Status Flow**: Credit sales automatically transition 'Billed' → 'Completed' when invoices are paid
+- ✅ **Safe Deletion**: Sales revert to 'Pending' when invoices are deleted, preventing orphaned records
+- ✅ **Data Integrity**: Atomic transactions ensure consistency between invoices and sales
+- ✅ **User Experience**: Enhanced UI feedback with sales count details and comprehensive error handling
+- ✅ **Production Ready**: All phases complete with comprehensive testing and validation
+
+### Technical Benefits
+- **Atomic Operations**: Database RPC functions ensure transaction safety
+- **Enhanced Error Handling**: Graceful fallback mechanisms with detailed logging
+- **UI Integration**: Immediate updates with `revalidatePath()` for responsive user experience
+- **TypeScript Safety**: Full type checking with proper error propagation
+- **Scalable Architecture**: Easily extensible for future business rule enhancements

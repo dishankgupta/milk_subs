@@ -1216,6 +1216,158 @@ async function createSalesLineItems(
   return lineItems || []
 }
 
+/**
+ * Enhanced function to mark invoice as paid with automatic sales completion
+ * Replaces manual invoice status updates with atomic transaction processing
+ */
+export async function markInvoiceAsPaid(
+  invoiceId: string, 
+  options: { revalidate?: boolean } = {}
+) {
+  const supabase = await createClient()
+  
+  try {
+    // Use atomic database function for consistency
+    const { data, error } = await supabase.rpc('process_invoice_payment_atomic', {
+      p_invoice_id: invoiceId,
+      p_new_status: 'Paid'
+    })
+    
+    if (error) {
+      console.error('Invoice payment processing failed:', error)
+      throw new Error(`Failed to mark invoice as paid: ${error.message}`)
+    }
+    
+    const result = data as {
+      success: boolean
+      invoice_id: string
+      new_status: string
+      updated_sales_count: number
+      timestamp: string
+    }
+    
+    console.log(`Invoice ${invoiceId} marked as paid. Updated ${result.updated_sales_count} sales to completed.`)
+    
+    // Trigger UI updates if requested (default: true)
+    if (options.revalidate !== false) {
+      const { revalidatePath } = await import("next/cache")
+      revalidatePath('/dashboard/invoices')
+      revalidatePath('/dashboard/sales')
+      revalidatePath('/dashboard/outstanding')
+      revalidatePath(`/dashboard/invoices/${invoiceId}`)
+    }
+    
+    return {
+      success: true,
+      updatedSalesCount: result.updated_sales_count,
+      timestamp: result.timestamp
+    }
+    
+  } catch (error) {
+    console.error('Invoice payment processing error:', error)
+    throw error
+  }
+}
+
+/**
+ * Enhanced function to delete invoice with automatic sales reversion
+ * Ensures sales don't remain orphaned in 'Billed' status
+ * Replaces the existing deleteInvoice function for better safety
+ */
+export async function deleteInvoiceWithSalesRevert(
+  invoiceId: string,
+  options: { revalidate?: boolean } = {}
+) {
+  const supabase = await createClient()
+  
+  try {
+    // Use atomic database function for consistency
+    const { data, error } = await supabase.rpc('delete_invoice_and_revert_sales', {
+      p_invoice_id: invoiceId
+    })
+    
+    if (error) {
+      console.error('Invoice deletion failed:', error)
+      throw new Error(`Failed to delete invoice: ${error.message}`)
+    }
+    
+    const result = data as {
+      success: boolean
+      deleted_invoice_id: string
+      reverted_sales_count: number
+      timestamp: string
+    }
+    
+    console.log(`Invoice ${invoiceId} deleted. Reverted ${result.reverted_sales_count} sales to pending.`)
+    
+    // Trigger UI updates if requested (default: true)
+    if (options.revalidate !== false) {
+      const { revalidatePath } = await import("next/cache")
+      revalidatePath('/dashboard/invoices')
+      revalidatePath('/dashboard/sales')
+      revalidatePath('/dashboard/outstanding')
+    }
+    
+    return {
+      success: true,
+      revertedSalesCount: result.reverted_sales_count,
+      timestamp: result.timestamp
+    }
+    
+  } catch (error) {
+    console.error('Invoice deletion error:', error)
+    throw error
+  }
+}
+
+/**
+ * Enhanced bulk delete invoices with automatic sales reversion
+ * Uses the enhanced deleteInvoiceWithSalesRevert for each invoice
+ */
+export async function bulkDeleteInvoicesWithSalesRevert(invoiceIds: string[]): Promise<{
+  successful: number
+  failed: number
+  errors: string[]
+  messages: string[]
+  totalRevertedSales: number
+}> {
+  const results = {
+    successful: 0,
+    failed: 0,
+    errors: [] as string[],
+    messages: [] as string[],
+    totalRevertedSales: 0
+  }
+
+  for (const invoiceId of invoiceIds) {
+    try {
+      const result = await deleteInvoiceWithSalesRevert(invoiceId, { revalidate: false })
+      if (result.success) {
+        results.successful++
+        results.totalRevertedSales += result.revertedSalesCount
+        results.messages.push(`Invoice ${invoiceId.substring(0, 8)}... deleted successfully${result.revertedSalesCount > 0 ? ` (${result.revertedSalesCount} sales reverted)` : ''}`)
+      } else {
+        results.failed++
+        results.errors.push(`Invoice ${invoiceId.substring(0, 8)}... failed to delete`)
+      }
+    } catch (error) {
+      results.failed++
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
+      results.errors.push(`Invoice ${invoiceId.substring(0, 8)}...: ${errorMsg}`)
+    }
+  }
+
+  // Trigger UI updates once at the end for better performance
+  if (results.successful > 0) {
+    const { revalidatePath } = await import("next/cache")
+    revalidatePath('/dashboard/invoices')
+    revalidatePath('/dashboard/sales')
+    revalidatePath('/dashboard/outstanding')
+  }
+
+  return results
+}
+
 export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {
   return `
 <!DOCTYPE html>

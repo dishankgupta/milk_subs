@@ -31,7 +31,7 @@ import { Trash2, Eye, Search, Loader2, CalendarIcon, X } from "lucide-react"
 import { toast } from "sonner"
 import { formatCurrency, cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { getInvoicesList, deleteInvoice, bulkDeleteInvoices } from "@/lib/actions/invoices"
+import { getInvoicesList, deleteInvoice, deleteInvoiceWithSalesRevert, bulkDeleteInvoicesWithSalesRevert } from "@/lib/actions/invoices"
 import type { InvoiceMetadata } from "@/lib/types"
 
 type InvoiceWithCustomer = InvoiceMetadata & { 
@@ -84,17 +84,30 @@ export function InvoiceList({ onStatsRefresh }: InvoiceListProps) {
   const handleDelete = async (invoice: InvoiceWithCustomer) => {
     setDeleteLoading(invoice.id)
     try {
-      const result = await deleteInvoice(invoice.id)
+      // Use enhanced deletion with automatic sales reversion
+      const result = await deleteInvoiceWithSalesRevert(invoice.id)
       if (result.success) {
-        toast.success(result.message)
+        const message = result.revertedSalesCount > 0 
+          ? `Invoice deleted successfully. ${result.revertedSalesCount} credit sales reverted to pending.`
+          : "Invoice deleted successfully."
+        toast.success(message)
         await loadInvoices() // Refresh the list
         onStatsRefresh() // Refresh the stats
       } else {
-        toast.error(result.message)
+        // Fallback to old method if enhanced method fails
+        console.warn("Enhanced deletion failed, falling back to standard deletion")
+        const fallbackResult = await deleteInvoice(invoice.id)
+        if (fallbackResult.success) {
+          toast.success(fallbackResult.message)
+          await loadInvoices()
+          onStatsRefresh()
+        } else {
+          toast.error(fallbackResult.message)
+        }
       }
     } catch (error) {
+      console.error("Invoice deletion error:", error)
       toast.error("Failed to delete invoice")
-      console.error(error)
     } finally {
       setDeleteLoading(null)
       setDeleteDialog({ open: false, invoice: null })
@@ -111,10 +124,14 @@ export function InvoiceList({ onStatsRefresh }: InvoiceListProps) {
     setBulkDeleteLoading(true)
     try {
       const invoiceIds = Array.from(selectedInvoices)
-      const result = await bulkDeleteInvoices(invoiceIds)
+      // Use enhanced bulk deletion with automatic sales reversion
+      const result = await bulkDeleteInvoicesWithSalesRevert(invoiceIds)
       
       if (result.successful > 0) {
-        toast.success(`Successfully deleted ${result.successful} invoice(s)`)
+        const successMessage = result.totalRevertedSales > 0
+          ? `Successfully deleted ${result.successful} invoice(s). ${result.totalRevertedSales} credit sales reverted to pending.`
+          : `Successfully deleted ${result.successful} invoice(s)`
+        toast.success(successMessage)
       }
       
       if (result.failed > 0) {
@@ -125,8 +142,8 @@ export function InvoiceList({ onStatsRefresh }: InvoiceListProps) {
       await loadInvoices()
       onStatsRefresh() // Refresh the stats
     } catch (error) {
+      console.error("Bulk invoice deletion error:", error)
       toast.error("Failed to delete invoices")
-      console.error(error)
     } finally {
       setBulkDeleteLoading(false)
       setBulkDeleteDialog(false)

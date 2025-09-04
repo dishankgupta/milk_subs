@@ -296,11 +296,21 @@ export async function deletePayment(id: string) {
       throw new Error(`Failed to remove payment allocations: ${allocationError.message}`)
     }
     
-    // Update invoice statuses for affected invoices
+    // Update invoice statuses for affected invoices with enhanced sales completion
     for (const allocation of allocatedInvoices || []) {
-      await supabase.rpc('update_invoice_status', {
-        invoice_uuid: allocation.invoice_id
+      const { data: result, error: statusError } = await supabase.rpc('update_invoice_status_with_sales_completion', {
+        p_invoice_id: allocation.invoice_id
       })
+      
+      if (statusError) {
+        console.error('Enhanced invoice status update failed:', statusError)
+        // Fallback to standard update
+        await supabase.rpc('update_invoice_status', {
+          invoice_uuid: allocation.invoice_id
+        })
+      } else if (result?.updated_sales_count > 0) {
+        console.log(`Invoice ${allocation.invoice_id}: ${result.updated_sales_count} credit sales completed`)
+      }
     }
   }
 
