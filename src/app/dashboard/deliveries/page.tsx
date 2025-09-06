@@ -16,7 +16,6 @@ interface FilterState {
   searchQuery: string
   dateFilter: string
   routeFilter: string
-  deliveryTypeFilter?: string
 }
 
 interface SortState {
@@ -37,14 +36,35 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   const quantityVariance = totalActualQuantity - totalPlannedQuantity
   
-  // Additional items specific stats
-  const additionalItemsQuantity = additional.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
-  const additionalItemsValue = additional.reduce((sum, d) => 
-    sum + ((d.actual_quantity || 0) * d.unit_price), 0
-  )
-  const subscriptionValue = subscription.reduce((sum, d) => 
-    sum + ((d.actual_quantity || 0) * d.unit_price), 0
-  )
+  // Product-wise breakdown for orders
+  const productWiseOrders = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName]++
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for planned quantities
+  const productWisePlanned = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.planned_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for actual quantities
+  const productWiseActual = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.actual_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
 
   return {
     totalOrders,
@@ -56,10 +76,9 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
     quantityVariance,
     subscriptionCount: counts.subscription,
     additionalCount: counts.additional,
-    additionalItemsQuantity,
-    additionalItemsValue,
-    subscriptionValue,
-    additionalPercentage: totalOrders > 0 ? Math.round((counts.additional / totalOrders) * 100) : 0
+    productWiseOrders,
+    productWisePlanned,
+    productWiseActual
   }
 }
 
@@ -70,8 +89,7 @@ function DeliveriesContent() {
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
     dateFilter: "all",
-    routeFilter: "all",
-    deliveryTypeFilter: "all"
+    routeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
     key: 'daily_order.order_date',
@@ -79,14 +97,14 @@ function DeliveriesContent() {
   })
   const [loading, setLoading] = useState(true)
 
-  const stats = calculateDeliveryStats(filteredDeliveries)
+  const stats = calculateDeliveryStats(filteredDeliveries.length > 0 ? filteredDeliveries : [])
 
   const loadData = async () => {
     try {
       setLoading(true)
       const deliveriesData = await getDeliveries()
       setDeliveries(deliveriesData)
-      setFilteredDeliveries(deliveriesData) // Initialize filtered data
+      // Don't initialize filteredDeliveries here - let the filter logic handle it
     } catch (error) {
       console.error("Failed to load deliveries data:", error)
     } finally {
@@ -124,7 +142,7 @@ function DeliveriesContent() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="pt-6">
@@ -142,7 +160,7 @@ function DeliveriesContent() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -150,22 +168,14 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalOrders}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.subscriptionCount} subscription, {stats.additionalCount} additional
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Additional Items</CardTitle>
-            <Package2 className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.additionalCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.additionalPercentage}% of total deliveries
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>{stats.subscriptionCount} subscription, {stats.additionalCount} additional</p>
+              {Object.entries(stats.productWiseOrders).map(([product, count]) => (
+                <p key={product} className="text-xs">
+                  <span className="font-medium">{product}:</span> {count}
+                </p>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -189,9 +199,14 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalPlannedQuantity}L</div>
-            <p className="text-xs text-muted-foreground">
-              Total planned volume
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Total planned volume</p>
+              {Object.entries(stats.productWisePlanned).map(([product, quantity]) => (
+                <p key={product} className="text-xs">
+                  <span className="font-medium">{product}:</span> {quantity}L
+                </p>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -206,9 +221,18 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalActualQuantity}L</div>
-            <p className={`text-xs ${stats.quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {stats.quantityVariance >= 0 ? "+" : ""}{stats.quantityVariance}L variance
-            </p>
+            <div className="text-xs space-y-1">
+              <p className={`${stats.quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {stats.quantityVariance >= 0 ? "+" : ""}{stats.quantityVariance}L variance
+              </p>
+              <div className="text-muted-foreground">
+                {Object.entries(stats.productWiseActual).map(([product, quantity]) => (
+                  <p key={product} className="text-xs">
+                    <span className="font-medium">{product}:</span> {quantity}L
+                  </p>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { categorizeDeliveries, type DeliveryType } from "@/components/deliveries/delivery-type-toggle"
 
 // Using DeliveryExtended which contains all necessary fields directly
 
@@ -32,7 +31,6 @@ interface FilterState {
   searchQuery: string
   dateFilter: string
   routeFilter: string
-  deliveryTypeFilter: DeliveryType
 }
 
 interface SortState {
@@ -50,39 +48,20 @@ interface DeliveriesTableProps {
 export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChange, onSortChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [dateFilter, setDateFilter] = useState<string>("all")
+  const [dateFilter, setDateFilter] = useState<string>("")
   const [routeFilter, setRouteFilter] = useState<string>("all")
-  const [deliveryTypeFilter, setDeliveryTypeFilter] = useState<DeliveryType>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  // Memoize the delivery type filter change handler
-  const handleDeliveryTypeChange = useCallback((type: DeliveryType) => {
-    setDeliveryTypeFilter(type)
-  }, [])
-
-  // Categorize deliveries for type filtering - memoize to prevent unnecessary recalculations
-  const { all: allDeliveries, subscription: subscriptionDeliveries, additional: additionalDeliveries, counts } = useMemo(
-    () => categorizeDeliveries(initialDeliveries),
-    [initialDeliveries]
-  )
-  
-  // Get deliveries based on type filter
-  const typeFilteredDeliveries = deliveryTypeFilter === 'subscription' 
-    ? subscriptionDeliveries
-    : deliveryTypeFilter === 'additional'
-    ? additionalDeliveries
-    : allDeliveries
-
   // Filter deliveries based on search and filters (client-side only)
-  const filteredDeliveries = typeFilteredDeliveries.filter(delivery => {
+  const filteredDeliveries = initialDeliveries.filter(delivery => {
     const matchesSearch = !searchQuery || 
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
     
-    const matchesDate = dateFilter === "all" || 
+    const matchesDate = dateFilter === "all" || dateFilter === "" || 
       delivery.order_date === dateFilter
     
     const matchesRoute = routeFilter === "all" || 
@@ -108,18 +87,33 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     }
   )
 
-  // Notify parent component when filters change (only on filter state changes, not filtered data)
+  // Handle search functionality (client-side filtering)
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  // Get unique dates and routes for filters
+  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
+  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
+
+  // Set default date filter to most recent date on first load
+  useEffect(() => {
+    if (uniqueDates.length > 0 && dateFilter === "") {
+      setDateFilter(uniqueDates[0]) // Most recent date
+    }
+  }, [uniqueDates, dateFilter])
+
+  // Notify parent component when filters change
   useEffect(() => {
     if (onFiltersChange) {
       const currentFilters = {
         searchQuery,
         dateFilter,
-        routeFilter,
-        deliveryTypeFilter
+        routeFilter
       }
       onFiltersChange(filteredDeliveries, currentFilters)
     }
-  }, [searchQuery, dateFilter, routeFilter, deliveryTypeFilter, onFiltersChange])
+  }, [searchQuery, dateFilter, routeFilter]) // Remove onFiltersChange from deps
 
   // Notify parent component when sort changes
   useEffect(() => {
@@ -129,16 +123,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         direction: sortConfig.direction
       })
     }
-  }, [sortConfig, onSortChange])
-
-  // Handle search functionality (client-side filtering)
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
-  }
-
-  // Get unique dates and routes for filters
-  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
-  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
+  }, [sortConfig]) // Remove onSortChange from deps
 
   async function handleDelete(id: string, customerName: string) {
     if (!confirm(`Are you sure you want to delete the delivery for ${customerName}?`)) {
@@ -215,19 +200,6 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       {/* Search and Filters */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
-          {/* Delivery Type Filter */}
-          <div className="w-full sm:w-48">
-            <Select value={deliveryTypeFilter} onValueChange={handleDeliveryTypeChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Deliveries ({counts.all})</SelectItem>
-                <SelectItem value="subscription">Subscription ({counts.subscription})</SelectItem>
-                <SelectItem value="additional">Additional Items ({counts.additional})</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input

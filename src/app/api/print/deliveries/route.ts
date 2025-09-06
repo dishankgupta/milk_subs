@@ -14,6 +14,36 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   const quantityVariance = totalActualQuantity - totalPlannedQuantity
 
+  // Product-wise breakdown for orders
+  const productWiseOrders = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName]++
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for planned quantities
+  const productWisePlanned = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.planned_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for actual quantities
+  const productWiseActual = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.actual_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
+
   return {
     totalOrders,
     deliveredOrders,
@@ -21,7 +51,10 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
     totalPlannedQuantity,
     totalActualQuantity,
     completionRate,
-    quantityVariance
+    quantityVariance,
+    productWiseOrders,
+    productWisePlanned,
+    productWiseActual
   }
 }
 
@@ -353,19 +386,40 @@ export async function GET(request: NextRequest) {
     <div class="stat-card">
       <h3>Total Orders</h3>
       <div class="value">${stats.totalOrders}</div>
+      <div style="font-size: 8px; color: #666; margin-top: 4px;">
+        ${Object.entries(stats.productWiseOrders).map(([product, count]) => 
+          `<div>${product}: ${count}</div>`
+        ).join('')}
+      </div>
     </div>
     <div class="stat-card">
       <h3>Completion Rate</h3>
       <div class="percentage ${stats.completionRate >= 95 ? 'good' : stats.completionRate >= 85 ? 'warning' : 'danger'}">${stats.completionRate}%</div>
+      <div style="font-size: 8px; color: #666; margin-top: 2px;">${stats.deliveredOrders} of ${stats.totalOrders} delivered</div>
     </div>
     <div class="stat-card">
       <h3>Planned Quantity</h3>
       <div class="value">${stats.totalPlannedQuantity}L</div>
+      <div style="font-size: 8px; color: #666; margin-top: 4px;">
+        ${Object.entries(stats.productWisePlanned).map(([product, quantity]) => 
+          `<div>${product}: ${quantity}L</div>`
+        ).join('')}
+      </div>
     </div>
     <div class="stat-card">
       <h3>Actual Delivered</h3>
       <div class="value ${stats.quantityVariance > 0 ? 'variance-positive' : stats.quantityVariance < 0 ? 'variance-negative' : 'variance-neutral'}">
         ${stats.totalActualQuantity}L
+      </div>
+      <div style="font-size: 8px; margin-top: 2px;">
+        <div class="${stats.quantityVariance >= 0 ? 'variance-positive' : 'variance-negative'}">
+          ${stats.quantityVariance >= 0 ? '+' : ''}${stats.quantityVariance}L variance
+        </div>
+        <div style="color: #666; margin-top: 4px;">
+          ${Object.entries(stats.productWiseActual).map(([product, quantity]) => 
+            `<div>${product}: ${quantity}L</div>`
+          ).join('')}
+        </div>
       </div>
     </div>
   </div>
