@@ -95,7 +95,7 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
     }
     
     .logo-img {
-      width: 120px; /* Increased by 1.5x (80px * 1.5) */
+      width: 200px; /* Increased by 2.5x (80px * 2.5) */
       height: auto;
     }
     

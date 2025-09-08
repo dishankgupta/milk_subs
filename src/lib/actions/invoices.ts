@@ -1531,7 +1531,6 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
       text-align: center;
       font-weight: 800; /* Extra bold for headers */
       font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
-      text-transform: uppercase;
       border: 1px solid #025e24;
     }
     
@@ -1726,10 +1725,10 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
       <table class="items-table">
         <thead>
           <tr>
-            <th>ITEM DESCRIPTION</th>
-            <th>QTY</th>
-            <th>PRICE<br><small>INCL. GST</small></th>
-            <th>TOTAL</th>
+            <th>Item Description</th>
+            <th>Quantity</th>
+            <th>Price<br><small>incl. GST</small></th>
+            <th>Totals</th>
           </tr>
         </thead>
         <tbody>

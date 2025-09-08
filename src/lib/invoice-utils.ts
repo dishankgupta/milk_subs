@@ -316,7 +316,7 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
       day: 'numeric' 
     }).format(new Date(day.date)),
     items: day.items.map(item => 
-      `${item.productName} - ${item.quantity}${item.unitOfMeasure}`
+      `${item.productName} - ${item.quantity} ${item.unitOfMeasure}`
     )
   }))
 
