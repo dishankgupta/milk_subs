@@ -82,7 +82,7 @@ manualSales?.forEach(sale => {
 
 #### Layout Architecture:
 ```
-Header (Logo + Invoice Title (Center) + Address)
+Header (Invoice Title + Logo (Center) + Address)
 │
 ├── Main Content (Flex Layout)
 │   ├── Left Section (35%)
@@ -188,11 +188,12 @@ public/
 
 ### Layout Measurements:
 - **Logo**: 120px width (1.5x original), auto height, no text overlay
-- **QR Code**: 140px max-width, maintains aspect ratio
+- **QR Code**: 105px max-width (0.75x reduced size), maintains aspect ratio
+- **Company Address**: 11px fixed font size for consistent readability
 - **Table Padding**: 8-12px cells, 6-15px totals section
 - **Grid Gaps**: 15px daily summary columns, 8px entry spacing
 - **Footer Icons**: 16px × 16px, 5px gap from text
-- **Header Layout**: Single row with Logo (left) + Invoice Title (center) + Address (right)
+- **Header Layout**: Single row with Invoice Title (left) + Logo (center) + Address (right)
 
 ## 🚀 Testing & Validation Strategy
 
@@ -368,9 +369,38 @@ const manualSalesItemsMap = new Map<string, InvoiceManualSaleItem>()
 
 **Result**: Invoice now shows clean, professional line items with proper aggregation while maintaining detailed daily breakdown in summary section.
 
+### Minor Template Refinements (September 8, 2025 - Final Updates)
+**Changes Applied**: Post-implementation visual adjustments based on user feedback
+
+**Header Layout Optimization**:
+- Restructured header to: Invoice Title (left) + Logo (center) + Address (right)
+- Applied proper flex centering with equal 1/3 space distribution for perfect logo centering
+- Maintained 120px logo size for balanced proportions
+
+**Invoice Meta Enhancement**:
+- Added "Invoice Period" field showing date range between Invoice No and Invoice Date
+- Changed "Date:" label to "Invoice Date:" for clarity
+- Format: Invoice No → Invoice Period → Invoice Date
+
+**Visual Adjustments**:
+- Company address font size set to fixed 11px for consistent readability
+- QR code reduced to 105px (0.75x size) for better space utilization
+- SUB TOTAL calculation corrected to exclude GST (amount calculation only, no label change)
+
+**CSS Implementation**:
+```css
+.company-address { font-size: 11px; }
+.qr-code-img { max-width: 105px; }
+.logo-section { justify-content: center; flex: 1; }
+```
+
+**Business Logic Fix**:
+- SUB TOTAL now correctly shows: `(deliveryAmount + manualSalesAmount - totalGstAmount)`
+- Maintains clean invoice flow: SUB TOTAL → G.S.T. → GRAND TOTAL
+
 ---
 
 **Implementation Completed**: September 8, 2025  
-**Critical Fix Applied**: September 8, 2025  
+**Final Refinements Applied**: September 8, 2025  
 **Ready for Production Testing**: ✅  
 **Next Review**: Post-deployment user feedback analysis

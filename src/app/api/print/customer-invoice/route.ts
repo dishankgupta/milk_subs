@@ -83,7 +83,6 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
     .header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       margin-bottom: 20px;
       padding: 15px 0;
       background: white;
@@ -92,25 +91,28 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
     .logo-section {
       display: flex;
       align-items: center;
+      justify-content: center;
+      flex: 1; /* Equal space for centering */
     }
     
     .logo-img {
-      width: 200px; /* Increased by 2.5x (80px * 2.5) */
+      width: 120px; /* Reduced back to 120px */
       height: auto;
     }
     
     .invoice-title {
-      text-align: center;
+      text-align: left;
       font-size: ${fontSizes.titleSize}px;
       font-weight: 800; /* Extra bold for title */
       color: #025e24;
       letter-spacing: 2px;
-      flex: 1; /* Take remaining space in the center */
+      flex: 1; /* Equal space */
     }
     
     .company-address {
       text-align: right;
-      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
+      flex: 1; /* Equal space */
+      font-size: 11px;
       font-weight: 400; /* Regular weight */
       color: #666;
       line-height: 1.3;
@@ -238,7 +240,7 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
     }
     
     .qr-code-img {
-      max-width: 140px;
+      max-width: 105px; /* 140px * 0.75 = 105px */
       height: auto;
       border: 1px solid #ddd;
     }
@@ -331,12 +333,12 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
   </style>
 </head>
 <body>
-  <!-- Header with Logo, Invoice Title, and Company Address -->
+  <!-- Header with Invoice Title, Logo (Center), and Company Address -->
   <div class="header">
+    <h1 class="invoice-title">INVOICE</h1>
     <div class="logo-section">
       ${assets.logo ? `<img src="${assets.logo}" alt="PureDairy Logo" class="logo-img">` : ''}
     </div>
-    <h1 class="invoice-title">INVOICE</h1>
     <div class="company-address">
       Plot No. G-2/8, MIDC,<br>
       Jalgaon - 3, MS, India.
@@ -355,7 +357,8 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
       
       <div class="invoice-meta">
         <div class="invoice-number">Invoice No: ${invoiceData.invoiceNumber}</div>
-        <div>Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
+        <div>Invoice Period: ${format(new Date(invoiceData.periodStart), 'dd/MM/yyyy')} - ${format(new Date(invoiceData.periodEnd), 'dd/MM/yyyy')}</div>
+        <div>Invoice Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
       </div>
 
       <!-- QR Code positioned above daily summary -->
@@ -402,7 +405,7 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
         <table class="totals-table">
           <tr>
             <td class="label">SUB TOTAL</td>
-            <td class="amount">₹ ${(invoiceData.totals.deliveryAmount + invoiceData.totals.manualSalesAmount).toFixed(2)}</td>
+            <td class="amount">₹ ${(invoiceData.totals.deliveryAmount + invoiceData.totals.manualSalesAmount - invoiceData.totals.totalGstAmount).toFixed(2)}</td>
           </tr>
           ${invoiceData.totals.totalGstAmount > 0 ? `
           <tr>

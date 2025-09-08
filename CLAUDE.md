@@ -235,6 +235,7 @@ Complete Supabase database with 16 tables:
 - **Filter-Responsive Dashboards**: Dynamic statistics with print system integration (Sep 1)
 - **Credit Sales Status Completion**: ⭐ **NEW** - Automated status flow from 'Billed' to 'Completed' when invoices are paid (Sep 4)
 - **Invoice Template Enhancement**: ⭐ **NEW** - Complete visual overhaul matching PureDairy branding with professional layout (Sep 8)
+- **Dual Template Architecture**: ⭐ **IMPORTANT** - Invoice generation exists in two separate locations requiring synchronized updates
 
 ## Development Workflow
 
@@ -433,3 +434,14 @@ export default async function Page({ params }) {
 - **UI Integration**: Immediate updates with `revalidatePath()` for responsive user experience
 - **TypeScript Safety**: Full type checking with proper error propagation
 - **Scalable Architecture**: Easily extensible for future business rule enhancements
+
+## Invoice Template Dual Architecture
+
+⚠️ **CRITICAL**: Invoice template changes must be made in **TWO LOCATIONS**:
+
+1. **Main System**: `/src/lib/actions/invoices.ts` (lines 1371-1814) - Bulk generation
+2. **Print API**: `/src/app/api/print/customer-invoice/route.ts` (lines 39-468) - Direct printing
+
+**Why**: Historical evolution created separate paths for bulk processing vs immediate rendering.
+
+**Rule**: All CSS, HTML, font, and layout changes must be synchronized in both files to maintain consistency.
