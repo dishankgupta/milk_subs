@@ -1,8 +1,13 @@
 import { NextRequest } from 'next/server'
 import { format } from 'date-fns'
 import { prepareInvoiceData } from '@/lib/actions/invoices'
-import { formatCurrency } from '@/lib/utils'
 import type { InvoiceData } from '@/lib/actions/invoices'
+import { 
+  getInvoiceAssets, 
+  calculateResponsiveFontSizes, 
+  getOpenSansFontCSS,
+  formatDailySummaryForColumns 
+} from '@/lib/invoice-utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,8 +15,6 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customer_id')
     const periodStart = searchParams.get('period_start')
     const periodEnd = searchParams.get('period_end')
-    const invoiceNumber = searchParams.get('invoice_number')
-
     if (!customerId || !periodStart || !periodEnd) {
       return new Response('Missing required parameters', { status: 400 })
     }
@@ -34,6 +37,20 @@ export async function GET(request: NextRequest) {
 }
 
 function generateInvoiceHTML(invoiceData: InvoiceData): string {
+  // Get all assets converted to base64
+  const assets = getInvoiceAssets()
+  
+  // Calculate responsive font sizes based on content volume
+  const totalLineItems = invoiceData.deliveryItems.length + invoiceData.manualSalesItems.length
+  const fontSizes = calculateResponsiveFontSizes({
+    dailySummaryDays: invoiceData.dailySummary.length,
+    productCount: [...new Set([...invoiceData.deliveryItems, ...invoiceData.manualSalesItems].map(item => item.productName))].length,
+    totalLineItems
+  })
+  
+  // Format daily summary for 4-column layout
+  const dailySummaryColumns = formatDailySummaryForColumns(invoiceData.dailySummary)
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -42,9 +59,11 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${invoiceData.invoiceNumber} - ${invoiceData.customer.billing_name}</title>
   <style>
+    ${getOpenSansFontCSS()}
+    
     @page {
       size: A4;
-      margin: 20mm;
+      margin: 15mm 15mm 15mm 10mm; /* 15mm all sides, 10mm right as per spec */
     }
     
     * {
@@ -54,11 +73,11 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
     }
     
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 12px;
+      font-family: "Open Sans", sans-serif;
+      font-size: ${fontSizes.baseSize}px;
       line-height: 1.4;
       color: #333;
-      background: white;
+      background: #f8f9fa; /* Light off-white background as per spec */
     }
     
     .header {
@@ -66,8 +85,8 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
       align-items: center;
       justify-content: space-between;
       margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 3px solid #2D5F2D;
+      padding: 15px 0;
+      background: white;
     }
     
     .logo-section {
@@ -75,284 +94,246 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
       align-items: center;
     }
     
-    .logo {
-      width: 60px;
-      height: 60px;
-      background: #2D5F2D;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
+    .logo-img {
+      width: 80px;
+      height: auto;
       margin-right: 15px;
     }
     
     .company-name {
-      font-size: 28px;
-      font-weight: bold;
-      color: #2D5F2D;
+      font-size: ${fontSizes.headerSize}px;
+      font-weight: 800; /* Extra bold for headers */
+      color: #025e24; /* Custom green as per spec */
       margin-bottom: 2px;
-    }
-    
-    .company-tagline {
-      font-size: 12px;
-      color: #666;
-      font-style: italic;
     }
     
     .company-address {
       text-align: right;
-      font-size: 11px;
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
+      font-weight: 400; /* Regular weight */
       color: #666;
       line-height: 1.3;
     }
     
     .invoice-title {
       text-align: center;
-      font-size: 36px;
-      font-weight: bold;
-      color: #2D5F2D;
+      font-size: ${fontSizes.titleSize}px;
+      font-weight: 800; /* Extra bold for title */
+      color: #025e24;
       margin: 20px 0;
       letter-spacing: 2px;
     }
     
-    .invoice-details {
+    .main-content {
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 30px;
+      gap: 20px;
+      margin-bottom: 20px;
     }
     
-    .customer-details {
+    .left-section {
       flex: 1;
+      max-width: 35%;
     }
     
     .customer-title {
-      font-size: 16px;
-      font-weight: bold;
-      color: #2D5F2D;
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 800; /* Extra bold for headers */
+      color: black;
       margin-bottom: 8px;
       text-transform: uppercase;
-      letter-spacing: 1px;
     }
     
     .customer-info {
-      background: #f8f9fa;
-      padding: 15px;
-      border-left: 4px solid #2D5F2D;
-      border-radius: 0 8px 8px 0;
+      font-weight: 500; /* Medium weight for content */
+      margin-bottom: 20px;
     }
     
     .customer-name {
-      font-size: 18px;
-      font-weight: bold;
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 500;
       color: #333;
-      margin-bottom: 5px;
-    }
-    
-    .invoice-meta {
-      text-align: right;
-      background: #2D5F2D;
-      color: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin-left: 30px;
-    }
-    
-    .invoice-number {
-      font-size: 20px;
-      font-weight: bold;
       margin-bottom: 8px;
     }
     
-    .qr-code {
-      width: 120px;
-      height: 120px;
-      background: white;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      margin: 15px auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #666;
-      text-align: center;
+    .invoice-meta {
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+    
+    .invoice-number {
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    
+    .right-section {
+      flex: 2;
     }
     
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 30px 0;
-      border: 2px solid #2D5F2D;
-      border-radius: 8px;
-      overflow: hidden;
+      background: #fdfbf9; /* Main table background as per spec */
+      border: 1px solid #025e24;
     }
     
     .items-table th {
-      background: #2D5F2D;
+      background: #025e24; /* Custom green header */
       color: white;
-      padding: 15px 10px;
-      text-align: left;
-      font-weight: bold;
+      padding: 12px 8px;
+      text-align: center;
+      font-weight: 800; /* Extra bold for headers */
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-right: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid #025e24;
+    }
+    
+    .items-table th:first-child {
+      text-align: left;
     }
     
     .items-table th:last-child {
-      border-right: none;
       text-align: right;
     }
     
     .items-table td {
-      padding: 12px 10px;
-      border-bottom: 1px solid #eee;
-      border-right: 1px solid #eee;
+      padding: 8px;
+      border: 1px solid #ddd;
+      font-weight: 500; /* Medium weight for content */
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
     }
     
     .items-table td:last-child {
-      border-right: none;
       text-align: right;
-      font-weight: bold;
-    }
-    
-    .items-table tbody tr:nth-child(even) {
-      background: #f8f9fa;
-    }
-    
-    .items-table tbody tr:hover {
-      background: #e8f5e8;
+      font-weight: 500;
     }
     
     .totals-section {
-      margin: 30px 0;
+      margin: 15px 0;
       display: flex;
       justify-content: flex-end;
     }
     
     .totals-table {
       border-collapse: collapse;
-      min-width: 300px;
+      background: #fdfbf9;
     }
     
     .totals-table td {
-      padding: 10px 20px;
+      padding: 6px 15px;
       border: 1px solid #ddd;
+      font-weight: 500;
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
     }
     
     .totals-table .label {
-      font-weight: bold;
-      background: #f8f9fa;
       text-align: right;
+      font-weight: 500;
     }
     
     .totals-table .amount {
       text-align: right;
-      font-family: 'Courier New', monospace;
     }
     
     .grand-total {
-      background: #2D5F2D !important;
-      color: white !important;
-      font-size: 16px;
-      font-weight: bold;
+      font-weight: 800;
+      font-size: ${fontSizes.baseSize}px;
+    }
+    
+    .qr-section {
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    .qr-code-img {
+      max-width: 140px;
+      height: auto;
+      border: 1px solid #ddd;
     }
     
     .daily-summary {
-      margin: 40px 0;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      overflow: hidden;
+      margin: 20px 0;
+      border: 1px solid #666;
+      background: white;
     }
     
     .daily-summary-title {
-      background: #f0f0f0;
-      padding: 15px 20px;
-      font-size: 16px;
-      font-weight: bold;
-      color: #2D5F2D;
-      border-bottom: 1px solid #ddd;
+      padding: 8px 15px;
+      font-size: ${fontSizes.baseSize}px;
+      font-weight: 800; /* Extra bold for headers */
+      color: black;
+      border-bottom: 1px solid #666;
     }
     
     .daily-summary-content {
-      padding: 20px;
-      max-height: 300px;
-      overflow-y: auto;
+      padding: 15px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      font-size: ${fontSizes.summarySize}px;
+      font-weight: 400; /* Regular weight for summary */
+    }
+    
+    .daily-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     
     .daily-entry {
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 1px dotted #ccc;
-    }
-    
-    .daily-entry:last-child {
-      border-bottom: none;
-      margin-bottom: 0;
+      margin-bottom: 8px;
     }
     
     .daily-date {
-      font-weight: bold;
-      color: #2D5F2D;
-      margin-bottom: 5px;
+      font-weight: 500;
+      color: black;
+      margin-bottom: 3px;
     }
     
-    .daily-items {
-      font-size: 11px;
+    .daily-product {
+      font-size: ${Math.max(fontSizes.summarySize - 1, 8)}px;
       color: #666;
-      margin-left: 20px;
+      margin-left: 8px;
+      line-height: 1.2;
     }
     
     .footer {
-      margin-top: 50px;
-      padding-top: 20px;
-      border-top: 2px solid #2D5F2D;
+      margin-top: 20px;
+      padding-top: 15px;
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
-      font-size: 11px;
-      color: #666;
+      gap: 40px;
+      font-size: ${Math.max(fontSizes.baseSize - 2, 8)}px;
+      color: black;
+      background: white;
+      padding: 10px;
     }
     
-    .contact-info {
-      display: flex;
-      align-items: center;
-      gap: 30px;
-    }
-    
-    .contact-item {
+    .footer-item {
       display: flex;
       align-items: center;
       gap: 5px;
     }
     
-    .website {
-      font-weight: bold;
-      color: #2D5F2D;
+    .footer-icon {
+      width: 16px;
+      height: 16px;
     }
     
-    /* Print optimizations */
+    /* Print optimizations for 300 DPI */
     @media print {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
       }
       
-      .items-table {
+      .items-table, .daily-summary {
         break-inside: avoid;
       }
       
-      .daily-summary {
+      .daily-summary-content {
         break-inside: avoid;
-      }
-    }
-    
-    /* Auto-print after load */
-    @media print {
-      body {
-        margin: 0;
       }
     }
   </style>
@@ -361,10 +342,9 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
   <!-- Header with Logo and Company Info -->
   <div class="header">
     <div class="logo-section">
-      <div class="logo">👑</div>
+      ${assets.logo ? `<img src="${assets.logo}" alt="PureDairy Logo" class="logo-img">` : ''}
       <div>
         <div class="company-name">PureDairy</div>
-        <div class="company-tagline">Premium Quality Dairy Products</div>
       </div>
     </div>
     <div class="company-address">
@@ -376,129 +356,124 @@ function generateInvoiceHTML(invoiceData: InvoiceData): string {
   <!-- Invoice Title -->
   <h1 class="invoice-title">INVOICE</h1>
 
-  <!-- Customer and Invoice Details -->
-  <div class="invoice-details">
-    <div class="customer-details">
-      <div class="customer-title">Customer Name</div>
+  <!-- Main Content Layout -->
+  <div class="main-content">
+    <!-- Left Section: Customer Details + QR Code -->
+    <div class="left-section">
+      <div class="customer-title">CUSTOMER NAME</div>
       <div class="customer-info">
         <div class="customer-name">${invoiceData.customer.billing_name}</div>
-        <div>${invoiceData.customer.address}</div>
-        <div>Contact: ${invoiceData.customer.contact_person}</div>
-        <div>Phone: ${invoiceData.customer.phone_primary}</div>
+        <div>${invoiceData.customer.address || ''}</div>
       </div>
-    </div>
-    
-    <div class="invoice-meta">
-      <div class="invoice-number">Invoice No: ${invoiceData.invoiceNumber}</div>
-      <div>Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
-      <div>Period: ${format(new Date(invoiceData.periodStart), 'dd/MM/yyyy')} to ${format(new Date(invoiceData.periodEnd), 'dd/MM/yyyy')}</div>
       
-      <div class="qr-code">
-        QR Code<br>
-        (Payment Link)
+      <div class="invoice-meta">
+        <div class="invoice-number">Invoice No: ${invoiceData.invoiceNumber}</div>
+        <div>Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
       </div>
-    </div>
-  </div>
 
-  <!-- Items Table -->
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th>Item Description</th>
-        <th>Qty</th>
-        <th>Price<br>Incl. GST</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${invoiceData.subscriptionItems.map(item => `
-        <tr>
-          <td>
-            <strong>${item.productName}</strong><br>
-            <small>Subscription deliveries</small>
-          </td>
-          <td>${item.quantity} ${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.unitPrice)}/${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.totalAmount)}</td>
-        </tr>
-      `).join('')}
-      
-      ${invoiceData.manualSalesItems.map(item => `
-        <tr>
-          <td>
-            <strong>${item.productName}</strong><br>
-            <small>Manual sale (${format(new Date(item.saleDate), 'dd/MM/yyyy')})</small>
-          </td>
-          <td>${item.quantity} ${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.unitPrice)}/${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.totalAmount)}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-
-  <!-- Totals -->
-  <div class="totals-section">
-    <table class="totals-table">
-      <tr>
-        <td class="label">Sub Total:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.subscriptionAmount + invoiceData.totals.manualSalesAmount)}</td>
-      </tr>
-      ${invoiceData.totals.totalGstAmount > 0 ? `
-      <tr>
-        <td class="label">G.S.T.:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.totalGstAmount)}</td>
-      </tr>
+      <!-- QR Code positioned above daily summary -->
+      ${assets.qrCode ? `
+      <div class="qr-section">
+        <img src="${assets.qrCode}" alt="Payment QR Code" class="qr-code-img">
+      </div>
       ` : ''}
-      <tr class="grand-total">
-        <td class="label">Grand Total:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.grandTotal)}</td>
-      </tr>
-    </table>
+    </div>
+
+    <!-- Right Section: Items Table -->
+    <div class="right-section">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>ITEM DESCRIPTION</th>
+            <th>QTY</th>
+            <th>PRICE<br><small>INCL. GST</small></th>
+            <th>TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(invoiceData.deliveryItems || []).map(item => `
+            <tr>
+              <td>${item.productName}</td>
+              <td style="text-align: center;">${item.quantity} ${item.unitOfMeasure}</td>
+              <td style="text-align: center;">₹ ${item.unitPrice.toFixed(2)}</td>
+              <td>₹ ${item.totalAmount.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+          ${(invoiceData.manualSalesItems || []).map(item => `
+            <tr>
+              <td>${item.productName}</td>
+              <td style="text-align: center;">${item.quantity} ${item.unitOfMeasure}</td>
+              <td style="text-align: center;">₹ ${item.unitPrice.toFixed(2)}</td>
+              <td>₹ ${item.totalAmount.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <!-- Totals -->
+      <div class="totals-section">
+        <table class="totals-table">
+          <tr>
+            <td class="label">SUB TOTAL</td>
+            <td class="amount">₹ ${(invoiceData.totals.deliveryAmount + invoiceData.totals.manualSalesAmount).toFixed(2)}</td>
+          </tr>
+          ${invoiceData.totals.totalGstAmount > 0 ? `
+          <tr>
+            <td class="label">G.S.T.</td>
+            <td class="amount">₹ ${invoiceData.totals.totalGstAmount.toFixed(2)}</td>
+          </tr>
+          ` : ''}
+          <tr class="grand-total">
+            <td class="label">GRAND TOTAL</td>
+            <td class="amount">₹ ${invoiceData.totals.grandTotal.toFixed(2)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Daily Summary -->
+  <!-- 4-Column Daily Summary -->
   ${invoiceData.dailySummary.length > 0 ? `
   <div class="daily-summary">
     <div class="daily-summary-title">Daily Summary:</div>
     <div class="daily-summary-content">
-      ${invoiceData.dailySummary.map(day => `
-        <div class="daily-entry">
-          <div class="daily-date">${format(new Date(day.date), 'dd/MM/yyyy')}</div>
-          <div class="daily-items">
-            ${day.items.map(item => 
-              `${item.productName} - ${item.quantity} ${item.unitOfMeasure}`
-            ).join(', ')}
-          </div>
+      ${dailySummaryColumns.map(column => `
+        <div class="daily-column">
+          ${column.map(day => `
+            <div class="daily-entry">
+              <div class="daily-date">${day.formattedDate}</div>
+              ${day.items.map(item => `
+                <div class="daily-product">${item}</div>
+              `).join('')}
+            </div>
+          `).join('')}
         </div>
       `).join('')}
     </div>
   </div>
   ` : ''}
 
-  <!-- Footer -->
+  <!-- Footer with SVG Icons -->
   <div class="footer">
-    <div class="contact-info">
-      <div class="contact-item">
-        <span>🌐</span>
-        <span class="website">puredairy.net</span>
-      </div>
-      <div class="contact-item">
-        <span>📞</span>
-        <span>8767-206-236</span>
-      </div>
-      <div class="contact-item">
-        <span>📧</span>
-        <span>info@puredairy.net</span>
-      </div>
+    <div class="footer-item">
+      ${assets.footerIcons.website ? `<img src="${assets.footerIcons.website}" alt="Website" class="footer-icon">` : '🌐'}
+      <span>puredairy.net</span>
+    </div>
+    <div class="footer-item">
+      ${assets.footerIcons.phone ? `<img src="${assets.footerIcons.phone}" alt="Phone" class="footer-icon">` : '📞'}
+      <span>8767-206-236</span>
+    </div>
+    <div class="footer-item">
+      ${assets.footerIcons.email ? `<img src="${assets.footerIcons.email}" alt="Email" class="footer-icon">` : '📧'}
+      <span>info@puredairy.net</span>
     </div>
   </div>
 
   <script>
-    // Auto-print after 1 second delay
+    // Auto-print after 2 second delay (increased for font loading)
     setTimeout(function() {
       window.print();
-    }, 1000);
+    }, 2000);
   </script>
 </body>
 </html>

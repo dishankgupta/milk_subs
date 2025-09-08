@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentISTDate, calculateFinancialYear } from "@/lib/date-utils"
+import { readFileSync } from "fs"
+import path from "path"
 
 export interface InvoiceNumberResult {
   invoiceNumber: string
@@ -158,4 +160,179 @@ export function formatInvoiceNumberForDisplay(invoiceNumber: string): string {
   const sequencePart = invoiceNumber.slice(6)
   
   return `${yearPart}-${sequencePart}`
+}
+
+// ===== NEW INVOICE TEMPLATE UTILITIES =====
+
+/**
+ * Convert SVG file to base64 data URI for PDF compatibility
+ * Used for footer icons (1www.svg, 2phone.svg, 3email.svg)
+ */
+export function convertSvgToBase64(svgFileName: string): string {
+  try {
+    const svgPath = path.join(process.cwd(), 'public', svgFileName)
+    const svgContent = readFileSync(svgPath, 'utf-8')
+    const base64 = Buffer.from(svgContent).toString('base64')
+    return `data:image/svg+xml;base64,${base64}`
+  } catch (error) {
+    console.error(`Failed to convert SVG ${svgFileName} to base64:`, error)
+    return '' // Return empty string on error to avoid breaking template
+  }
+}
+
+/**
+ * Convert PNG file to base64 data URI for embedding in HTML/PDF
+ * Used for logo and QR code
+ */
+export function convertPngToBase64(pngFileName: string): string {
+  try {
+    const pngPath = path.join(process.cwd(), 'public', pngFileName)
+    const pngBuffer = readFileSync(pngPath)
+    const base64 = pngBuffer.toString('base64')
+    return `data:image/png;base64,${base64}`
+  } catch (error) {
+    console.error(`Failed to convert PNG ${pngFileName} to base64:`, error)
+    return '' // Return empty string on error to avoid breaking template
+  }
+}
+
+/**
+ * Get all converted assets for invoice template
+ * Returns base64 data URIs for all required assets
+ */
+export function getInvoiceAssets(): {
+  logo: string
+  qrCode: string
+  footerIcons: {
+    website: string
+    phone: string
+    email: string
+  }
+} {
+  return {
+    logo: convertPngToBase64('PureDairy_Logo-removebg-preview.png'),
+    qrCode: convertPngToBase64('QR_code.png'),
+    footerIcons: {
+      website: convertSvgToBase64('1www.svg'),
+      phone: convertSvgToBase64('2phone.svg'),
+      email: convertSvgToBase64('3email.svg')
+    }
+  }
+}
+
+/**
+ * Calculate responsive font sizes based on content volume
+ * Ensures single A4 page constraint with maximum 31 days and 7 products
+ */
+export function calculateResponsiveFontSizes(contentMetrics: {
+  dailySummaryDays: number
+  productCount: number
+  totalLineItems: number
+}): {
+  baseSize: number
+  headerSize: number
+  titleSize: number
+  summarySize: number
+  scaleFactor: number
+} {
+  const { dailySummaryDays, productCount, totalLineItems } = contentMetrics
+
+  // Calculate content density score (higher = more content = smaller fonts)
+  const contentDensity = Math.min(
+    (dailySummaryDays / 31) * 0.4 + 
+    (productCount / 7) * 0.3 + 
+    (totalLineItems / 15) * 0.3,
+    1.0
+  )
+
+  // Base font size: 12px normal, scales down to 9px for high-density content
+  const baseSize = Math.max(12 - (contentDensity * 3), 9)
+  const scaleFactor = baseSize / 12
+
+  return {
+    baseSize,
+    headerSize: Math.round(baseSize * 1.5), // 18px normal, down to 13.5px
+    titleSize: Math.round(baseSize * 2.5),  // 30px normal, down to 22.5px
+    summarySize: Math.max(baseSize - 1, 8), // 11px normal, down to 8px minimum
+    scaleFactor
+  }
+}
+
+/**
+ * Generate Open Sans font import CSS for PDF generation
+ * Loads specified font weights for proper rendering
+ */
+export function getOpenSansFontCSS(): string {
+  return `
+    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;800&display=swap');
+    
+    .font-open-sans-regular {
+      font-family: "Open Sans", sans-serif;
+      font-optical-sizing: auto;
+      font-weight: 400;
+      font-style: normal;
+      font-variation-settings: "wdth" 100;
+    }
+    
+    .font-open-sans-medium {
+      font-family: "Open Sans", sans-serif;
+      font-optical-sizing: auto;
+      font-weight: 500;
+      font-style: normal;
+      font-variation-settings: "wdth" 100;
+    }
+    
+    .font-open-sans-extrabold {
+      font-family: "Open Sans", sans-serif;
+      font-optical-sizing: auto;
+      font-weight: 800;
+      font-style: normal;
+      font-variation-settings: "wdth" 100;
+    }
+  `
+}
+
+/**
+ * Format daily summary data for 4-column layout
+ * Distributes transaction days dynamically across columns
+ */
+export function formatDailySummaryForColumns(dailySummary: Array<{
+  date: string
+  items: Array<{
+    productName: string
+    quantity: number
+    unitOfMeasure: string
+  }>
+}>): Array<Array<{
+  date: string
+  formattedDate: string
+  items: string[]
+}>> {
+  // Convert to display format
+  const formattedDays = dailySummary.map(day => ({
+    date: day.date,
+    formattedDate: new Intl.DateTimeFormat('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    }).format(new Date(day.date)),
+    items: day.items.map(item => 
+      `${item.productName} - ${item.quantity}${item.unitOfMeasure}`
+    )
+  }))
+
+  // Distribute into 4 columns dynamically
+  const columns: Array<Array<typeof formattedDays[0]>> = [[], [], [], []]
+  const itemsPerColumn = Math.ceil(formattedDays.length / 4)
+
+  formattedDays.forEach((day, index) => {
+    const columnIndex = Math.floor(index / itemsPerColumn)
+    if (columnIndex < 4) {
+      columns[columnIndex].push(day)
+    } else {
+      // If we have more than expected, add to the last column
+      columns[3].push(day)
+    }
+  })
+
+  return columns
 }

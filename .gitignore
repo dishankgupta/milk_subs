@@ -44,3 +44,6 @@ next-env.d.ts
 # csv templates
 csv-templates/customers-data.csv
 csv-templates/subscriptions-data.csv
+
+# public folder
+public/
