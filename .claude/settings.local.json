@@ -43,7 +43,8 @@
       "Bash(node:*)",
       "mcp__supabase__search_docs",
       "Bash(dir:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "mcp__filesystem__write_file"
     ]
   },
   "enabledMcpjsonServers": [
