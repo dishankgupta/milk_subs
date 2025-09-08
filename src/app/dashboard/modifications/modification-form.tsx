@@ -22,6 +22,7 @@ import { modificationSchema, type ModificationFormData } from '@/lib/validations
 import { createModification, updateModification } from '@/lib/actions/modifications'
 import type { Customer, Product, Modification, Subscription } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { getCurrentISTDate, parseLocalDateIST } from '@/lib/date-utils'
 
 interface ModificationFormProps {
   customers: Customer[]
@@ -56,14 +57,14 @@ export function ModificationForm({
       customer_id: modification.customer_id,
       product_id: modification.product_id,
       modification_type: modification.modification_type,
-      start_date: new Date(modification.start_date),
-      end_date: new Date(modification.end_date),
+      start_date: parseLocalDateIST(modification.start_date),
+      end_date: parseLocalDateIST(modification.end_date),
       quantity_change: modification.quantity_change || undefined,
       reason: modification.reason || undefined,
     } : {
       modification_type: 'Skip',
-      start_date: new Date(),
-      end_date: new Date(),
+      start_date: getCurrentISTDate(),
+      end_date: getCurrentISTDate(),
     }
   })
 

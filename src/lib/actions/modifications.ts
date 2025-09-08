@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Modification } from '@/lib/types'
-import { formatTimestampForDatabase, getCurrentISTDate } from '@/lib/date-utils'
+import { formatTimestampForDatabase, getCurrentISTDate, formatDateForDatabase } from '@/lib/date-utils'
 
 export async function createModification(data: {
   customer_id: string
@@ -52,12 +52,14 @@ export async function getModifications({
   search = '',
   status = 'all',
   type = 'all',
-  customer_id = ''
+  customer_id = '',
+  includeExpired = false
 }: {
   search?: string
   status?: string
   type?: string
   customer_id?: string
+  includeExpired?: boolean
 } = {}) {
   try {
     const supabase = await createClient()
@@ -95,7 +97,27 @@ export async function getModifications({
       throw error
     }
 
-    return { success: true, data: modifications as Modification[] }
+    const currentDateString = formatDateForDatabase(getCurrentISTDate())
+    
+    // Add computed expiration status and filter based on includeExpired
+    const enhancedModifications = (modifications as Modification[])
+      .map(mod => ({
+        ...mod,
+        isExpired: currentDateString > mod.end_date,
+        displayStatus: (mod.is_active 
+          ? (currentDateString > mod.end_date ? 'Expired' : 'Active')
+          : 'Disabled') as 'Active' | 'Expired' | 'Disabled',
+        effectivelyActive: mod.is_active && currentDateString <= mod.end_date
+      }))
+      .filter(mod => {
+        // If not including expired, filter out expired active modifications
+        if (!includeExpired && mod.is_active && mod.isExpired) {
+          return false
+        }
+        return true
+      })
+
+    return { success: true, data: enhancedModifications }
   } catch (error) {
     console.error('Error fetching modifications:', error)
     return { 
@@ -262,6 +284,58 @@ export async function getActiveModificationsForDate(date: string) {
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to fetch active modifications',
       data: []
+    }
+  }
+}
+
+export async function bulkArchiveExpiredModifications() {
+  try {
+    const supabase = await createClient()
+    const currentDateString = formatDateForDatabase(getCurrentISTDate())
+    
+    // First, get the count of expired modifications for feedback
+    const { count } = await supabase
+      .from('modifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .lt('end_date', currentDateString)
+
+    if (!count || count === 0) {
+      return { 
+        success: true, 
+        message: 'No expired modifications found to archive',
+        count: 0
+      }
+    }
+
+    // Archive expired modifications
+    const { error } = await supabase
+      .from('modifications')
+      .update({ 
+        is_active: false,
+        updated_at: formatTimestampForDatabase(getCurrentISTDate())
+      })
+      .eq('is_active', true)
+      .lt('end_date', currentDateString)
+
+    if (error) {
+      throw error
+    }
+
+    revalidatePath('/dashboard/modifications')
+    revalidatePath('/dashboard/customers')
+    
+    return { 
+      success: true, 
+      message: `Successfully archived ${count} expired modification${count === 1 ? '' : 's'}`,
+      count
+    }
+  } catch (error) {
+    console.error('Error archiving expired modifications:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to archive expired modifications',
+      count: 0
     }
   }
 }

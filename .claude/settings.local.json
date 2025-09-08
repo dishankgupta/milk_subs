@@ -42,7 +42,8 @@
       "mcp__playwright__browser_press_key",
       "Bash(node:*)",
       "mcp__supabase__search_docs",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)"
     ]
   },
   "enabledMcpjsonServers": [

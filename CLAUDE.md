@@ -105,7 +105,7 @@ Complete Supabase database with 16 tables:
 - **Product Management** (`/dashboard/products`): GST-integrated catalog with subscription support and real-time calculations
 - **Subscription Management** (`/dashboard/subscriptions`): Pattern-based subscriptions with 2-day cycle preview and customer integration
 - **Order Generation** (`/dashboard/orders`): Automated daily order generation with modification support and bulk operations
-- **Modification System** (`/dashboard/modifications`): Temporary subscription changes (skip/increase/decrease) with date range support
+- **Modification System** (`/dashboard/modifications`): ⭐ **ENHANCED** - Temporary subscription changes with smart expiration handling, bulk archive operations, and performance optimizations (Sep 8)
 
 ### Financial & Operations Modules
 - **Payment Management** (`/dashboard/payments`): Invoice allocation system with unapplied payments tracking and credit management
@@ -236,6 +236,7 @@ Complete Supabase database with 16 tables:
 - **Credit Sales Status Completion**: ⭐ **NEW** - Automated status flow from 'Billed' to 'Completed' when invoices are paid (Sep 4)
 - **Invoice Template Enhancement**: ⭐ **NEW** - Complete visual overhaul matching PureDairy branding with professional layout (Sep 8)
 - **Dual Template Architecture**: ⭐ **IMPORTANT** - Invoice generation exists in two separate locations requiring synchronized updates
+- **Modifications System Enhancement**: ⭐ **NEW** - Smart expiration handling, bulk archive operations, React.memo optimizations, and IST date compliance (Sep 8)
 
 ## Development Workflow
 
@@ -243,7 +244,7 @@ Complete Supabase database with 16 tables:
    - `/src/lib/actions/customers.ts` - Customer CRUD operations and opening balance management
    - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
    - `/src/lib/actions/orders.ts` - Order generation and management operations
-   - `/src/lib/actions/modifications.ts` - Modification CRUD operations
+   - `/src/lib/actions/modifications.ts` - **ENHANCED** - Modification CRUD with smart expiration detection and bulk archive operations (Sep 8)
    - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and sales completion integration
    - `/src/lib/actions/deliveries.ts` - **RESTRUCTURED** - Individual and bulk delivery confirmation with additional items support (684 lines rewritten)
    - `/src/lib/actions/reports.ts` - Production and delivery report generation

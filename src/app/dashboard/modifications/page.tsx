@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ModificationsTable } from './modifications-table'
 
 export default function ModificationsPage() {
@@ -23,9 +24,11 @@ export default function ModificationsPage() {
         </Button>
       </div>
 
-      <Suspense fallback={<div>Loading modifications...</div>}>
-        <ModificationsTable />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<div>Loading modifications...</div>}>
+          <ModificationsTable />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }

@@ -163,6 +163,10 @@ export interface Modification {
   updated_at: string
   customer?: Customer
   product?: Product
+  // Computed fields for expiration handling
+  isExpired?: boolean
+  displayStatus?: 'Active' | 'Expired' | 'Disabled'
+  effectivelyActive?: boolean
 }
 
 export interface Payment {
