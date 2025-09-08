@@ -1432,7 +1432,7 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
       font-size: ${fontSizes.baseSize}px;
       line-height: 1.4;
       color: #333;
-      background: #f8f9fa; /* Light off-white background as per spec */
+      background: #ffffff; /* Light off-white background as per spec */
     }
     
     .header {
@@ -1450,16 +1450,17 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
     }
     
     .logo-img {
-      width: 80px;
+      width: 120px; /* Increased by 1.5x (80px * 1.5) */
       height: auto;
-      margin-right: 15px;
     }
     
-    .company-name {
-      font-size: ${fontSizes.headerSize}px;
-      font-weight: 800; /* Extra bold for headers */
-      color: #025e24; /* Custom green as per spec */
-      margin-bottom: 2px;
+    .invoice-title {
+      text-align: center;
+      font-size: ${fontSizes.titleSize}px;
+      font-weight: 800; /* Extra bold for title */
+      color: #000000;
+      letter-spacing: 2px;
+      flex: 1; /* Take remaining space in the center */
     }
     
     .company-address {
@@ -1468,15 +1469,6 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
       font-weight: 400; /* Regular weight */
       color: #666;
       line-height: 1.3;
-    }
-    
-    .invoice-title {
-      text-align: center;
-      font-size: ${fontSizes.titleSize}px;
-      font-weight: 800; /* Extra bold for title */
-      color: #025e24;
-      margin: 20px 0;
-      letter-spacing: 2px;
     }
     
     .main-content {
@@ -1694,22 +1686,17 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
   </style>
 </head>
 <body>
-  <!-- Header with Logo and Company Info -->
+  <!-- Header with Logo, Invoice Title, and Company Address -->
   <div class="header">
     <div class="logo-section">
       ${assets.logo ? `<img src="${assets.logo}" alt="PureDairy Logo" class="logo-img">` : ''}
-      <div>
-        <div class="company-name">PureDairy</div>
-      </div>
     </div>
+    <h1 class="invoice-title">INVOICE</h1>
     <div class="company-address">
       Plot No. G-2/8, MIDC,<br>
       Jalgaon - 3, MS, India.
     </div>
   </div>
-
-  <!-- Invoice Title -->
-  <h1 class="invoice-title">INVOICE</h1>
 
   <!-- Main Content Layout -->
   <div class="main-content">

@@ -82,9 +82,7 @@ manualSales?.forEach(sale => {
 
 #### Layout Architecture:
 ```
-Header (Logo + Company Info + Address)
-│
-├── Invoice Title (Center)
+Header (Logo + Invoice Title (Center) + Address)
 │
 ├── Main Content (Flex Layout)
 │   ├── Left Section (35%)
@@ -189,11 +187,12 @@ public/
 - **Responsive**: 9px-30px range based on content density
 
 ### Layout Measurements:
-- **Logo**: 80px width, auto height, 15px margin-right
+- **Logo**: 120px width (1.5x original), auto height, no text overlay
 - **QR Code**: 140px max-width, maintains aspect ratio
 - **Table Padding**: 8-12px cells, 6-15px totals section
 - **Grid Gaps**: 15px daily summary columns, 8px entry spacing
 - **Footer Icons**: 16px × 16px, 5px gap from text
+- **Header Layout**: Single row with Logo (left) + Invoice Title (center) + Address (right)
 
 ## 🚀 Testing & Validation Strategy
 
@@ -323,7 +322,32 @@ generateInvoiceHTML(data: InvoiceData): string
 
 ## 🔧 Latest Updates & Fixes
 
-### Product Aggregation Fix (September 8, 2025 - Latest)
+### Header Layout Consolidation (September 8, 2025 - Latest Update)
+**Change Requested**: Consolidate header layout to single row: Logo + Invoice Title + Address  
+**Implementation**: 
+- Removed separate "PureDairy" text (logo already contains it)
+- Increased logo size from 80px to 120px (1.5x scaling)
+- Restructured header to single flex row with proper spacing
+- Centered invoice title with flex: 1 property
+
+**CSS Changes**:
+```css
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo-img {
+  width: 120px; /* Increased by 1.5x */
+}
+
+.invoice-title {
+  flex: 1; /* Center in available space */
+}
+```
+
+### Product Aggregation Fix (September 8, 2025)
 **Issue Discovered**: Main invoice table showed duplicate line items for manual sales products instead of aggregated totals  
 **Example**: "Masala Tak" appeared 7 separate times instead of "Masala Tak - 35 packets (total)"
 
