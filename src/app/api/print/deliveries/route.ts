@@ -1,7 +1,84 @@
 import { NextRequest } from 'next/server'
 import { getDeliveries } from '@/lib/actions/deliveries'
-import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate, parseLocalDateIST } from '@/lib/date-utils'
+import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns'
 import type { DeliveryExtended } from '@/lib/types'
+
+// Function to convert date presets to date ranges
+function getDateRangeFromPreset(preset: string, mostRecentDate?: string): { fromDate: Date, toDate: Date } | null {
+  const today = getCurrentISTDate()
+
+  switch (preset) {
+    case "mostRecent":
+      if (mostRecentDate) {
+        const recentDate = parseLocalDateIST(mostRecentDate)
+        return {
+          fromDate: startOfDay(recentDate),
+          toDate: endOfDay(recentDate)
+        }
+      }
+      // Fallback to today if no most recent date available
+      return {
+        fromDate: startOfDay(today),
+        toDate: endOfDay(today)
+      }
+
+    case "today":
+      return {
+        fromDate: startOfDay(today),
+        toDate: endOfDay(today)
+      }
+
+    case "yesterday":
+      const yesterday = subDays(today, 1)
+      return {
+        fromDate: startOfDay(yesterday),
+        toDate: endOfDay(yesterday)
+      }
+
+    case "last7days":
+      const sevenDaysAgo = subDays(today, 6) // Include today
+      return {
+        fromDate: startOfDay(sevenDaysAgo),
+        toDate: endOfDay(today)
+      }
+
+    case "last30days":
+      const thirtyDaysAgo = subDays(today, 29) // Include today
+      return {
+        fromDate: startOfDay(thirtyDaysAgo),
+        toDate: endOfDay(today)
+      }
+
+    case "thisWeek":
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday start
+      const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+      return {
+        fromDate: weekStart,
+        toDate: weekEnd
+      }
+
+    case "thisMonth":
+      const monthStart = startOfMonth(today)
+      const monthEnd = endOfMonth(today)
+      return {
+        fromDate: monthStart,
+        toDate: monthEnd
+      }
+
+    case "lastMonth":
+      const lastMonth = subDays(startOfMonth(today), 1)
+      const lastMonthStart = startOfMonth(lastMonth)
+      const lastMonthEnd = endOfMonth(lastMonth)
+      return {
+        fromDate: lastMonthStart,
+        toDate: lastMonthEnd
+      }
+
+    default:
+      return null
+  }
+}
 
 function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   const totalOrders = deliveries.length
@@ -58,18 +135,28 @@ function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   }
 }
 
-function filterDeliveries(deliveries: DeliveryExtended[], searchQuery?: string, dateFilter?: string, routeFilter?: string) {
+function filterDeliveries(deliveries: DeliveryExtended[], searchQuery?: string, dateRange?: { fromDate: Date, toDate: Date }, routeFilter?: string) {
   return deliveries.filter(delivery => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesDate = !dateFilter || 
-      delivery.order_date === dateFilter
-    
-    const matchesRoute = !routeFilter || 
+
+    const matchesDate = !dateRange || (() => {
+      try {
+        const deliveryDate = parseLocalDateIST(delivery.order_date)
+        return isWithinInterval(deliveryDate, {
+          start: startOfDay(dateRange.fromDate),
+          end: endOfDay(dateRange.toDate)
+        })
+      } catch (error) {
+        console.error("Error parsing delivery date:", delivery.order_date, error)
+        return false
+      }
+    })()
+
+    const matchesRoute = !routeFilter ||
       delivery.route?.name === routeFilter
 
     return matchesSearch && matchesDate && matchesRoute
@@ -121,16 +208,45 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get('search') || undefined
-    const dateFilter = searchParams.get('date') || undefined
+    const datePreset = searchParams.get('datePreset') || undefined
+    const dateFrom = searchParams.get('dateFrom') || undefined
+    const dateTo = searchParams.get('dateTo') || undefined
     const routeFilter = searchParams.get('route') || undefined
     const sortKey = searchParams.get('sortKey') || 'order_date'
     const sortDirection = (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc'
-    
+
     // Fetch all deliveries
     const allDeliveries = await getDeliveries()
-    
+
+    // Determine date range for filtering
+    let dateRange: { fromDate: Date, toDate: Date } | undefined = undefined
+
+    if (datePreset) {
+      // Find the most recent date from deliveries for "mostRecent" preset
+      let mostRecentDate: string | undefined = undefined
+      if (datePreset === 'mostRecent' && allDeliveries.length > 0) {
+        const sortedByDate = [...allDeliveries].sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
+        mostRecentDate = sortedByDate[0].order_date
+      }
+
+      const range = getDateRangeFromPreset(datePreset, mostRecentDate)
+      if (range) {
+        dateRange = range
+      }
+    } else if (dateFrom && dateTo) {
+      // Handle custom date range
+      try {
+        dateRange = {
+          fromDate: new Date(dateFrom),
+          toDate: new Date(dateTo)
+        }
+      } catch (error) {
+        console.error("Error parsing custom date range:", error)
+      }
+    }
+
     // Apply filters
-    const filteredDeliveries = filterDeliveries(allDeliveries, searchQuery, dateFilter, routeFilter)
+    const filteredDeliveries = filterDeliveries(allDeliveries, searchQuery, dateRange, routeFilter)
     
     // Calculate stats
     const stats = calculateDeliveryStats(filteredDeliveries)
@@ -147,7 +263,41 @@ export async function GET(request: NextRequest) {
     // Generate filter description for title
     const filterParts = []
     if (searchQuery) filterParts.push(`Search: "${searchQuery}"`)
-    if (dateFilter) filterParts.push(`Date: ${formatDateIST(new Date(dateFilter))}`)
+    if (dateRange) {
+      if (datePreset) {
+        // Use preset label with actual date range for clarity
+        switch (datePreset) {
+          case 'mostRecent':
+            filterParts.push(`Date: Most Recent (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'today':
+            filterParts.push(`Date: Today (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'yesterday':
+            filterParts.push(`Date: Yesterday (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'last7days':
+            filterParts.push(`Date: Last 7 days (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'last30days':
+            filterParts.push(`Date: Last 30 days (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'thisWeek':
+            filterParts.push(`Date: This week (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'thisMonth':
+            filterParts.push(`Date: This month (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'lastMonth':
+            filterParts.push(`Date: Last month (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          default:
+            filterParts.push(`Date: ${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)}`)
+        }
+      } else {
+        filterParts.push(`Date: ${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)}`)
+      }
+    }
     if (routeFilter) filterParts.push(`Route: ${routeFilter}`)
     const filterDescription = filterParts.length > 0 ? ` (${filterParts.join(', ')})` : ''
     
