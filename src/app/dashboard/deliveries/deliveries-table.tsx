@@ -90,8 +90,8 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     }
   )
 
-  // Add pagination after sorting
-  const paginationConfig = createPaginationConfig(sortedDeliveries.length)
+  // Add pagination after sorting - use total deliveries count for config, not filtered count
+  const paginationConfig = createPaginationConfig(initialDeliveries.length)
   const pagination = usePagination(sortedDeliveries, {
     defaultItemsPerPage: paginationConfig.defaultItemsPerPage,
     itemsPerPageOptions: paginationConfig.itemsPerPageOptions,
@@ -348,12 +348,13 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       </div>
 
       {/* Top Pagination Controls */}
-      {pagination.totalPages > 1 && (
+      {pagination.totalItems > 0 && (
         <div className="mb-4">
           <SimplePagination
             pagination={pagination}
             itemName="deliveries"
             className="justify-center"
+            itemsPerPageOptions={paginationConfig.itemsPerPageOptions}
           />
         </div>
       )}
@@ -529,12 +530,13 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
           })}
 
           {/* Pagination Controls */}
-          {pagination.totalPages > 1 && (
+          {pagination.totalItems > 0 && (
             <div className="mt-6">
               <SimplePagination
                 pagination={pagination}
                 itemName="deliveries"
                 className="justify-center"
+                itemsPerPageOptions={paginationConfig.itemsPerPageOptions}
               />
             </div>
           )}

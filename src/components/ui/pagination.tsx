@@ -348,6 +348,7 @@ export function SimplePagination<T>(props: {
   pagination: PaginationResult<T>
   itemName?: string
   className?: string
+  itemsPerPageOptions?: number[]
 }) {
   return (
     <PaginationContainer
@@ -356,6 +357,7 @@ export function SimplePagination<T>(props: {
       showFirstLast={true}
       showJumpToPage={false}
       size="default"
+      itemsPerPageOptions={props.itemsPerPageOptions}
     />
   )
 }
