@@ -111,7 +111,7 @@ Complete Supabase database with 16 tables:
 - **Payment Management** (`/dashboard/payments`): Invoice allocation system with unapplied payments tracking and credit management
 - **Outstanding Management** (`/dashboard/outstanding`): Invoice-based calculations with three-tier display (Gross→Credit→Net)
 - **Delivery Management** (`/dashboard/deliveries`): ⭐ **RESTRUCTURED** - Self-contained delivery tracking with additional items support (32% performance improvement)
-- **Sales Management** (`/dashboard/sales`): Manual sales tracking (Cash/QR/Credit) with GST compliance and professional reporting
+- **Sales Management** (`/dashboard/sales`): Manual sales tracking (Cash/QR/Credit) with GST compliance, bulk entry system, and professional reporting with select/bulk delete
 - **Invoice Management** (`/dashboard/invoices`): ⭐ **REFACTORED** - Complete revenue capture with direct delivery-invoice relationships
 
 ### Reports & Analytics
@@ -238,6 +238,7 @@ Complete Supabase database with 16 tables:
 - **Invoice Template Enhancement**: ⭐ **NEW** - Complete visual overhaul matching PureDairy branding with professional layout (Sep 8)
 - **Dual Template Architecture**: ⭐ **IMPORTANT** - Invoice generation exists in two separate locations requiring synchronized updates
 - **Modifications System Enhancement**: ⭐ **NEW** - Smart expiration handling, bulk archive operations, React.memo optimizations, and IST date compliance (Sep 8)
+- **Bulk Sales System**: ⭐ **NEW** - Complete bulk sales entry and delete functionality with dynamic table, real-time calculations, and selection management (Sep 15)
 
 ## Development Workflow
 
@@ -249,7 +250,7 @@ Complete Supabase database with 16 tables:
    - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and sales completion integration
    - `/src/lib/actions/deliveries.ts` - **RESTRUCTURED** - Individual and bulk delivery confirmation with additional items support (684 lines rewritten)
    - `/src/lib/actions/reports.ts` - Production and delivery report generation
-   - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations
+   - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations and bulk operations (create/delete)
    - `/src/lib/actions/invoices.ts` - **ENHANCED** - Invoice generation with automatic sales completion and safe deletion (Sep 4)
    - `/src/lib/actions/outstanding.ts` - Outstanding calculations with enhanced payment allocation and sales completion
 2. **Validation**: Zod schemas in `/src/lib/validations.ts` (includes sales and invoice schemas)

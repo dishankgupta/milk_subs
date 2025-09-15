@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { Plus, TrendingUp, CreditCard, DollarSign, BarChart3, FileText } from 'lucide-react'
+import { Plus, TrendingUp, CreditCard, DollarSign, BarChart3, FileText, PlusCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,17 +56,17 @@ export default function SalesPage() {
             <Button asChild className="w-full justify-start">
               <Link href="/dashboard/sales/new">
                 <Plus className="h-4 w-4 mr-2" />
-                Record Cash Sale
+                Add Sale
               </Link>
             </Button>
-            
+
             <Button asChild variant="outline" className="w-full justify-start">
-              <Link href="/dashboard/sales/new?type=credit">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Record Credit Sale
+              <Link href="/dashboard/sales/bulk">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add Bulk Sales
               </Link>
             </Button>
-            
+
             <Button asChild variant="outline" className="w-full justify-start">
               <Link href="/dashboard/sales/reports">
                 <BarChart3 className="h-4 w-4 mr-2" />
@@ -77,7 +77,7 @@ export default function SalesPage() {
             <Button asChild variant="outline" className="w-full justify-start">
               <Link href="/dashboard/invoices">
                 <FileText className="h-4 w-4 mr-2" />
-                Generate Invoices
+                Generate Invoice
               </Link>
             </Button>
           </CardContent>

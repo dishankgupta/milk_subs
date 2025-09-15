@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer } from 'lucide-react'
+import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer, X } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatDateIST, formatWithIST, parseLocalDateIST, formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -42,7 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { deleteSale } from '@/lib/actions/sales'
+import { deleteSale, bulkDeleteSales } from '@/lib/actions/sales'
 import { formatCurrency } from '@/lib/utils'
 import { useSorting } from '@/hooks/useSorting'
 import type { Sale } from '@/lib/types'
@@ -62,6 +63,11 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isClient, setIsClient] = useState(false)
+
+  // Bulk selection state
+  const [selectedSales, setSelectedSales] = useState<Set<string>>(new Set())
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
   // Fix hydration mismatch by ensuring client-side rendering
   useEffect(() => {
@@ -154,6 +160,57 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
       setIsDeleting(false)
       setDeleteDialogOpen(false)
       setSaleToDelete(null)
+    }
+  }
+
+  // Bulk selection handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSales(new Set(sortedSales.map(sale => sale.id)))
+    } else {
+      setSelectedSales(new Set())
+    }
+  }
+
+  const handleSelectSale = (saleId: string, checked: boolean) => {
+    const newSelected = new Set(selectedSales)
+    if (checked) {
+      newSelected.add(saleId)
+    } else {
+      newSelected.delete(saleId)
+    }
+    setSelectedSales(newSelected)
+  }
+
+  const handleClearSelection = () => {
+    setSelectedSales(new Set())
+  }
+
+  const handleBulkDeleteClick = () => {
+    setBulkDeleteDialogOpen(true)
+  }
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedSales.size === 0) return
+
+    setIsBulkDeleting(true)
+    try {
+      const result = await bulkDeleteSales(Array.from(selectedSales))
+
+      if (result.success) {
+        toast.success(`Successfully deleted ${result.deletedCount} sales`)
+        setSelectedSales(new Set())
+        // Refresh the page to update the list
+        window.location.reload()
+      } else {
+        toast.error(result.error || 'Failed to delete sales')
+      }
+    } catch (error) {
+      console.error('Error bulk deleting sales:', error)
+      toast.error('Failed to delete sales')
+    } finally {
+      setIsBulkDeleting(false)
+      setBulkDeleteDialogOpen(false)
     }
   }
 
@@ -274,6 +331,32 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
 
   return (
     <div className="space-y-4">
+      {/* Bulk Actions Bar */}
+      {selectedSales.size > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium">
+                {selectedSales.size} sale{selectedSales.size !== 1 ? 's' : ''} selected
+              </span>
+              <Button variant="outline" size="sm" onClick={handleClearSelection}>
+                <X className="h-4 w-4 mr-2" />
+                Clear Selection
+              </Button>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDeleteClick}
+              disabled={isBulkDeleting}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Search and Filter Controls */}
       <div className="flex flex-col gap-4">
         <div className="flex gap-4 items-center">
@@ -370,6 +453,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={selectedSales.size === sortedSales.length && sortedSales.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all sales"
+                  />
+                </TableHead>
                 <SortableTableHead
                   sortKey="sale_date"
                   sortConfig={sortConfig}
@@ -440,6 +530,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
             <TableBody>
               {sortedSales.map((sale) => (
                 <TableRow key={sale.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedSales.has(sale.id)}
+                      onCheckedChange={(checked) => handleSelectSale(sale.id, checked as boolean)}
+                      aria-label={`Select sale ${sale.id}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-medium">
                       {formatDateIST(new Date(sale.sale_date)).split('/').map((part, i) => i === 2 ? part.slice(-2) : part).join('/')}
@@ -543,26 +640,76 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Sale</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this {saleToDelete?.sale_type.toLowerCase()} sale of{' '}
-              {saleToDelete?.product?.name} for {formatCurrency(saleToDelete?.total_amount || 0)}?
-              {saleToDelete?.sale_type === 'Credit' && saleToDelete?.customer && (
-                <span className="block mt-2 text-amber-600">
-                  This will also reduce {saleToDelete.customer.billing_name}&apos;s outstanding amount 
-                  by {formatCurrency(saleToDelete.total_amount)}.
-                </span>
-              )}
-              <span className="block mt-2 font-medium">This action cannot be undone.</span>
+            <AlertDialogDescription asChild>
+              <div>
+                <p>
+                  Are you sure you want to delete this {saleToDelete?.sale_type.toLowerCase()} sale of{' '}
+                  {saleToDelete?.product?.name} for {formatCurrency(saleToDelete?.total_amount || 0)}?
+                </p>
+                {saleToDelete?.sale_type === 'Credit' && saleToDelete?.customer && (
+                  <p className="mt-2 text-amber-600">
+                    This will also reduce {saleToDelete.customer.billing_name}&apos;s outstanding amount
+                    by {formatCurrency(saleToDelete.total_amount)}.
+                  </p>
+                )}
+                <p className="mt-2 font-medium">This action cannot be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? 'Deleting...' : 'Delete Sale'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Sales</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p>Are you sure you want to delete {selectedSales.size} selected sales?</p>
+                <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                  {Array.from(selectedSales).slice(0, 5).map(saleId => {
+                    const sale = sortedSales.find(s => s.id === saleId)
+                    if (!sale) return null
+                    return (
+                      <div key={saleId} className="text-sm bg-gray-50 p-2 rounded">
+                        {sale.product?.name} - {formatCurrency(sale.total_amount)} ({sale.sale_type})
+                        {sale.customer && (
+                          <span className="text-gray-600"> - {sale.customer.billing_name}</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {selectedSales.size > 5 && (
+                    <div className="text-sm text-gray-600">
+                      ...and {selectedSales.size - 5} more sales
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 font-medium text-red-600">
+                  This action cannot be undone and may affect customer outstanding amounts.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDeleteConfirm}
+              disabled={isBulkDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isBulkDeleting ? 'Deleting...' : `Delete ${selectedSales.size} Sales`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
