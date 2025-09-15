@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
+import { usePagination, SimplePagination, createPaginationConfig } from "@/lib/pagination"
 
 import type { DeliveryExtended } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
@@ -86,6 +87,14 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       return undefined
     }
   )
+
+  // Add pagination after sorting
+  const paginationConfig = createPaginationConfig(sortedDeliveries.length)
+  const pagination = usePagination(sortedDeliveries, {
+    defaultItemsPerPage: paginationConfig.defaultItemsPerPage,
+    itemsPerPageOptions: paginationConfig.itemsPerPageOptions,
+    maxVisiblePages: paginationConfig.maxVisiblePages
+  })
 
   // Handle search functionality (client-side filtering)
   const handleSearch = (query: string) => {
@@ -189,7 +198,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
 
   function handleSelectAll(checked: boolean) {
     if (checked) {
-      setSelectedDeliveries(new Set(sortedDeliveries.map(d => d.id)))
+      setSelectedDeliveries(new Set(pagination.paginatedData.map(d => d.id)))
     } else {
       setSelectedDeliveries(new Set())
     }
@@ -243,7 +252,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-600">
-            Showing {sortedDeliveries.length} delivery{sortedDeliveries.length !== 1 ? 'ies' : 'y'}
+            Showing {pagination.displayInfo.start}-{pagination.displayInfo.end} of {pagination.displayInfo.total} deliver{pagination.displayInfo.total !== 1 ? 'ies' : 'y'}
           </div>
           {selectedDeliveries.size > 0 && (
             <div className="flex items-center gap-2">
@@ -333,8 +342,19 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         </div>
       </div>
 
+      {/* Top Pagination Controls */}
+      {pagination.totalPages > 1 && (
+        <div className="mb-4">
+          <SimplePagination
+            pagination={pagination}
+            itemName="deliveries"
+            className="justify-center"
+          />
+        </div>
+      )}
+
       {/* Results */}
-      {sortedDeliveries.length === 0 ? (
+      {pagination.totalItems === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-muted-foreground">
@@ -348,16 +368,16 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         <div className="space-y-4">
           {/* Select All Row */}
           <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-            <Checkbox 
-              checked={sortedDeliveries.length > 0 && selectedDeliveries.size === sortedDeliveries.length}
+            <Checkbox
+              checked={pagination.paginatedData.length > 0 && selectedDeliveries.size === pagination.paginatedData.length}
               onCheckedChange={handleSelectAll}
             />
             <span className="text-sm font-medium">
-              Select All ({sortedDeliveries.length} deliveries)
+              Select All ({pagination.paginatedData.length} deliveries on this page)
             </span>
           </div>
-          
-          {sortedDeliveries.map((delivery) => {
+
+          {pagination.paginatedData.map((delivery) => {
             const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
             const amountVariance = quantityVariance * delivery.unit_price
             const isAdditional = delivery.daily_order_id === null || delivery.planned_quantity === null
@@ -502,6 +522,17 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               </Card>
             )
           })}
+
+          {/* Pagination Controls */}
+          {pagination.totalPages > 1 && (
+            <div className="mt-6">
+              <SimplePagination
+                pagination={pagination}
+                itemName="deliveries"
+                className="justify-center"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

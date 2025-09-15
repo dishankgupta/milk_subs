@@ -133,6 +133,7 @@ Complete Supabase database with 16 tables:
 - **Bulk operations** - Efficient bulk delivery confirmation and invoice generation
 - **PDF generation** - Robust Puppeteer-based system with retry mechanisms
 - **Real-time search** - Client-side search and filtering across all data tables
+- **Standard pagination system** - Reusable pagination components with dual controls (top/bottom) and smart configuration
 
 ## TypeScript Configuration
 
@@ -267,11 +268,16 @@ Complete Supabase database with 16 tables:
    - `/src/lib/file-utils.ts` - PDF generation utilities with retry mechanisms and timeout handling
    - `/scripts/test-pdf.js` - PDF generation testing script for validation
    - Automatic Chrome installation via postinstall script
-10. **Sorting Infrastructure**: 
+10. **Sorting Infrastructure**:
     - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
     - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
     - Sort types and configurations in `/src/lib/types.ts`
-11. **IST Date Handling**: **MANDATORY** - Use only IST utilities from `/src/lib/date-utils.ts` for ALL date operations
+11. **Pagination System**: **STANDARD** - Reusable client-side pagination for all data tables
+    - `/src/hooks/usePagination.ts` - Core pagination hook with URL sync support
+    - `/src/components/ui/pagination.tsx` - Complete pagination UI components
+    - `/src/lib/pagination.ts` - Utility library with pre-configured settings
+    - **Usage**: Import `usePagination` and `SimplePagination` for instant pagination on any data table
+12. **IST Date Handling**: **MANDATORY** - Use only IST utilities from `/src/lib/date-utils.ts` for ALL date operations
     - `/src/lib/date-utils.ts` - Comprehensive IST utilities (400+ lines, 40+ functions)
     - **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
     - **ALWAYS** use `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()` for consistency
