@@ -44,14 +44,26 @@ export const PAGINATION_CONFIGS = {
 // Utility function to create pagination config based on data size
 export function createPaginationConfig(dataSize: number, isMobile = false) {
   if (isMobile) {
-    return PAGINATION_CONFIGS.mobile
+    return {
+      ...PAGINATION_CONFIGS.mobile,
+      itemsPerPageOptions: [...PAGINATION_CONFIGS.mobile.itemsPerPageOptions]
+    }
   }
 
   if (dataSize <= 100) {
-    return PAGINATION_CONFIGS.small
+    return {
+      ...PAGINATION_CONFIGS.small,
+      itemsPerPageOptions: [...PAGINATION_CONFIGS.small.itemsPerPageOptions]
+    }
   } else if (dataSize <= 1000) {
-    return PAGINATION_CONFIGS.medium
+    return {
+      ...PAGINATION_CONFIGS.medium,
+      itemsPerPageOptions: [...PAGINATION_CONFIGS.medium.itemsPerPageOptions]
+    }
   } else {
-    return PAGINATION_CONFIGS.large
+    return {
+      ...PAGINATION_CONFIGS.large,
+      itemsPerPageOptions: [...PAGINATION_CONFIGS.large.itemsPerPageOptions]
+    }
   }
 }
