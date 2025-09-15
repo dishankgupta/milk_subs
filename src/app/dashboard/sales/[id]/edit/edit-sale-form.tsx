@@ -50,7 +50,7 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
   const form = useForm<SaleFormData>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
-      customer_id: sale.customer_id || undefined,
+      customer_id: sale.customer_id || null,
       product_id: sale.product_id,
       quantity: sale.quantity,
       unit_price: sale.unit_price,
@@ -143,6 +143,10 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="Cash" id="cash" />
                         <Label htmlFor="cash">Cash Sale</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="QR" id="qr" />
+                        <Label htmlFor="qr">QR Sale</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="Credit" id="credit" />

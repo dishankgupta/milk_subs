@@ -193,8 +193,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
       }
       
       // Add sorting parameters
-      if (sortConfig.key) params.set('sort_by', sortConfig.key)
-      if (sortConfig.direction) params.set('sort_order', sortConfig.direction)
+      if (sortConfig?.key) params.set('sort_by', sortConfig.key)
+      if (sortConfig?.direction) params.set('sort_order', sortConfig.direction)
       
       // Open print page in new window
       const printUrl = `/api/print/sales-history?${params.toString()}`
@@ -426,6 +426,14 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                 >
                   Status
                 </SortableTableHead>
+                <SortableTableHead
+                  sortKey="notes"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                  className="max-w-[150px]"
+                >
+                  Notes
+                </SortableTableHead>
                 <TableHead className="w-[50px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -476,14 +484,23 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge 
+                    <Badge
                       variant={
-                        sale.payment_status === 'Completed' ? 'default' : 
+                        sale.payment_status === 'Completed' ? 'default' :
                         sale.payment_status === 'Pending' ? 'destructive' : 'outline'
                       }
                     >
                       {sale.payment_status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-[150px]">
+                    {sale.notes ? (
+                      <div className="text-sm truncate" title={sale.notes}>
+                        {sale.notes}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>

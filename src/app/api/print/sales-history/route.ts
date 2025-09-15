@@ -8,12 +8,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     
     // Extract filter parameters
+    const saleType = searchParams.get('sale_type')
+    const paymentStatus = searchParams.get('payment_status')
+
     const filters = {
       search: searchParams.get('search') || '',
       customer_id: searchParams.get('customer_id') || '',
       product_id: searchParams.get('product_id') || '',
-      sale_type: searchParams.get('sale_type') || '',
-      payment_status: searchParams.get('payment_status') || '',
+      sale_type: (saleType && ['Cash', 'Credit', 'QR'].includes(saleType)) ? saleType as 'Cash' | 'Credit' | 'QR' : undefined,
+      payment_status: (paymentStatus && ['Completed', 'Pending', 'Billed'].includes(paymentStatus)) ? paymentStatus as 'Completed' | 'Pending' | 'Billed' : undefined,
       date_from: searchParams.get('date_from') || '',
       date_to: searchParams.get('date_to') || ''
     }
@@ -23,8 +26,12 @@ export async function GET(request: NextRequest) {
     const sortOrder = searchParams.get('sort_order') || 'desc'
 
     // Fetch sales data with filters (get all records for printing)
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([_, value]) => value !== '' && value !== undefined)
+    )
+
     const salesData = await getSales({
-      ...filters,
+      ...cleanFilters,
       limit: 10000 // Get all sales for printing
     })
     let { sales } = salesData
@@ -82,8 +89,8 @@ export async function GET(request: NextRequest) {
     // Generate active filters summary
     const activeFilters: string[] = []
     if (filters.search) activeFilters.push(`Search: "${filters.search}"`)
-    if (filters.sale_type && filters.sale_type !== 'all') activeFilters.push(`Type: ${filters.sale_type}`)
-    if (filters.payment_status && filters.payment_status !== 'all') activeFilters.push(`Status: ${filters.payment_status}`)
+    if (filters.sale_type) activeFilters.push(`Type: ${filters.sale_type}`)
+    if (filters.payment_status) activeFilters.push(`Status: ${filters.payment_status}`)
     if (filters.date_from) activeFilters.push(`From: ${formatDateIST(new Date(filters.date_from))}`)
     if (filters.date_to) activeFilters.push(`To: ${formatDateIST(new Date(filters.date_to))}`)
 
@@ -400,6 +407,7 @@ export async function GET(request: NextRequest) {
               <th>GST</th>
               <th>Type</th>
               <th>Status</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -417,6 +425,7 @@ export async function GET(request: NextRequest) {
                 <td>${formatCurrency(sale.gst_amount || 0)}</td>
                 <td><span class="badge badge-${sale.sale_type.toLowerCase()}">${sale.sale_type}</span></td>
                 <td><span class="badge badge-${sale.payment_status.toLowerCase()}">${sale.payment_status}</span></td>
+                <td style="font-size: 11px; max-width: 120px; word-wrap: break-word;">${sale.notes || '-'}</td>
               </tr>
             `).join('')}
           </tbody>
