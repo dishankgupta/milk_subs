@@ -25,12 +25,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { EnhancedDateFilter, DateFilterState, doesDateMatchFilter } from "@/components/ui/enhanced-date-filter"
+import { parseLocalDateIST, formatDateIST } from "@/lib/date-utils"
+import { startOfDay, endOfDay } from "date-fns"
 
 // Using DeliveryExtended which contains all necessary fields directly
 
 interface FilterState {
   searchQuery: string
-  dateFilter: string
+  dateFilter: DateFilterState
   routeFilter: string
 }
 
@@ -49,23 +52,22 @@ interface DeliveriesTableProps {
 export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChange, onSortChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [dateFilter, setDateFilter] = useState<string>("")
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: "mostRecent", label: "Most Recent" })
   const [routeFilter, setRouteFilter] = useState<string>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Filter deliveries based on search and filters (client-side only)
   const filteredDeliveries = initialDeliveries.filter(delivery => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesDate = dateFilter === "all" || dateFilter === "" || 
-      delivery.order_date === dateFilter
-    
-    const matchesRoute = routeFilter === "all" || 
+
+    const matchesDate = doesDateMatchFilter(delivery.order_date, dateFilter)
+
+    const matchesRoute = routeFilter === "all" ||
       delivery.route?.name === routeFilter
 
     return matchesSearch && matchesDate && matchesRoute
@@ -101,16 +103,26 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     setSearchQuery(query)
   }
 
-  // Get unique dates and routes for filters
-  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
+  // Get unique routes for filters
   const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
+
+  // Get unique dates for setting default (most recent date)
+  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
 
   // Set default date filter to most recent date on first load
   useEffect(() => {
-    if (uniqueDates.length > 0 && dateFilter === "") {
-      setDateFilter(uniqueDates[0]) // Most recent date
+    if (uniqueDates.length > 0 && dateFilter.preset === "mostRecent" && dateFilter.label === "Most Recent") {
+      const mostRecentDate = uniqueDates[0]
+      const recentDate = parseLocalDateIST(mostRecentDate)
+      setDateFilter({
+        preset: "mostRecent",
+        fromDate: startOfDay(recentDate),
+        toDate: endOfDay(recentDate),
+        label: `Most Recent (${formatDateIST(recentDate)})`,
+        mostRecentDate: mostRecentDate
+      })
     }
-  }, [uniqueDates, dateFilter])
+  }, [uniqueDates, dateFilter.preset, dateFilter.label])
 
   // Notify parent component when filters change
   useEffect(() => {
@@ -219,19 +231,12 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
             />
           </div>
           <div className="flex gap-2">
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Date" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Dates</SelectItem>
-                {uniqueDates.map(date => (
-                  <SelectItem key={date} value={date}>
-                    {formatDateToIST(new Date(date))}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EnhancedDateFilter
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="w-[400px]"
+              mostRecentDate={uniqueDates[0]}
+            />
             
             <Select value={routeFilter} onValueChange={setRouteFilter}>
               <SelectTrigger className="w-[120px]">

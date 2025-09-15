@@ -11,10 +11,11 @@ import { DeliveriesTable } from "./deliveries-table"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { DeliveryExtended } from "@/lib/types"
+import type { DateFilterState } from "@/components/ui/enhanced-date-filter"
 
 interface FilterState {
   searchQuery: string
-  dateFilter: string
+  dateFilter: DateFilterState
   routeFilter: string
 }
 
@@ -88,7 +89,7 @@ function DeliveriesContent() {
   const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryExtended[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
-    dateFilter: "all",
+    dateFilter: { preset: "mostRecent", label: "Most Recent" },
     routeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
@@ -124,13 +125,21 @@ function DeliveriesContent() {
   const handlePrintReport = () => {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
-    if (currentFilters.dateFilter !== 'all') params.append('date', currentFilters.dateFilter)
+
+    // Handle enhanced date filter for print
+    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
+      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
+      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+    } else {
+      params.append('datePreset', currentFilters.dateFilter.preset)
+    }
+
     if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
-    
+
     // Add sort parameters
     params.append('sortKey', currentSort.key)
     params.append('sortDirection', currentSort.direction)
-    
+
     const printUrl = `/api/print/deliveries?${params.toString()}`
     window.open(printUrl, '_blank')
   }
