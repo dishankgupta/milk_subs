@@ -239,13 +239,22 @@ export async function allocatePayment(
         throw new Error(`Failed to allocate payment to invoice: ${insertError.message}`)
       }
       
-      // Update invoice status using the database function
-      const { error: functionError } = await supabase.rpc('update_invoice_status', {
-        invoice_uuid: allocation.invoiceId
+      // Update invoice status with enhanced sales completion
+      const { data: result, error: functionError } = await supabase.rpc('update_invoice_status_with_sales_completion', {
+        p_invoice_id: allocation.invoiceId
       })
       
       if (functionError) {
-        throw new Error(`Failed to update invoice status: ${functionError.message}`)
+        console.error('Enhanced invoice status update failed:', functionError)
+        // Fallback to standard update
+        const { error: fallbackError } = await supabase.rpc('update_invoice_status', {
+          invoice_uuid: allocation.invoiceId
+        })
+        if (fallbackError) {
+          throw new Error(`Failed to update invoice status: ${fallbackError.message}`)
+        }
+      } else if (result?.updated_sales_count > 0) {
+        console.log(`Invoice ${allocation.invoiceId}: ${result.updated_sales_count} credit sales completed`)
       }
     }
     

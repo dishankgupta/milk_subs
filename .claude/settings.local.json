@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "mcp__supabase__apply_migration",
       "Bash(pnpm add:*)",
       "Bash(pnpm run:*)",
       "Bash(pnpm dlx:*)",
@@ -41,7 +40,10 @@
       "mcp__playwright__browser_handle_dialog",
       "mcp__playwright__browser_press_key",
       "Bash(node:*)",
-      "mcp__supabase__search_docs"
+      "mcp__supabase__search_docs",
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)",
+      "mcp__filesystem__write_file"
     ]
   },
   "enabledMcpjsonServers": [

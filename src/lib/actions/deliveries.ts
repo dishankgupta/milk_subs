@@ -2,12 +2,17 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
-import type { DeliveryFormData, BulkDeliveryFormData } from "@/lib/validations"
+import type { DeliveryExtended, DeliveryWithItems, AdditionalDeliveryItem, Customer, Product, Route, DailyOrder } from "@/lib/types"
+import type { DeliveryFormData, BulkDeliveryFormData, DeliveryWithAdditionalItemsFormData } from "@/lib/validations"
 import { 
   formatTimestampForDatabase, 
-  getCurrentISTDate 
+  getCurrentISTDate,
+  formatDateForDatabase 
 } from "@/lib/date-utils"
+
+// ============================================================================
+// FETCH OPERATIONS - Using self-contained delivery queries
+// ============================================================================
 
 export async function getDeliveries() {
   const supabase = await createClient()
@@ -16,12 +21,9 @@ export async function getDeliveries() {
     .from('deliveries')
     .select(`
       *,
-      daily_order:daily_orders (
-        *,
-        customer:customers (*),
-        product:products (*),
-        route:routes (*)
-      )
+      customer:customers (*),
+      product:products (*),
+      route:routes (*)
     `)
     .order('created_at', { ascending: false })
 
@@ -30,11 +32,11 @@ export async function getDeliveries() {
     throw new Error('Failed to fetch deliveries')
   }
 
-  return deliveries as (Delivery & { daily_order: DailyOrder & { 
+  return deliveries as (DeliveryExtended & { 
     customer: Customer, 
     product: Product, 
     route: Route 
-  } })[]
+  })[]
 }
 
 export async function searchDeliveries(searchQuery: string) {
@@ -44,15 +46,12 @@ export async function searchDeliveries(searchQuery: string) {
     .from('deliveries')
     .select(`
       *,
-      daily_order:daily_orders (
-        *,
-        customer:customers (*),
-        product:products (*),
-        route:routes (*)
-      )
+      customer:customers (*),
+      product:products (*),
+      route:routes (*)
     `)
     .or(
-      `delivery_person.ilike.%${searchQuery}%,delivery_notes.ilike.%${searchQuery}%`
+      `delivery_person.ilike.%${searchQuery}%,delivery_notes.ilike.%${searchQuery}%,customer.billing_name.ilike.%${searchQuery}%,product.name.ilike.%${searchQuery}%,route.name.ilike.%${searchQuery}%`
     )
     .order('created_at', { ascending: false })
 
@@ -61,11 +60,11 @@ export async function searchDeliveries(searchQuery: string) {
     throw new Error('Failed to search deliveries')
   }
 
-  return deliveries as (Delivery & { daily_order: DailyOrder & { 
+  return deliveries as (DeliveryExtended & { 
     customer: Customer, 
     product: Product, 
     route: Route 
-  } })[]
+  })[]
 }
 
 export async function getDeliveryById(id: string) {
@@ -75,12 +74,9 @@ export async function getDeliveryById(id: string) {
     .from('deliveries')
     .select(`
       *,
-      daily_order:daily_orders (
-        *,
-        customer:customers (*),
-        product:products (*),
-        route:routes (*)
-      )
+      customer:customers (*),
+      product:products (*),
+      route:routes (*)
     `)
     .eq('id', id)
     .single()
@@ -90,20 +86,83 @@ export async function getDeliveryById(id: string) {
     throw new Error('Failed to fetch delivery')
   }
 
-  return delivery as Delivery & { 
-    daily_order: DailyOrder & { 
-      customer: Customer, 
-      product: Product, 
-      route: Route 
-    } 
+  return delivery as DeliveryExtended & { 
+    customer: Customer, 
+    product: Product, 
+    route: Route
   }
 }
+
+export async function getDeliveriesWithFilters(filters?: {
+  date?: string
+  routeId?: string
+  deliveryTime?: 'Morning' | 'Evening'
+  status?: 'pending' | 'delivered' | 'cancelled'
+  customerId?: string
+}) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from('deliveries')
+    .select(`
+      *,
+      customer:customers (*),
+      product:products (*),
+      route:routes (*)
+    `)
+
+  if (filters?.date) {
+    query = query.eq('order_date', filters.date)
+  }
+  if (filters?.routeId) {
+    query = query.eq('route_id', filters.routeId)
+  }
+  if (filters?.deliveryTime) {
+    query = query.eq('delivery_time', filters.deliveryTime)
+  }
+  if (filters?.status) {
+    query = query.eq('delivery_status', filters.status)
+  }
+  if (filters?.customerId) {
+    query = query.eq('customer_id', filters.customerId)
+  }
+
+  query = query.order('order_date', { ascending: false })
+    .order('delivery_time', { ascending: true })
+    .order('route_id', { ascending: true })
+
+  const { data: deliveries, error } = await query
+
+  if (error) {
+    console.error('Error fetching filtered deliveries:', error)
+    throw new Error('Failed to fetch deliveries')
+  }
+
+  return deliveries as (DeliveryExtended & { 
+    customer: Customer, 
+    product: Product, 
+    route: Route 
+  })[]
+}
+
+// ============================================================================
+// CREATE OPERATIONS - Supporting both subscription and additional deliveries
+// ============================================================================
 
 export async function createDelivery(data: DeliveryFormData) {
   const supabase = await createClient()
   
   const deliveryData = {
-    daily_order_id: data.daily_order_id,
+    daily_order_id: data.daily_order_id || null,
+    customer_id: data.customer_id,
+    product_id: data.product_id,
+    route_id: data.route_id,
+    order_date: formatDateForDatabase(data.order_date),
+    delivery_time: data.delivery_time,
+    unit_price: data.unit_price,
+    total_amount: data.total_amount,
+    planned_quantity: data.planned_quantity || null,
+    delivery_status: data.delivery_status || 'pending',
     actual_quantity: data.actual_quantity,
     delivery_notes: data.delivery_notes || null,
     delivery_person: data.delivery_person || null,
@@ -121,30 +180,53 @@ export async function createDelivery(data: DeliveryFormData) {
     throw new Error('Failed to create delivery record')
   }
 
-  // Update the daily order status to 'Delivered'
-  const { error: updateError } = await supabase
-    .from('daily_orders')
-    .update({ status: 'Delivered' })
-    .eq('id', data.daily_order_id)
+  // Update daily order status if this was a subscription delivery
+  if (data.daily_order_id) {
+    const { error: updateError } = await supabase
+      .from('daily_orders')
+      .update({ status: 'Delivered' })
+      .eq('id', data.daily_order_id)
 
-  if (updateError) {
-    console.error('Error updating order status:', updateError)
-    // Don't throw error here as delivery was created successfully
+    if (updateError) {
+      console.error('Error updating order status:', updateError)
+      // Don't throw error here as delivery was created successfully
+    }
   }
 
   revalidatePath('/dashboard/deliveries')
   revalidatePath('/dashboard/orders')
   
-  return delivery as Delivery
+  return delivery as DeliveryExtended
+}
+
+export async function createDeliveryWithAdditionalItems(data: DeliveryWithAdditionalItemsFormData) {
+  // With the new self-contained deliveries structure, additional items are created as separate deliveries
+  // Create main delivery
+  const mainDelivery = await createDelivery(data)
+  
+  // Additional items would now be created as separate delivery entries with daily_order_id = NULL
+  // This is handled through the individual delivery pages workflow as per the restructure
+  
+  return mainDelivery
 }
 
 export async function createBulkDeliveries(data: BulkDeliveryFormData) {
   const supabase = await createClient()
   
-  // First, get the orders to be delivered
+  // Get orders with their details for self-contained delivery creation
   const { data: orders, error: ordersError } = await supabase
     .from('daily_orders')
-    .select('id, planned_quantity')
+    .select(`
+      id, 
+      customer_id,
+      product_id,
+      route_id,
+      order_date,
+      delivery_time,
+      unit_price,
+      total_amount,
+      planned_quantity
+    `)
     .in('id', data.order_ids)
     .eq('status', 'Generated')
   
@@ -159,7 +241,7 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
   
   const deliveredAt = data.delivered_at ? formatTimestampForDatabase(data.delivered_at) : formatTimestampForDatabase(getCurrentISTDate())
   
-  // Prepare delivery records
+  // Prepare delivery records with self-contained data
   const deliveryRecords = orders.map((order) => {
     let actualQuantity = order.planned_quantity // Default to planned quantity
     
@@ -173,6 +255,15 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
     
     return {
       daily_order_id: order.id,
+      customer_id: order.customer_id,
+      product_id: order.product_id,
+      route_id: order.route_id,
+      order_date: order.order_date,
+      delivery_time: order.delivery_time,
+      unit_price: order.unit_price,
+      total_amount: order.total_amount,
+      planned_quantity: order.planned_quantity,
+      delivery_status: 'delivered',
       actual_quantity: actualQuantity,
       delivery_notes: data.delivery_notes || null,
       delivery_person: data.delivery_person || null,
@@ -180,10 +271,34 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
     }
   })
   
-  // Insert all delivery records in a transaction
+  // Process additional items by customer if provided
+  const additionalDeliveries: Array<Omit<typeof deliveryRecords[0], 'daily_order_id' | 'planned_quantity'>> = []
+  if (data.additional_items_by_customer) {
+    for (const customerItems of data.additional_items_by_customer) {
+      for (const item of customerItems.items) {
+        additionalDeliveries.push({
+          customer_id: customerItems.customer_id,
+          product_id: item.product_id,
+          route_id: customerItems.route_id,
+          order_date: formatDateForDatabase(getCurrentISTDate()),
+          delivery_time: 'Morning', // Default for additional items
+          unit_price: item.unit_price,
+          total_amount: item.quantity * item.unit_price,
+          delivery_status: 'delivered',
+          actual_quantity: item.quantity,
+          delivery_notes: item.notes || null,
+          delivery_person: data.delivery_person || null,
+          delivered_at: deliveredAt,
+        })
+      }
+    }
+  }
+  
+  // Insert all delivery records (subscription + additional)
+  const allDeliveryRecords = [...deliveryRecords, ...additionalDeliveries]
   const { data: deliveries, error: insertError } = await supabase
     .from('deliveries')
-    .insert(deliveryRecords)
+    .insert(allDeliveryRecords)
     .select()
   
   if (insertError) {
@@ -191,7 +306,7 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
     throw new Error('Failed to create delivery records')
   }
   
-  // Update all order statuses to 'Delivered'
+  // Update order statuses to 'Delivered' (only for subscription deliveries)
   const { error: updateError } = await supabase
     .from('daily_orders')
     .update({ status: 'Delivered' })
@@ -206,15 +321,34 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
   revalidatePath('/dashboard/orders')
   
   return {
-    deliveries: deliveries as Delivery[],
-    count: deliveries.length
+    deliveries: deliveries as DeliveryExtended[],
+    subscriptionCount: deliveryRecords.length,
+    additionalCount: additionalDeliveries.length,
+    totalCount: deliveries.length
   }
 }
+
+// ============================================================================
+// UPDATE OPERATIONS - Self-contained delivery updates
+// ============================================================================
 
 export async function updateDelivery(id: string, data: Partial<DeliveryFormData>) {
   const supabase = await createClient()
   
   const updateData: Record<string, unknown> = {}
+  
+  // Core delivery fields
+  if (data.customer_id !== undefined) updateData.customer_id = data.customer_id
+  if (data.product_id !== undefined) updateData.product_id = data.product_id
+  if (data.route_id !== undefined) updateData.route_id = data.route_id
+  if (data.order_date !== undefined) updateData.order_date = formatDateForDatabase(data.order_date)
+  if (data.delivery_time !== undefined) updateData.delivery_time = data.delivery_time
+  if (data.unit_price !== undefined) updateData.unit_price = data.unit_price
+  if (data.total_amount !== undefined) updateData.total_amount = data.total_amount
+  if (data.planned_quantity !== undefined) updateData.planned_quantity = data.planned_quantity
+  if (data.delivery_status !== undefined) updateData.delivery_status = data.delivery_status
+  
+  // Delivery execution fields
   if (data.actual_quantity !== undefined) updateData.actual_quantity = data.actual_quantity
   if (data.delivery_notes !== undefined) updateData.delivery_notes = data.delivery_notes || null
   if (data.delivery_person !== undefined) updateData.delivery_person = data.delivery_person || null
@@ -237,16 +371,20 @@ export async function updateDelivery(id: string, data: Partial<DeliveryFormData>
   revalidatePath('/dashboard/deliveries')
   revalidatePath(`/dashboard/deliveries/${id}`)
   
-  return delivery as Delivery
+  return delivery as DeliveryExtended
 }
+
+// ============================================================================
+// DELETE OPERATIONS - Handling both subscription and additional deliveries
+// ============================================================================
 
 export async function deleteDelivery(id: string) {
   const supabase = await createClient()
   
-  // First get the delivery to get the order id
+  // First get the delivery to check if it's linked to an order
   const { data: delivery, error: fetchError } = await supabase
     .from('deliveries')
-    .select('daily_order_id')
+    .select('id, daily_order_id')
     .eq('id', id)
     .single()
 
@@ -255,6 +393,9 @@ export async function deleteDelivery(id: string) {
     throw new Error('Failed to find delivery')
   }
 
+  // No need to delete additional items as they are now part of the deliveries table structure
+
+  // Delete the delivery
   const { error } = await supabase
     .from('deliveries')
     .delete()
@@ -265,15 +406,17 @@ export async function deleteDelivery(id: string) {
     throw new Error('Failed to delete delivery')
   }
 
-  // Update the daily order status back to 'Generated'
-  const { error: updateError } = await supabase
-    .from('daily_orders')
-    .update({ status: 'Generated' })
-    .eq('id', delivery.daily_order_id)
+  // Update daily order status if this was a subscription delivery
+  if (delivery.daily_order_id) {
+    const { error: updateError } = await supabase
+      .from('daily_orders')
+      .update({ status: 'Generated' })
+      .eq('id', delivery.daily_order_id)
 
-  if (updateError) {
-    console.error('Error updating order status after deletion:', updateError)
-    // Don't throw error here as delivery was deleted successfully
+    if (updateError) {
+      console.error('Error updating order status after deletion:', updateError)
+      // Don't throw error here as delivery was deleted successfully
+    }
   }
 
   revalidatePath('/dashboard/deliveries')
@@ -287,7 +430,7 @@ export async function bulkDeleteDeliveries(deliveryIds: string[]) {
 
   const supabase = await createClient()
   
-  // First get all deliveries to get their order IDs
+  // Get deliveries with their order IDs
   const { data: deliveries, error: fetchError } = await supabase
     .from('deliveries')
     .select('id, daily_order_id')
@@ -302,6 +445,8 @@ export async function bulkDeleteDeliveries(deliveryIds: string[]) {
     return { successCount: 0, failureCount: 0 }
   }
 
+  // No need to delete additional items as they are now part of the deliveries table structure
+
   // Bulk delete deliveries
   const { error: deleteError } = await supabase
     .from('deliveries')
@@ -313,16 +458,21 @@ export async function bulkDeleteDeliveries(deliveryIds: string[]) {
     throw new Error('Failed to delete deliveries')
   }
 
-  // Bulk update daily orders status back to 'Generated'
-  const orderIds = deliveries.map(d => d.daily_order_id)
-  const { error: updateError } = await supabase
-    .from('daily_orders')
-    .update({ status: 'Generated' })
-    .in('id', orderIds)
+  // Update order statuses for subscription deliveries
+  const orderIds = deliveries
+    .filter(d => d.daily_order_id)
+    .map(d => d.daily_order_id)
+    
+  if (orderIds.length > 0) {
+    const { error: updateError } = await supabase
+      .from('daily_orders')
+      .update({ status: 'Generated' })
+      .in('id', orderIds)
 
-  if (updateError) {
-    console.error('Error updating order statuses after bulk deletion:', updateError)
-    // Don't throw error here as deliveries were deleted successfully
+    if (updateError) {
+      console.error('Error updating order statuses after bulk deletion:', updateError)
+      // Don't throw error here as deliveries were deleted successfully
+    }
   }
 
   revalidatePath('/dashboard/deliveries')
@@ -330,6 +480,10 @@ export async function bulkDeleteDeliveries(deliveryIds: string[]) {
   
   return { successCount: deliveries.length, failureCount: 0 }
 }
+
+// ============================================================================
+// UTILITY FUNCTIONS - Supporting new delivery workflow
+// ============================================================================
 
 export async function getUndeliveredOrders(date?: string) {
   const supabase = await createClient()
@@ -357,61 +511,67 @@ export async function getUndeliveredOrders(date?: string) {
     throw new Error('Failed to fetch undelivered orders')
   }
 
-  return orders as (DailyOrder & { 
-    customer: Customer, 
-    product: Product, 
-    route: Route 
-  })[]
+  return orders as (DailyOrder & {
+    customer: Customer
+    product: Product
+    route: Route
+  })[] // Keep existing type compatibility
 }
 
 export async function getDeliveryStats(date?: string) {
   const supabase = await createClient()
   
-  let ordersQuery = supabase
-    .from('daily_orders')
-    .select('id, planned_quantity, status')
-
+  // Get stats from deliveries table directly
   let deliveriesQuery = supabase
     .from('deliveries')
     .select(`
-      id, 
+      id,
+      daily_order_id,
+      planned_quantity,
       actual_quantity,
-      daily_order:daily_orders!inner (
-        id,
-        order_date,
-        planned_quantity
-      )
+      delivery_status,
+      order_date
     `)
 
   if (date) {
-    ordersQuery = ordersQuery.eq('order_date', date)
-    deliveriesQuery = deliveriesQuery.eq('daily_order.order_date', date)
+    deliveriesQuery = deliveriesQuery.eq('order_date', date)
   }
 
-  const [ordersResult, deliveriesResult] = await Promise.all([
-    ordersQuery,
-    deliveriesQuery
-  ])
+  const { data: deliveries, error: deliveriesError } = await deliveriesQuery
 
-  if (ordersResult.error) {
-    console.error('Error fetching order stats:', ordersResult.error)
-    throw new Error('Failed to fetch order statistics')
-  }
-
-  if (deliveriesResult.error) {
-    console.error('Error fetching delivery stats:', deliveriesResult.error)
+  if (deliveriesError) {
+    console.error('Error fetching delivery stats:', deliveriesError)
     throw new Error('Failed to fetch delivery statistics')
   }
 
-  const orders = ordersResult.data
-  const deliveries = deliveriesResult.data
+  // Get orders count for completion rate calculation
+  let ordersQuery = supabase
+    .from('daily_orders')
+    .select('id, status, planned_quantity')
 
+  if (date) {
+    ordersQuery = ordersQuery.eq('order_date', date)
+  }
+
+  const { data: orders, error: ordersError } = await ordersQuery
+
+  if (ordersError) {
+    console.error('Error fetching order stats:', ordersError)
+    throw new Error('Failed to fetch order statistics')
+  }
+
+  // Calculate statistics
+  const subscriptionDeliveries = deliveries.filter(d => d.daily_order_id !== null)
+  const additionalDeliveries = deliveries.filter(d => d.daily_order_id === null)
+  
   const totalOrders = orders.length
   const deliveredOrders = orders.filter(o => o.status === 'Delivered').length
   const pendingOrders = orders.filter(o => o.status === 'Generated').length
   
-  const totalPlannedQuantity = orders.reduce((sum, order) => sum + Number(order.planned_quantity), 0)
-  const totalActualQuantity = deliveries.reduce((sum, delivery) => sum + Number(delivery.actual_quantity || 0), 0)
+  const totalPlannedQuantity = subscriptionDeliveries.reduce((sum, delivery) => 
+    sum + Number(delivery.planned_quantity || 0), 0)
+  const totalActualQuantity = deliveries.reduce((sum, delivery) => 
+    sum + Number(delivery.actual_quantity || 0), 0)
   
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   
@@ -419,9 +579,22 @@ export async function getDeliveryStats(date?: string) {
     totalOrders,
     deliveredOrders,
     pendingOrders,
+    subscriptionDeliveries: subscriptionDeliveries.length,
+    additionalDeliveries: additionalDeliveries.length,
+    totalDeliveries: deliveries.length,
     totalPlannedQuantity,
     totalActualQuantity,
     completionRate,
     quantityVariance: totalActualQuantity - totalPlannedQuantity
   }
 }
+
+// ============================================================================
+// ADDITIONAL ITEMS MANAGEMENT
+// ============================================================================
+
+// Additional items are now managed as separate deliveries with daily_order_id = NULL
+// This function has been replaced with individual delivery creation
+
+// Additional items are now managed through individual delivery pages
+// This function has been removed as part of the deliveries table restructure

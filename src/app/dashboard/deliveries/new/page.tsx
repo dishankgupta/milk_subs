@@ -44,7 +44,17 @@ async function NewDeliveryContent({ searchParams }: NewDeliveryPageProps) {
       )
     }
 
-    return <DeliveryForm dailyOrder={order} />
+    return <DeliveryForm initialData={{
+      customer: order.customer,
+      product: order.product,
+      route: order.route,
+      order_date: order.order_date,
+      delivery_time: order.delivery_time,
+      unit_price: order.unit_price,
+      total_amount: order.total_amount,
+      planned_quantity: order.planned_quantity,
+      daily_order_id: order.id
+    }} />
   }
 
   // Show list of undelivered orders

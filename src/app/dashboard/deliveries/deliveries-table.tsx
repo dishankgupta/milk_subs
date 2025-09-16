@@ -5,8 +5,9 @@ import Link from "next/link"
 import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { useSorting } from "@/hooks/useSorting"
+import { usePagination, SimplePagination, createPaginationConfig } from "@/lib/pagination"
 
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
+import type { DeliveryExtended } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { deleteDelivery, bulkDeleteDeliveries } from "@/lib/actions/deliveries"
 
@@ -24,18 +25,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { EnhancedDateFilter, DateFilterState, doesDateMatchFilter } from "@/components/ui/enhanced-date-filter"
+import { parseLocalDateIST, formatDateIST } from "@/lib/date-utils"
+import { startOfDay, endOfDay } from "date-fns"
 
-type DeliveryWithOrder = Delivery & {
-  daily_order: DailyOrder & {
-    customer: Customer
-    product: Product
-    route: Route
-  }
-}
+// Using DeliveryExtended which contains all necessary fields directly
 
 interface FilterState {
   searchQuery: string
-  dateFilter: string
+  dateFilter: DateFilterState
   routeFilter: string
 }
 
@@ -45,33 +43,32 @@ interface SortState {
 }
 
 interface DeliveriesTableProps {
-  initialDeliveries: DeliveryWithOrder[]
+  initialDeliveries: DeliveryExtended[]
   onDataChange?: () => void
-  onFiltersChange?: (filtered: DeliveryWithOrder[], filters: FilterState) => void
+  onFiltersChange?: (filtered: DeliveryExtended[], filters: FilterState) => void
   onSortChange?: (sortState: SortState) => void
 }
 
 export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChange, onSortChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [dateFilter, setDateFilter] = useState<string>("all")
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: "mostRecent", label: "Most Recent" })
   const [routeFilter, setRouteFilter] = useState<string>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Filter deliveries based on search and filters (client-side only)
   const filteredDeliveries = initialDeliveries.filter(delivery => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesDate = dateFilter === "all" || 
-      delivery.daily_order.order_date === dateFilter
-    
-    const matchesRoute = routeFilter === "all" || 
-      delivery.daily_order.route.name === routeFilter
+      delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesDate = doesDateMatchFilter(delivery.order_date, dateFilter)
+
+    const matchesRoute = routeFilter === "all" ||
+      delivery.route?.name === routeFilter
 
     return matchesSearch && matchesDate && matchesRoute
   })
@@ -79,11 +76,11 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   // Apply sorting to filtered deliveries with default sort by order date descending
   const { sortedData: sortedDeliveries, sortConfig, handleSort } = useSorting(
     filteredDeliveries,
-    'daily_order.order_date',
+    'order_date',
     'desc',
     (delivery, key) => {
       if (key === 'variance') {
-        return (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
+        return (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
       }
       if (key === 'delivered_at') {
         return delivery.delivered_at ? new Date(delivery.delivered_at) : new Date(0)
@@ -93,7 +90,41 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     }
   )
 
-  // Notify parent component when filters change (only on filter state changes, not filtered data)
+  // Add pagination after sorting - use total deliveries count for config, not filtered count
+  const paginationConfig = createPaginationConfig(initialDeliveries.length)
+  const pagination = usePagination(sortedDeliveries, {
+    defaultItemsPerPage: paginationConfig.defaultItemsPerPage,
+    itemsPerPageOptions: paginationConfig.itemsPerPageOptions,
+    maxVisiblePages: paginationConfig.maxVisiblePages
+  })
+
+  // Handle search functionality (client-side filtering)
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  // Get unique routes for filters
+  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
+
+  // Get unique dates for setting default (most recent date)
+  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
+
+  // Set default date filter to most recent date on first load
+  useEffect(() => {
+    if (uniqueDates.length > 0 && dateFilter.preset === "mostRecent" && dateFilter.label === "Most Recent") {
+      const mostRecentDate = uniqueDates[0]
+      const recentDate = parseLocalDateIST(mostRecentDate)
+      setDateFilter({
+        preset: "mostRecent",
+        fromDate: startOfDay(recentDate),
+        toDate: endOfDay(recentDate),
+        label: `Most Recent (${formatDateIST(recentDate)})`,
+        mostRecentDate: mostRecentDate
+      })
+    }
+  }, [uniqueDates, dateFilter.preset, dateFilter.label])
+
+  // Notify parent component when filters change
   useEffect(() => {
     if (onFiltersChange) {
       const currentFilters = {
@@ -103,7 +134,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       }
       onFiltersChange(filteredDeliveries, currentFilters)
     }
-  }, [searchQuery, dateFilter, routeFilter])
+  }, [searchQuery, dateFilter, routeFilter]) // Remove onFiltersChange from deps
 
   // Notify parent component when sort changes
   useEffect(() => {
@@ -113,16 +144,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         direction: sortConfig.direction
       })
     }
-  }, [sortConfig, onSortChange])
-
-  // Handle search functionality (client-side filtering)
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
-  }
-
-  // Get unique dates and routes for filters
-  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.daily_order.order_date))).sort().reverse()
-  const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.daily_order.route.name)))
+  }, [sortConfig]) // Remove onSortChange from deps
 
   async function handleDelete(id: string, customerName: string) {
     if (!confirm(`Are you sure you want to delete the delivery for ${customerName}?`)) {
@@ -188,7 +210,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
 
   function handleSelectAll(checked: boolean) {
     if (checked) {
-      setSelectedDeliveries(new Set(sortedDeliveries.map(d => d.id)))
+      setSelectedDeliveries(new Set(pagination.paginatedData.map(d => d.id)))
     } else {
       setSelectedDeliveries(new Set())
     }
@@ -209,19 +231,12 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
             />
           </div>
           <div className="flex gap-2">
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Date" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Dates</SelectItem>
-                {uniqueDates.map(date => (
-                  <SelectItem key={date} value={date}>
-                    {formatDateToIST(new Date(date))}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EnhancedDateFilter
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="w-[400px]"
+              mostRecentDate={uniqueDates[0]}
+            />
             
             <Select value={routeFilter} onValueChange={setRouteFilter}>
               <SelectTrigger className="w-[120px]">
@@ -230,7 +245,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               <SelectContent>
                 <SelectItem value="all">All Routes</SelectItem>
                 {uniqueRoutes.map(route => (
-                  <SelectItem key={route} value={route}>{route}</SelectItem>
+                  <SelectItem key={route} value={route || ''}>{route}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -242,7 +257,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-600">
-            Showing {sortedDeliveries.length} delivery{sortedDeliveries.length !== 1 ? 'ies' : 'y'}
+            Showing {pagination.displayInfo.start}-{pagination.displayInfo.end} of {pagination.displayInfo.total} deliver{pagination.displayInfo.total !== 1 ? 'ies' : 'y'}
           </div>
           {selectedDeliveries.size > 0 && (
             <div className="flex items-center gap-2">
@@ -265,26 +280,26 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Sort by:</span>
           <Button
-            variant={sortConfig?.key === 'daily_order.customer.billing_name' ? 'default' : 'outline'}
+            variant={sortConfig?.key === 'customer.billing_name' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleSort('daily_order.customer.billing_name')}
+            onClick={() => handleSort('customer.billing_name')}
             className="text-xs h-7"
           >
             Customer
-            {sortConfig?.key === 'daily_order.customer.billing_name' && (
+            {sortConfig?.key === 'customer.billing_name' && (
               sortConfig.direction === 'asc' ? 
                 <ArrowUp className="ml-1 h-3 w-3" /> : 
                 <ArrowDown className="ml-1 h-3 w-3" />
             )}
           </Button>
           <Button
-            variant={sortConfig?.key === 'daily_order.order_date' ? 'default' : 'outline'}
+            variant={sortConfig?.key === 'order_date' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleSort('daily_order.order_date')}
+            onClick={() => handleSort('order_date')}
             className="text-xs h-7"
           >
             Order Date
-            {sortConfig?.key === 'daily_order.order_date' && (
+            {sortConfig?.key === 'order_date' && (
               sortConfig.direction === 'asc' ? 
                 <ArrowUp className="ml-1 h-3 w-3" /> : 
                 <ArrowDown className="ml-1 h-3 w-3" />
@@ -332,8 +347,20 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         </div>
       </div>
 
+      {/* Top Pagination Controls */}
+      {pagination.totalItems > 0 && (
+        <div className="mb-4">
+          <SimplePagination
+            pagination={pagination}
+            itemName="deliveries"
+            className="justify-center"
+            itemsPerPageOptions={paginationConfig.itemsPerPageOptions}
+          />
+        </div>
+      )}
+
       {/* Results */}
-      {sortedDeliveries.length === 0 ? (
+      {pagination.totalItems === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-muted-foreground">
@@ -347,43 +374,50 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         <div className="space-y-4">
           {/* Select All Row */}
           <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-            <Checkbox 
-              checked={sortedDeliveries.length > 0 && selectedDeliveries.size === sortedDeliveries.length}
+            <Checkbox
+              checked={pagination.paginatedData.length > 0 && selectedDeliveries.size === pagination.paginatedData.length}
               onCheckedChange={handleSelectAll}
             />
             <span className="text-sm font-medium">
-              Select All ({sortedDeliveries.length} deliveries)
+              Select All ({pagination.paginatedData.length} deliveries on this page)
             </span>
           </div>
-          
-          {sortedDeliveries.map((delivery) => {
-            const order = delivery.daily_order
-            const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
-            const amountVariance = quantityVariance * order.unit_price
+
+          {pagination.paginatedData.map((delivery) => {
+            const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
+            const amountVariance = quantityVariance * delivery.unit_price
+            const isAdditional = delivery.daily_order_id === null || delivery.planned_quantity === null
 
             return (
-              <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''}`}>
+              <Card key={delivery.id} className={`hover:shadow-md transition-shadow ${selectedDeliveries.has(delivery.id) ? 'ring-2 ring-blue-500' : ''} ${isAdditional ? 'border-l-4 border-l-orange-500' : 'border-l-4 border-l-blue-500'}`}>
                 <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox 
-                        checked={selectedDeliveries.has(delivery.id)}
-                        onCheckedChange={(checked) => handleSelectDelivery(delivery.id, checked as boolean)}
-                        className="mt-1"
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                  <div className="flex items-start gap-4">
+                    <Checkbox 
+                      checked={selectedDeliveries.has(delivery.id)}
+                      onCheckedChange={(checked) => handleSelectDelivery(delivery.id, checked as boolean)}
+                      className="mt-1 shrink-0"
+                    />
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Customer & Product Info */}
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{order.customer.billing_name}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="font-medium truncate">{delivery.customer?.billing_name || 'N/A'}</span>
+                            <Badge 
+                              variant={isAdditional ? "outline" : "secondary"}
+                              className={`shrink-0 ${isAdditional ? "text-orange-600 border-orange-300" : "text-blue-600 bg-blue-100"}`}
+                            >
+                              {isAdditional ? "Additional" : "Subscription"}
+                            </Badge>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {order.customer.contact_person}
+                          <div className="text-sm text-muted-foreground truncate">
+                            {delivery.customer?.contact_person || 'N/A'}
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            <span>{order.product.name}</span>
+                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="truncate">{delivery.product?.name || 'N/A'}</span>
                           </div>
                         </div>
 
@@ -391,15 +425,15 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Order Date:</span>{" "}
-                            {formatDateToIST(new Date(order.order_date))}
+                            <span className="whitespace-nowrap">{formatDateToIST(new Date(delivery.order_date))}</span>
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Route:</span>{" "}
-                            {order.route.name} • {order.delivery_time}
+                            <span className="truncate">{delivery.route?.name || 'N/A'} • {delivery.delivery_time}</span>
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">Planned:</span>{" "}
-                            {order.planned_quantity}L @ {formatCurrency(order.unit_price)}/L
+                            <span className="whitespace-nowrap">{delivery.planned_quantity || 0}L @ {formatCurrency(delivery.unit_price)}/L</span>
                           </div>
                         </div>
 
@@ -407,31 +441,33 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                         <div className="space-y-2">
                           <div className="text-sm">
                             <span className="font-medium">Actual:</span>{" "}
-                            {delivery.actual_quantity || 0}L
-                            {quantityVariance !== 0 && (
-                              <span className={quantityVariance > 0 ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
-                                ({quantityVariance > 0 ? "+" : ""}{quantityVariance}L)
-                              </span>
-                            )}
+                            <span className="whitespace-nowrap">
+                              {delivery.actual_quantity || 0}L
+                              {quantityVariance !== 0 && (
+                                <span className={quantityVariance > 0 ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
+                                  ({quantityVariance > 0 ? "+" : ""}{quantityVariance}L)
+                                </span>
+                              )}
+                            </span>
                           </div>
                           
                           {delivery.delivered_at && (
                             <div className="flex items-center gap-2 text-sm">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
+                              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="whitespace-nowrap">{formatDateTimeToIST(new Date(delivery.delivered_at))}</span>
                             </div>
                           )}
                           
                           {delivery.delivery_person && (
                             <div className="text-sm">
                               <span className="font-medium">Delivered by:</span>{" "}
-                              {delivery.delivery_person}
+                              <span className="truncate">{delivery.delivery_person}</span>
                             </div>
                           )}
 
                           {/* Amount Variance Badge */}
                           {amountVariance !== 0 && (
-                            <Badge variant={amountVariance > 0 ? "default" : "destructive"} className="w-fit">
+                            <Badge variant={amountVariance > 0 ? "default" : "destructive"} className="w-fit shrink-0">
                               {amountVariance > 0 ? "+" : ""}{formatCurrency(amountVariance)}
                             </Badge>
                           )}
@@ -440,7 +476,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="shrink-0 ml-auto">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -467,7 +503,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
                           </Link>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleDelete(delivery.id, order.customer.billing_name)}
+                            onClick={() => handleDelete(delivery.id, delivery.customer?.billing_name || 'Unknown')}
                             className="text-red-600 focus:text-red-600"
                             disabled={deletingId === delivery.id}
                           >
@@ -492,6 +528,18 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               </Card>
             )
           })}
+
+          {/* Pagination Controls */}
+          {pagination.totalItems > 0 && (
+            <div className="mt-6">
+              <SimplePagination
+                pagination={pagination}
+                itemName="deliveries"
+                className="justify-center"
+                itemsPerPageOptions={paginationConfig.itemsPerPageOptions}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

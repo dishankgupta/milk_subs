@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -8,9 +8,11 @@ import { format } from "date-fns"
 import { formatDateToIST } from "@/lib/utils"
 import { toast } from "sonner"
 
-import { deliverySchema, type DeliveryFormData } from "@/lib/validations"
-import { createDelivery, updateDelivery } from "@/lib/actions/deliveries"
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
+import { deliveryWithAdditionalItemsSchema, type DeliveryWithAdditionalItemsFormData } from "@/lib/validations"
+import { createDelivery, updateDelivery, createDeliveryWithAdditionalItems } from "@/lib/actions/deliveries"
+import { getProducts } from "@/lib/actions/products"
+import type { DeliveryExtended, Product, Customer, Route } from "@/lib/types"
+import { AdditionalItemsFormSection } from "@/components/deliveries/additional-items-form-section"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,57 +25,88 @@ import { Calendar } from "@/components/ui/calendar"
 import { cn, formatCurrency } from "@/lib/utils"
 
 interface DeliveryFormProps {
-  delivery?: Delivery & {
-    daily_order: DailyOrder & {
-      customer: Customer
-      product: Product
-      route: Route
-    }
-  }
-  dailyOrder?: DailyOrder & {
+  delivery?: DeliveryExtended
+  // For backward compatibility when creating new deliveries from orders
+  initialData?: {
     customer: Customer
     product: Product
     route: Route
+    order_date: string
+    delivery_time: string
+    unit_price: number
+    total_amount: number
+    planned_quantity: number
+    daily_order_id?: string
   }
 }
 
-export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
-  const order = delivery?.daily_order || dailyOrder
+export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
+  // Use delivery data directly if editing, otherwise use initialData for new deliveries
+  const orderData = delivery || initialData
   
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(
     delivery?.delivered_at ? new Date(delivery.delivered_at) : new Date()
   )
+  const [products, setProducts] = useState<Product[]>([])
+  const [additionalTotal, setAdditionalTotal] = useState(0)
   const router = useRouter()
+  
+  // Fetch products for additional items selection
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const productsData = await getProducts()
+        setProducts(productsData)
+      } catch (error) {
+        console.error('Error loading products:', error)
+        toast.error('Failed to load products')
+      }
+    }
+    loadProducts()
+  }, [])
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    watch
-  } = useForm<DeliveryFormData>({
-    resolver: zodResolver(deliverySchema),
+    watch,
+    control
+  } = useForm<DeliveryWithAdditionalItemsFormData>({
+    resolver: zodResolver(deliveryWithAdditionalItemsSchema),
     defaultValues: {
-      daily_order_id: order?.id || "",
-      actual_quantity: delivery?.actual_quantity || order?.planned_quantity || 0,
+      // Handle both old and new delivery structures
+      daily_order_id: delivery?.daily_order_id || initialData?.daily_order_id || undefined,
+      // Required fields for self-contained delivery - provide defaults for new deliveries
+      customer_id: delivery?.customer_id || initialData?.customer?.id || "",
+      product_id: delivery?.product_id || initialData?.product?.id || "",
+      route_id: delivery?.route_id || initialData?.route?.id || "",
+      order_date: delivery?.order_date ? new Date(delivery.order_date) : new Date(initialData?.order_date || Date.now()),
+      delivery_time: (delivery?.delivery_time || initialData?.delivery_time || "Morning") as "Morning" | "Evening",
+      unit_price: delivery?.unit_price || initialData?.unit_price || 0,
+      total_amount: delivery?.total_amount || initialData?.total_amount || 0,
+      planned_quantity: delivery?.planned_quantity || initialData?.planned_quantity || undefined,
+      delivery_status: delivery?.delivery_status || undefined, // Let default in schema handle this
+      actual_quantity: delivery?.actual_quantity || orderData?.planned_quantity || 0,
       delivery_notes: delivery?.delivery_notes || "",
       delivery_person: delivery?.delivery_person || "",
       delivered_at: deliveredAt,
+      additional_items: []
     },
   })
 
   const actualQuantity = watch("actual_quantity")
 
-  if (!order) {
+  if (!orderData) {
     return (
       <div className="text-center text-muted-foreground">
-        <p>Order not found</p>
+        <p>Order data not found</p>
       </div>
     )
   }
 
-  async function onSubmit(data: DeliveryFormData) {
+  const onSubmit = async (data: DeliveryWithAdditionalItemsFormData) => {
     startTransition(async () => {
       try {
         const formData = {
@@ -82,11 +115,26 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
         }
 
         if (delivery) {
+          // For editing existing deliveries, use the original update function
+          // TODO: Implement updateDeliveryWithAdditionalItems for editing
           await updateDelivery(delivery.id, formData)
           toast.success("Delivery updated successfully!")
         } else {
-          await createDelivery(formData)
-          toast.success("Delivery confirmed successfully!")
+          // For new deliveries, check if we have additional items
+          const validAdditionalItems = data.additional_items?.filter(item => 
+            item.product_id && item.quantity > 0
+          ) || []
+          
+          if (validAdditionalItems.length > 0) {
+            await createDeliveryWithAdditionalItems({
+              ...formData,
+              additional_items: validAdditionalItems
+            })
+            toast.success(`Delivery confirmed with ${validAdditionalItems.length} additional item(s)!`)
+          } else {
+            await createDelivery(formData)
+            toast.success("Delivery confirmed successfully!")
+          }
         }
         
         router.push("/dashboard/deliveries")
@@ -98,8 +146,10 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
     })
   }
 
-  const quantityVariance = actualQuantity - order.planned_quantity
-  const amountVariance = quantityVariance * order.unit_price
+  const quantityVariance = actualQuantity - (orderData.planned_quantity || 0)
+  const amountVariance = quantityVariance * orderData.unit_price
+  const subscriptionTotal = actualQuantity * orderData.unit_price
+  const grandTotal = subscriptionTotal + additionalTotal
 
   return (
     <div className="space-y-6">
@@ -111,7 +161,7 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
             Order Details
           </CardTitle>
           <CardDescription>
-            Order for {formatDateToIST(new Date(order.order_date))}
+            {delivery ? 'Delivery' : 'Order'} for {formatDateToIST(new Date(orderData.order_date))}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -120,8 +170,8 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <User className="h-4 w-4" />
               Customer
             </div>
-            <div className="font-medium">{order.customer.billing_name}</div>
-            <div className="text-sm text-muted-foreground">{order.customer.contact_person}</div>
+            <div className="font-medium">{orderData.customer?.billing_name}</div>
+            <div className="text-sm text-muted-foreground">{orderData.customer?.contact_person}</div>
           </div>
           
           <div className="space-y-2">
@@ -129,9 +179,9 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <Package className="h-4 w-4" />
               Product
             </div>
-            <div className="font-medium">{order.product.name}</div>
+            <div className="font-medium">{orderData.product?.name}</div>
             <div className="text-sm text-muted-foreground">
-              Planned: {order.planned_quantity}L @ {formatCurrency(order.unit_price)}/L
+              Planned: {orderData.planned_quantity || 0}L @ {formatCurrency(orderData.unit_price)}/L
             </div>
           </div>
 
@@ -140,8 +190,8 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <MapPin className="h-4 w-4" />
               Route & Time
             </div>
-            <div className="font-medium">{order.route.name}</div>
-            <div className="text-sm text-muted-foreground">{order.delivery_time}</div>
+            <div className="font-medium">{orderData.route?.name}</div>
+            <div className="text-sm text-muted-foreground">{orderData.delivery_time}</div>
           </div>
 
           <div className="space-y-2">
@@ -149,9 +199,9 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               <Package className="h-4 w-4" />
               Planned Amount
             </div>
-            <div className="font-medium">{formatCurrency(order.total_amount)}</div>
+            <div className="font-medium">{formatCurrency(orderData.total_amount)}</div>
             <div className="text-sm text-muted-foreground">
-              Status: <span className="capitalize">{order.status}</span>
+              Status: <span className="capitalize">{delivery?.delivery_status || 'pending'}</span>
             </div>
           </div>
         </CardContent>
@@ -204,6 +254,43 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
               />
               {errors.delivery_person && (
                 <p className="text-sm text-red-500">{errors.delivery_person.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Order Date <span className="text-red-500">*</span></Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !watch("order_date") && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {watch("order_date") ? (
+                      format(new Date(watch("order_date")), "PPP")
+                    ) : (
+                      <span>Pick order date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={watch("order_date") ? new Date(watch("order_date")) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setValue("order_date", date)
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {errors.order_date && (
+                <p className="text-sm text-red-500">{errors.order_date.message}</p>
               )}
             </div>
 
@@ -276,38 +363,100 @@ export function DeliveryForm({ delivery, dailyOrder }: DeliveryFormProps) {
           </CardContent>
         </Card>
 
-        {/* Summary Card */}
+        {/* Additional Items Section */}
+        <AdditionalItemsFormSection
+          control={control}
+          watch={watch}
+          products={products}
+          onTotalUpdate={setAdditionalTotal}
+        />
+
+        {/* Enhanced Summary Card */}
         <Card>
           <CardHeader>
             <CardTitle>Delivery Summary</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Planned</div>
-                <div className="font-medium">{order.planned_quantity}L</div>
-                <div className="text-sm text-muted-foreground">{formatCurrency(order.total_amount)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Actual</div>
-                <div className="font-medium">{actualQuantity}L</div>
-                <div className="text-sm text-muted-foreground">
-                  {formatCurrency(actualQuantity * order.unit_price)}
+            {/* Subscription Delivery Summary */}
+            <div className="space-y-4">
+              <div className="border-b pb-4">
+                <h4 className="text-sm font-medium text-blue-600 mb-3">Subscription Delivery</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Planned</div>
+                    <div className="font-medium">{orderData.planned_quantity || 0}L</div>
+                    <div className="text-sm text-muted-foreground">{formatCurrency(orderData.total_amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Actual</div>
+                    <div className="font-medium">{actualQuantity}L</div>
+                    <div className="text-sm text-muted-foreground">
+                      {formatCurrency(subscriptionTotal)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Variance</div>
+                    <div className={`font-medium ${quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {quantityVariance > 0 ? '+' : ''}{quantityVariance}L
+                    </div>
+                    <div className={`text-sm ${amountVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {amountVariance > 0 ? '+' : ''}{formatCurrency(amountVariance)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Status</div>
+                    <div className="font-medium">
+                      {delivery ? "Delivered" : "Confirming"}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Variance</div>
-                <div className={`font-medium ${quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {quantityVariance > 0 ? '+' : ''}{quantityVariance}L
+
+              {/* Additional Items Summary */}
+              {additionalTotal > 0 && (
+                <div className="border-b pb-4">
+                  <h4 className="text-sm font-medium text-orange-600 mb-3">Additional Items</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Items</div>
+                      <div className="font-medium">
+                        {watch("additional_items")?.filter(item => item?.product_id && (item?.quantity || 0) > 0).length || 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Total Amount</div>
+                      <div className="font-medium text-orange-600">
+                        {formatCurrency(additionalTotal)}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="text-sm text-muted-foreground">Type</div>
+                      <div className="font-medium">Extra Products</div>
+                    </div>
+                  </div>
                 </div>
-                <div className={`text-sm ${amountVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {amountVariance > 0 ? '+' : ''}{formatCurrency(amountVariance)}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Status</div>
-                <div className="font-medium">
-                  {delivery ? "Delivered" : "Confirming"}
+              )}
+
+              {/* Grand Total */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4 className="text-lg font-semibold">Total Delivery Value</h4>
+                    <div className="text-sm text-muted-foreground">
+                      Subscription: {formatCurrency(subscriptionTotal)}
+                      {additionalTotal > 0 && (
+                        <> + Additional: {formatCurrency(additionalTotal)}</>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(grandTotal)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {additionalTotal > 0 ? 'Combined Total' : 'Subscription Only'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

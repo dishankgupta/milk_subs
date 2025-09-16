@@ -163,6 +163,10 @@ export interface Modification {
   updated_at: string
   customer?: Customer
   product?: Product
+  // Computed fields for expiration handling
+  isExpired?: boolean
+  displayStatus?: 'Active' | 'Expired' | 'Disabled'
+  effectivelyActive?: boolean
 }
 
 export interface Payment {
@@ -181,7 +185,7 @@ export interface Payment {
 
 export interface Delivery {
   id: string
-  daily_order_id: string
+  daily_order_id: string | null // MODIFIED: Now nullable for additional items
   actual_quantity: number | null
   delivery_notes: string | null
   delivered_at: string | null
@@ -189,6 +193,64 @@ export interface Delivery {
   created_at: string
   updated_at: string
   daily_order?: DailyOrder
+}
+
+// Enhanced delivery type with self-contained fields
+export interface DeliveryExtended {
+  // Core fields
+  id: string
+  daily_order_id: string | null  // MODIFIED: Now nullable
+
+  // NEW: Self-contained business fields
+  customer_id: string
+  product_id: string
+  route_id: string
+  order_date: string
+  delivery_time: "Morning" | "Evening"
+
+  // NEW: Pricing fields
+  unit_price: number
+  total_amount: number
+
+  // MODIFIED: Now nullable for additional items
+  planned_quantity: number | null
+
+  // NEW: Status tracking
+  delivery_status: "pending" | "delivered" | "cancelled"
+
+  // Existing fields
+  actual_quantity: number | null
+  delivery_notes: string | null
+  delivered_at: string | null
+  delivery_person: string | null
+  created_at: string
+  updated_at: string
+
+  // Direct relations (no longer through joins)
+  customer?: Customer
+  product?: Product
+  route?: Route
+
+  // Optional: Keep for backward compatibility during transition
+  daily_order?: DailyOrder
+}
+
+// Additional item types
+export interface AdditionalDeliveryItem {
+  id: string
+  delivery_id: string
+  product_id: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  product?: Product
+}
+
+export interface DeliveryWithItems extends DeliveryExtended {
+  additional_items?: AdditionalDeliveryItem[]
 }
 
 export interface DashboardStats {

@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label'
 import { saleSchema, type SaleFormData } from '@/lib/validations'
 import { updateSale } from '@/lib/actions/sales'
 import { formatCurrency } from '@/lib/utils'
-import { calculateGSTInclusive } from '@/lib/gst-utils'
+import { calculateGSTFromInclusive } from '@/lib/gst-utils'
 import type { Sale, Product, Customer } from '@/lib/types'
 
 interface EditSaleFormProps {
@@ -50,7 +50,7 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
   const form = useForm<SaleFormData>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
-      customer_id: sale.customer_id || undefined,
+      customer_id: sale.customer_id || null,
       product_id: sale.product_id,
       quantity: sale.quantity,
       unit_price: sale.unit_price,
@@ -72,7 +72,7 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
       const selectedProduct = products.find(p => p.id === productId)
       if (selectedProduct) {
         const subtotal = quantity * unitPrice
-        calculateGSTInclusive(subtotal, selectedProduct.gst_rate || 0)
+        calculateGSTFromInclusive(subtotal, selectedProduct.gst_rate || 0)
       }
     }
   }, [form.watch('product_id'), form.watch('quantity'), form.watch('unit_price')])
@@ -96,8 +96,8 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
         throw new Error('Selected product not found')
       }
 
-      const subtotal = data.quantity * data.unit_price
-      const { gstAmount, totalAmount } = calculateGSTInclusive(subtotal, selectedProduct.gst_rate || 0)
+      const totalAmount = data.quantity * data.unit_price
+      const { baseAmount, gstAmount } = calculateGSTFromInclusive(totalAmount, selectedProduct.gst_rate || 0)
 
       await updateSale(sale.id, {
         ...data,
@@ -116,8 +116,8 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
   }
 
   const selectedProduct = products.find(p => p.id === form.watch('product_id'))
-  const subtotal = (form.watch('quantity') || 0) * (form.watch('unit_price') || 0)
-  const gstCalculation = selectedProduct ? calculateGSTInclusive(subtotal, selectedProduct.gst_rate || 0) : { gstAmount: 0, totalAmount: subtotal }
+  const totalAmount = (form.watch('quantity') || 0) * (form.watch('unit_price') || 0)
+  const gstCalculation = selectedProduct ? calculateGSTFromInclusive(totalAmount, selectedProduct.gst_rate || 0) : { baseAmount: totalAmount, gstAmount: 0 }
 
   return (
     <Card>
@@ -143,6 +143,10 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="Cash" id="cash" />
                         <Label htmlFor="cash">Cash Sale</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="QR" id="qr" />
+                        <Label htmlFor="qr">QR Sale</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="Credit" id="credit" />
@@ -307,11 +311,11 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
             </div>
 
             {/* Pricing Preview */}
-            {selectedProduct && subtotal > 0 && (
+            {selectedProduct && totalAmount > 0 && (
               <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Subtotal ({form.watch('quantity')} × {formatCurrency(form.watch('unit_price'))})</span>
-                  <span>{formatCurrency(subtotal)}</span>
+                  <span>Base Amount ({form.watch('quantity')} × {formatCurrency(form.watch('unit_price'))})</span>
+                  <span>{formatCurrency(gstCalculation.baseAmount)}</span>
                 </div>
                 {selectedProduct.gst_rate && selectedProduct.gst_rate > 0 && (
                   <div className="flex justify-between text-sm">
@@ -321,7 +325,7 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
                 )}
                 <div className="flex justify-between font-semibold border-t pt-2">
                   <span>Total Amount</span>
-                  <span>{formatCurrency(gstCalculation.totalAmount)}</span>
+                  <span>{formatCurrency(totalAmount)}</span>
                 </div>
               </div>
             )}

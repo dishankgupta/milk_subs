@@ -22,10 +22,9 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
   try {
     const { id } = await params
     const delivery = await getDeliveryById(id)
-    const order = delivery.daily_order
     
-    const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
-    const amountVariance = quantityVariance * order.unit_price
+    const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
+    const amountVariance = quantityVariance * delivery.unit_price
 
     return (
       <div className="space-y-6">
@@ -57,31 +56,31 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="font-medium text-lg">{order.customer.billing_name}</div>
-                {order.customer.contact_person && (
-                  <div className="text-muted-foreground">{order.customer.contact_person}</div>
+                <div className="font-medium text-lg">{delivery.customer.billing_name}</div>
+                {delivery.customer.contact_person && (
+                  <div className="text-muted-foreground">{delivery.customer.contact_person}</div>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="font-medium mb-1">Address</div>
-                  <div className="text-muted-foreground">{order.customer.address}</div>
+                  <div className="text-muted-foreground">{delivery.customer.address}</div>
                 </div>
                 <div>
                   <div className="font-medium mb-1">Primary Phone</div>
-                  <div className="text-muted-foreground">{order.customer.phone_primary}</div>
+                  <div className="text-muted-foreground">{delivery.customer.phone_primary}</div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="font-medium mb-1">Route</div>
-                  <div className="text-muted-foreground">{order.route.name}</div>
+                  <div className="text-muted-foreground">{delivery.route.name}</div>
                 </div>
                 <div>
                   <div className="font-medium mb-1">Delivery Time</div>
-                  <div className="text-muted-foreground">{order.delivery_time}</div>
+                  <div className="text-muted-foreground">{delivery.delivery_time}</div>
                 </div>
               </div>
             </CardContent>
@@ -97,31 +96,36 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="font-medium text-lg">{order.product.name}</div>
-                <div className="text-muted-foreground">Order #{order.id.slice(0, 8)}</div>
+                <div className="font-medium text-lg">{delivery.product.name}</div>
+                <div className="text-muted-foreground">
+                  Delivery #{delivery.id.slice(0, 8)}
+                  {delivery.daily_order_id && (
+                    <span className="ml-2">• Order #{delivery.daily_order_id.slice(0, 8)}</span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="font-medium mb-1">Order Date</div>
                   <div className="text-muted-foreground">
-                    {formatDateToIST(new Date(order.order_date))}
+                    {formatDateToIST(new Date(delivery.order_date))}
                   </div>
                 </div>
                 <div>
                   <div className="font-medium mb-1">Status</div>
-                  <Badge variant="default">Delivered</Badge>
+                  <Badge variant="default">{delivery.delivery_status || 'delivered'}</Badge>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="font-medium mb-1">Unit Price</div>
-                  <div className="text-muted-foreground">{formatCurrency(order.unit_price)}/L</div>
+                  <div className="text-muted-foreground">{formatCurrency(delivery.unit_price)}/L</div>
                 </div>
                 <div>
                   <div className="font-medium mb-1">Planned Amount</div>
-                  <div className="text-muted-foreground">{formatCurrency(order.total_amount)}</div>
+                  <div className="text-muted-foreground">{formatCurrency(delivery.total_amount)}</div>
                 </div>
               </div>
             </CardContent>
@@ -183,10 +187,10 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold">{order.planned_quantity}L</div>
+                  <div className="text-2xl font-bold">{delivery.planned_quantity || 0}L</div>
                   <div className="text-sm text-muted-foreground">Planned</div>
                   <div className="text-sm text-muted-foreground">
-                    {formatCurrency(order.total_amount)}
+                    {formatCurrency(delivery.total_amount)}
                   </div>
                 </div>
                 
@@ -194,7 +198,7 @@ async function DeliveryDetailContent({ params }: DeliveryDetailPageProps) {
                   <div className="text-2xl font-bold">{delivery.actual_quantity || 0}L</div>
                   <div className="text-sm text-muted-foreground">Actual</div>
                   <div className="text-sm text-muted-foreground">
-                    {formatCurrency((delivery.actual_quantity || 0) * order.unit_price)}
+                    {formatCurrency((delivery.actual_quantity || 0) * delivery.unit_price)}
                   </div>
                 </div>
                 

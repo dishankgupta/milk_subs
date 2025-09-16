@@ -2,26 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { Plus, Package, TrendingUp, AlertTriangle, CheckCircle, Printer } from "lucide-react"
+import { Plus, Package, Package2, TrendingUp, AlertTriangle, CheckCircle, Printer } from "lucide-react"
+import { categorizeDeliveries } from "@/components/deliveries/delivery-type-toggle"
 
 import { getDeliveries } from "@/lib/actions/deliveries"
 import { DeliveriesTable } from "./deliveries-table"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { Delivery, DailyOrder, Customer, Product, Route } from "@/lib/types"
-
-type DeliveryWithOrder = Delivery & { 
-  daily_order: DailyOrder & { 
-    customer: Customer, 
-    product: Product, 
-    route: Route 
-  } 
-}
+import type { DeliveryExtended } from "@/lib/types"
+import type { DateFilterState } from "@/components/ui/enhanced-date-filter"
 
 interface FilterState {
   searchQuery: string
-  dateFilter: string
+  dateFilter: DateFilterState
   routeFilter: string
 }
 
@@ -30,16 +24,48 @@ interface SortState {
   direction: 'asc' | 'desc'
 }
 
-function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
+function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
+  const { subscription, additional, counts } = categorizeDeliveries(deliveries)
+  
   const totalOrders = deliveries.length
   const deliveredOrders = deliveries.filter(d => d.actual_quantity !== null).length
   const pendingOrders = totalOrders - deliveredOrders
   
-  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + d.daily_order.planned_quantity, 0)
+  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + (d.planned_quantity || 0), 0)
   const totalActualQuantity = deliveries.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
   
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   const quantityVariance = totalActualQuantity - totalPlannedQuantity
+  
+  // Product-wise breakdown for orders
+  const productWiseOrders = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName]++
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for planned quantities
+  const productWisePlanned = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.planned_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for actual quantities
+  const productWiseActual = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.actual_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
 
   return {
     totalOrders,
@@ -48,17 +74,22 @@ function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
     totalPlannedQuantity,
     totalActualQuantity,
     completionRate,
-    quantityVariance
+    quantityVariance,
+    subscriptionCount: counts.subscription,
+    additionalCount: counts.additional,
+    productWiseOrders,
+    productWisePlanned,
+    productWiseActual
   }
 }
 
 
 function DeliveriesContent() {
-  const [deliveries, setDeliveries] = useState<DeliveryWithOrder[]>([])
-  const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryWithOrder[]>([])
+  const [deliveries, setDeliveries] = useState<DeliveryExtended[]>([])
+  const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryExtended[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
-    dateFilter: "all",
+    dateFilter: { preset: "mostRecent", label: "Most Recent" },
     routeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
@@ -67,14 +98,14 @@ function DeliveriesContent() {
   })
   const [loading, setLoading] = useState(true)
 
-  const stats = calculateDeliveryStats(filteredDeliveries)
+  const stats = calculateDeliveryStats(filteredDeliveries.length > 0 ? filteredDeliveries : [])
 
   const loadData = async () => {
     try {
       setLoading(true)
       const deliveriesData = await getDeliveries()
       setDeliveries(deliveriesData)
-      setFilteredDeliveries(deliveriesData) // Initialize filtered data
+      // Don't initialize filteredDeliveries here - let the filter logic handle it
     } catch (error) {
       console.error("Failed to load deliveries data:", error)
     } finally {
@@ -82,7 +113,7 @@ function DeliveriesContent() {
     }
   }
 
-  const handleFiltersChange = useCallback((filtered: DeliveryWithOrder[], filters: FilterState) => {
+  const handleFiltersChange = useCallback((filtered: DeliveryExtended[], filters: FilterState) => {
     setFilteredDeliveries(filtered)
     setCurrentFilters(filters)
   }, [])
@@ -94,13 +125,21 @@ function DeliveriesContent() {
   const handlePrintReport = () => {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
-    if (currentFilters.dateFilter !== 'all') params.append('date', currentFilters.dateFilter)
+
+    // Handle enhanced date filter for print
+    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
+      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
+      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+    } else {
+      params.append('datePreset', currentFilters.dateFilter.preset)
+    }
+
     if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
-    
+
     // Add sort parameters
     params.append('sortKey', currentSort.key)
     params.append('sortDirection', currentSort.direction)
-    
+
     const printUrl = `/api/print/deliveries?${params.toString()}`
     window.open(printUrl, '_blank')
   }
@@ -112,7 +151,7 @@ function DeliveriesContent() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="pt-6">
@@ -138,9 +177,14 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalOrders}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.deliveredOrders} delivered, {stats.pendingOrders} pending
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>{stats.subscriptionCount} subscription, {stats.additionalCount} additional</p>
+              {Object.entries(stats.productWiseOrders).map(([product, count]) => (
+                <p key={product} className="text-xs">
+                  <span className="font-medium">{product}:</span> {count}
+                </p>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -164,9 +208,14 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalPlannedQuantity}L</div>
-            <p className="text-xs text-muted-foreground">
-              Total planned volume
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Total planned volume</p>
+              {Object.entries(stats.productWisePlanned).map(([product, quantity]) => (
+                <p key={product} className="text-xs">
+                  <span className="font-medium">{product}:</span> {quantity}L
+                </p>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -181,9 +230,18 @@ function DeliveriesContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalActualQuantity}L</div>
-            <p className={`text-xs ${stats.quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {stats.quantityVariance >= 0 ? "+" : ""}{stats.quantityVariance}L variance
-            </p>
+            <div className="text-xs space-y-1">
+              <p className={`${stats.quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {stats.quantityVariance >= 0 ? "+" : ""}{stats.quantityVariance}L variance
+              </p>
+              <div className="text-muted-foreground">
+                {Object.entries(stats.productWiseActual).map(([product, quantity]) => (
+                  <p key={product} className="text-xs">
+                    <span className="font-medium">{product}:</span> {quantity}L
+                  </p>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -195,6 +253,12 @@ function DeliveriesContent() {
             <Printer className="mr-2 h-4 w-4" />
             Print Report
           </Button>
+          <Link href="/dashboard/deliveries/additional/new">
+            <Button variant="secondary" className="bg-orange-600 hover:bg-orange-700 text-white">
+              <Package2 className="mr-2 h-4 w-4" />
+              Record Additional Delivery
+            </Button>
+          </Link>
           <Link href="/dashboard/deliveries/new">
             <Button>
               <Plus className="mr-2 h-4 w-4" />

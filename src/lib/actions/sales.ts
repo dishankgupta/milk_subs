@@ -313,9 +313,77 @@ export async function deleteSale(saleId: string) {
   }
 }
 
-export async function updateSale(saleId: string, data: SaleFormData & { 
+export async function bulkDeleteSales(saleIds: string[]) {
+  if (saleIds.length === 0) {
+    return {
+      success: false,
+      error: "No sales selected for deletion"
+    }
+  }
+
+  const supabase = await createClient()
+
+  // First get all sales to validate they exist
+  const { data: sales, error: fetchError } = await supabase
+    .from("sales")
+    .select(`
+      id,
+      customer_id,
+      total_amount,
+      sale_type,
+      customer:customers(billing_name)
+    `)
+    .in("id", saleIds)
+
+  if (fetchError) {
+    return {
+      success: false,
+      error: "Failed to fetch sales for deletion"
+    }
+  }
+
+  if (sales.length !== saleIds.length) {
+    return {
+      success: false,
+      error: "Some selected sales no longer exist"
+    }
+  }
+
+  // Delete all sales in a single query
+  const { error: deleteError } = await supabase
+    .from("sales")
+    .delete()
+    .in("id", saleIds)
+
+  if (deleteError) {
+    return {
+      success: false,
+      error: `Failed to delete sales: ${deleteError.message}`
+    }
+  }
+
+  // Revalidate affected paths
+  revalidatePath("/dashboard/sales")
+  revalidatePath("/dashboard/customers")
+
+  // Revalidate individual customer pages if affected
+  const affectedCustomers = [...new Set(sales.filter(s => s.customer_id).map(s => s.customer_id))]
+  affectedCustomers.forEach(customerId => {
+    if (customerId) {
+      revalidatePath(`/dashboard/customers/${customerId}`)
+    }
+  })
+
+  return {
+    success: true,
+    deletedCount: sales.length,
+    affectedCustomers: affectedCustomers.length
+  }
+}
+
+export async function updateSale(saleId: string, data: SaleFormData & {
   total_amount: number
-  gst_amount: number 
+  gst_amount: number
 }) {
   const supabase = await createClient()
 

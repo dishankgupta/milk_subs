@@ -1,26 +1,125 @@
 import { NextRequest } from 'next/server'
 import { getDeliveries } from '@/lib/actions/deliveries'
-import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
-import type { Delivery, DailyOrder, Customer, Product, Route } from '@/lib/types'
+import { formatDateIST, getCurrentISTDate, parseLocalDateIST } from '@/lib/date-utils'
+import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns'
+import type { DeliveryExtended } from '@/lib/types'
 
-type DeliveryWithOrder = Delivery & { 
-  daily_order: DailyOrder & { 
-    customer: Customer, 
-    product: Product, 
-    route: Route 
-  } 
+// Function to convert date presets to date ranges
+function getDateRangeFromPreset(preset: string, mostRecentDate?: string): { fromDate: Date, toDate: Date } | null {
+  const today = getCurrentISTDate()
+
+  switch (preset) {
+    case "mostRecent":
+      if (mostRecentDate) {
+        const recentDate = parseLocalDateIST(mostRecentDate)
+        return {
+          fromDate: startOfDay(recentDate),
+          toDate: endOfDay(recentDate)
+        }
+      }
+      // Fallback to today if no most recent date available
+      return {
+        fromDate: startOfDay(today),
+        toDate: endOfDay(today)
+      }
+
+    case "today":
+      return {
+        fromDate: startOfDay(today),
+        toDate: endOfDay(today)
+      }
+
+    case "yesterday":
+      const yesterday = subDays(today, 1)
+      return {
+        fromDate: startOfDay(yesterday),
+        toDate: endOfDay(yesterday)
+      }
+
+    case "last7days":
+      const sevenDaysAgo = subDays(today, 6) // Include today
+      return {
+        fromDate: startOfDay(sevenDaysAgo),
+        toDate: endOfDay(today)
+      }
+
+    case "last30days":
+      const thirtyDaysAgo = subDays(today, 29) // Include today
+      return {
+        fromDate: startOfDay(thirtyDaysAgo),
+        toDate: endOfDay(today)
+      }
+
+    case "thisWeek":
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday start
+      const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+      return {
+        fromDate: weekStart,
+        toDate: weekEnd
+      }
+
+    case "thisMonth":
+      const monthStart = startOfMonth(today)
+      const monthEnd = endOfMonth(today)
+      return {
+        fromDate: monthStart,
+        toDate: monthEnd
+      }
+
+    case "lastMonth":
+      const lastMonth = subDays(startOfMonth(today), 1)
+      const lastMonthStart = startOfMonth(lastMonth)
+      const lastMonthEnd = endOfMonth(lastMonth)
+      return {
+        fromDate: lastMonthStart,
+        toDate: lastMonthEnd
+      }
+
+    default:
+      return null
+  }
 }
 
-function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
+function calculateDeliveryStats(deliveries: DeliveryExtended[]) {
   const totalOrders = deliveries.length
   const deliveredOrders = deliveries.filter(d => d.actual_quantity !== null).length
   const pendingOrders = totalOrders - deliveredOrders
   
-  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + d.daily_order.planned_quantity, 0)
+  const totalPlannedQuantity = deliveries.reduce((sum, d) => sum + (d.planned_quantity || 0), 0)
   const totalActualQuantity = deliveries.reduce((sum, d) => sum + (d.actual_quantity || 0), 0)
   
   const completionRate = totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
   const quantityVariance = totalActualQuantity - totalPlannedQuantity
+
+  // Product-wise breakdown for orders
+  const productWiseOrders = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName]++
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for planned quantities
+  const productWisePlanned = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.planned_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
+  
+  // Product-wise breakdown for actual quantities
+  const productWiseActual = deliveries.reduce((acc, d) => {
+    const productName = d.product?.name || 'Unknown Product'
+    if (!acc[productName]) {
+      acc[productName] = 0
+    }
+    acc[productName] += (d.actual_quantity || 0)
+    return acc
+  }, {} as Record<string, number>)
 
   return {
     totalOrders,
@@ -29,41 +128,56 @@ function calculateDeliveryStats(deliveries: DeliveryWithOrder[]) {
     totalPlannedQuantity,
     totalActualQuantity,
     completionRate,
-    quantityVariance
+    quantityVariance,
+    productWiseOrders,
+    productWisePlanned,
+    productWiseActual
   }
 }
 
-function filterDeliveries(deliveries: DeliveryWithOrder[], searchQuery?: string, dateFilter?: string, routeFilter?: string) {
+function filterDeliveries(deliveries: DeliveryExtended[], searchQuery?: string, dateRange?: { fromDate: Date, toDate: Date }, routeFilter?: string) {
   return deliveries.filter(delivery => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       delivery.delivery_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.delivery_notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.daily_order.customer.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesDate = !dateFilter || 
-      delivery.daily_order.order_date === dateFilter
-    
-    const matchesRoute = !routeFilter || 
-      delivery.daily_order.route.name === routeFilter
+      delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesDate = !dateRange || (() => {
+      try {
+        const deliveryDate = parseLocalDateIST(delivery.order_date)
+        return isWithinInterval(deliveryDate, {
+          start: startOfDay(dateRange.fromDate),
+          end: endOfDay(dateRange.toDate)
+        })
+      } catch (error) {
+        console.error("Error parsing delivery date:", delivery.order_date, error)
+        return false
+      }
+    })()
+
+    const matchesRoute = !routeFilter ||
+      delivery.route?.name === routeFilter
 
     return matchesSearch && matchesDate && matchesRoute
   })
 }
 
-function sortDeliveries(deliveries: DeliveryWithOrder[], sortKey: string, sortDirection: 'asc' | 'desc') {
+function sortDeliveries(deliveries: DeliveryExtended[], sortKey: string, sortDirection: 'asc' | 'desc') {
   const sorted = [...deliveries].sort((a, b) => {
     let aValue: string | number | Date
     let bValue: string | number | Date
 
     switch (sortKey) {
       case 'daily_order.customer.billing_name':
-        aValue = a.daily_order.customer.billing_name
-        bValue = b.daily_order.customer.billing_name
+      case 'customer.billing_name':
+        aValue = a.customer?.billing_name || ''
+        bValue = b.customer?.billing_name || ''
         break
       case 'daily_order.order_date':
-        aValue = new Date(a.daily_order.order_date)
-        bValue = new Date(b.daily_order.order_date)
+      case 'order_date':
+        aValue = new Date(a.order_date)
+        bValue = new Date(b.order_date)
         break
       case 'actual_quantity':
         aValue = a.actual_quantity || 0
@@ -74,12 +188,12 @@ function sortDeliveries(deliveries: DeliveryWithOrder[], sortKey: string, sortDi
         bValue = b.delivered_at ? new Date(b.delivered_at) : new Date(0)
         break
       case 'variance':
-        aValue = (a.actual_quantity || 0) - a.daily_order.planned_quantity
-        bValue = (b.actual_quantity || 0) - b.daily_order.planned_quantity
+        aValue = (a.actual_quantity || 0) - (a.planned_quantity || 0)
+        bValue = (b.actual_quantity || 0) - (b.planned_quantity || 0)
         break
       default:
-        aValue = a.daily_order.order_date
-        bValue = b.daily_order.order_date
+        aValue = a.order_date
+        bValue = b.order_date
     }
 
     if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
@@ -94,16 +208,45 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get('search') || undefined
-    const dateFilter = searchParams.get('date') || undefined
+    const datePreset = searchParams.get('datePreset') || undefined
+    const dateFrom = searchParams.get('dateFrom') || undefined
+    const dateTo = searchParams.get('dateTo') || undefined
     const routeFilter = searchParams.get('route') || undefined
-    const sortKey = searchParams.get('sortKey') || 'daily_order.order_date'
+    const sortKey = searchParams.get('sortKey') || 'order_date'
     const sortDirection = (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc'
-    
+
     // Fetch all deliveries
     const allDeliveries = await getDeliveries()
-    
+
+    // Determine date range for filtering
+    let dateRange: { fromDate: Date, toDate: Date } | undefined = undefined
+
+    if (datePreset) {
+      // Find the most recent date from deliveries for "mostRecent" preset
+      let mostRecentDate: string | undefined = undefined
+      if (datePreset === 'mostRecent' && allDeliveries.length > 0) {
+        const sortedByDate = [...allDeliveries].sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
+        mostRecentDate = sortedByDate[0].order_date
+      }
+
+      const range = getDateRangeFromPreset(datePreset, mostRecentDate)
+      if (range) {
+        dateRange = range
+      }
+    } else if (dateFrom && dateTo) {
+      // Handle custom date range
+      try {
+        dateRange = {
+          fromDate: new Date(dateFrom),
+          toDate: new Date(dateTo)
+        }
+      } catch (error) {
+        console.error("Error parsing custom date range:", error)
+      }
+    }
+
     // Apply filters
-    const filteredDeliveries = filterDeliveries(allDeliveries, searchQuery, dateFilter, routeFilter)
+    const filteredDeliveries = filterDeliveries(allDeliveries, searchQuery, dateRange, routeFilter)
     
     // Calculate stats
     const stats = calculateDeliveryStats(filteredDeliveries)
@@ -113,14 +256,48 @@ export async function GET(request: NextRequest) {
     
     // Get variance deliveries (only those with non-zero variances)
     const varianceDeliveries = sortedDeliveries.filter(delivery => {
-      const variance = (delivery.actual_quantity || 0) - delivery.daily_order.planned_quantity
+      const variance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
       return variance !== 0
     })
 
     // Generate filter description for title
     const filterParts = []
     if (searchQuery) filterParts.push(`Search: "${searchQuery}"`)
-    if (dateFilter) filterParts.push(`Date: ${formatDateIST(new Date(dateFilter))}`)
+    if (dateRange) {
+      if (datePreset) {
+        // Use preset label with actual date range for clarity
+        switch (datePreset) {
+          case 'mostRecent':
+            filterParts.push(`Date: Most Recent (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'today':
+            filterParts.push(`Date: Today (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'yesterday':
+            filterParts.push(`Date: Yesterday (${formatDateIST(dateRange.fromDate)})`)
+            break
+          case 'last7days':
+            filterParts.push(`Date: Last 7 days (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'last30days':
+            filterParts.push(`Date: Last 30 days (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'thisWeek':
+            filterParts.push(`Date: This week (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'thisMonth':
+            filterParts.push(`Date: This month (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          case 'lastMonth':
+            filterParts.push(`Date: Last month (${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)})`)
+            break
+          default:
+            filterParts.push(`Date: ${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)}`)
+        }
+      } else {
+        filterParts.push(`Date: ${formatDateIST(dateRange.fromDate)} - ${formatDateIST(dateRange.toDate)}`)
+      }
+    }
     if (routeFilter) filterParts.push(`Route: ${routeFilter}`)
     const filterDescription = filterParts.length > 0 ? ` (${filterParts.join(', ')})` : ''
     
@@ -359,19 +536,40 @@ export async function GET(request: NextRequest) {
     <div class="stat-card">
       <h3>Total Orders</h3>
       <div class="value">${stats.totalOrders}</div>
+      <div style="font-size: 8px; color: #666; margin-top: 4px;">
+        ${Object.entries(stats.productWiseOrders).map(([product, count]) => 
+          `<div>${product}: ${count}</div>`
+        ).join('')}
+      </div>
     </div>
     <div class="stat-card">
       <h3>Completion Rate</h3>
       <div class="percentage ${stats.completionRate >= 95 ? 'good' : stats.completionRate >= 85 ? 'warning' : 'danger'}">${stats.completionRate}%</div>
+      <div style="font-size: 8px; color: #666; margin-top: 2px;">${stats.deliveredOrders} of ${stats.totalOrders} delivered</div>
     </div>
     <div class="stat-card">
       <h3>Planned Quantity</h3>
       <div class="value">${stats.totalPlannedQuantity}L</div>
+      <div style="font-size: 8px; color: #666; margin-top: 4px;">
+        ${Object.entries(stats.productWisePlanned).map(([product, quantity]) => 
+          `<div>${product}: ${quantity}L</div>`
+        ).join('')}
+      </div>
     </div>
     <div class="stat-card">
       <h3>Actual Delivered</h3>
       <div class="value ${stats.quantityVariance > 0 ? 'variance-positive' : stats.quantityVariance < 0 ? 'variance-negative' : 'variance-neutral'}">
         ${stats.totalActualQuantity}L
+      </div>
+      <div style="font-size: 8px; margin-top: 2px;">
+        <div class="${stats.quantityVariance >= 0 ? 'variance-positive' : 'variance-negative'}">
+          ${stats.quantityVariance >= 0 ? '+' : ''}${stats.quantityVariance}L variance
+        </div>
+        <div style="color: #666; margin-top: 4px;">
+          ${Object.entries(stats.productWiseActual).map(([product, quantity]) => 
+            `<div>${product}: ${quantity}L</div>`
+          ).join('')}
+        </div>
       </div>
     </div>
   </div>
@@ -395,17 +593,16 @@ export async function GET(request: NextRequest) {
     </thead>
     <tbody>
       ${varianceDeliveries.map(delivery => {
-        const order = delivery.daily_order
-        const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
+        const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
         const isDelivered = delivery.actual_quantity !== null
         
         return `
         <tr>
-          <td>${formatDateIST(new Date(order.order_date))}</td>
-          <td>${order.customer.billing_name}</td>
-          <td>${order.product.name}</td>
-          <td class="number">${order.route.name}</td>
-          <td class="number">${order.planned_quantity}L</td>
+          <td>${formatDateIST(new Date(delivery.order_date))}</td>
+          <td>${delivery.customer?.billing_name || ''}</td>
+          <td>${delivery.product?.name || ''}</td>
+          <td class="number">${delivery.route?.name || ''}</td>
+          <td class="number">${delivery.planned_quantity || 0}L</td>
           <td class="number">${delivery.actual_quantity || 0}L</td>
           <td class="number ${quantityVariance > 0 ? 'variance-positive' : quantityVariance < 0 ? 'variance-negative' : 'variance-neutral'}">
             ${quantityVariance > 0 ? '+' : ''}${quantityVariance}L
@@ -441,17 +638,16 @@ export async function GET(request: NextRequest) {
     </thead>
     <tbody>
       ${sortedDeliveries.map(delivery => {
-        const order = delivery.daily_order
-        const quantityVariance = (delivery.actual_quantity || 0) - order.planned_quantity
+        const quantityVariance = (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)
         const isDelivered = delivery.actual_quantity !== null
         
         return `
         <tr>
-          <td>${formatDateIST(new Date(order.order_date))}</td>
-          <td>${order.customer.billing_name}</td>
-          <td>${order.product.name}</td>
-          <td class="number">${order.route.name}</td>
-          <td class="number">${order.planned_quantity}L</td>
+          <td>${formatDateIST(new Date(delivery.order_date))}</td>
+          <td>${delivery.customer?.billing_name || ''}</td>
+          <td>${delivery.product?.name || ''}</td>
+          <td class="number">${delivery.route?.name || ''}</td>
+          <td class="number">${delivery.planned_quantity || 0}L</td>
           <td class="number">${delivery.actual_quantity || 0}L</td>
           <td class="number ${quantityVariance > 0 ? 'variance-positive' : quantityVariance < 0 ? 'variance-negative' : 'variance-neutral'}">
             ${quantityVariance > 0 ? '+' : ''}${quantityVariance}L

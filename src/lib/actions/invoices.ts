@@ -6,7 +6,6 @@ import { markSalesAsBilled } from "@/lib/actions/sales"
 import { invoiceFileManager, generatePdfFromHtml, combinePdfs } from "@/lib/file-utils"
 import { format } from "date-fns"
 import path from "path"
-import { formatCurrency } from "@/lib/utils"
 import type { Customer } from "@/lib/types"
 import { 
   formatDateForDatabase, 
@@ -21,7 +20,7 @@ export interface InvoiceData {
   invoiceDate: string
   periodStart: string
   periodEnd: string
-  subscriptionItems: InvoiceSubscriptionItem[]
+  deliveryItems: InvoiceSubscriptionItem[]
   manualSalesItems: InvoiceManualSaleItem[]
   dailySummary: InvoiceDailySummaryItem[]
   totals: InvoiceTotals
@@ -57,7 +56,7 @@ export interface InvoiceDailySummaryItem {
 }
 
 export interface InvoiceTotals {
-  subscriptionAmount: number
+  deliveryAmount: number
   manualSalesAmount: number
   totalGstAmount: number
   grandTotal: number
@@ -103,20 +102,20 @@ export async function prepareInvoiceData(
     throw new Error("Customer not found")
   }
 
-  // Get subscription data (from daily_orders that have been delivered)
-  const { data: dailyOrders, error: ordersError } = await supabase
-    .from("daily_orders")
+  // Get all delivery data (both subscription and additional deliveries)
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from("deliveries")
     .select(`
       *,
-      product:products(*),
-      deliveries!inner(actual_quantity)
+      product:products(*)
     `)
     .eq("customer_id", customerId)
+    .eq("delivery_status", "delivered")
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
-  if (ordersError) {
-    throw new Error("Failed to fetch subscription orders")
+  if (deliveriesError) {
+    throw new Error("Failed to fetch subscription deliveries")
   }
 
   // Get manual sales data (credit sales only, unbilled)
@@ -139,61 +138,77 @@ export async function prepareInvoiceData(
   // Generate invoice number
   const { invoiceNumber } = await getNextInvoiceNumber()
 
-  // Process subscription items (group by product)
-  const subscriptionItemsMap = new Map<string, InvoiceSubscriptionItem>()
+  // Process all delivery items (both subscription and additional deliveries)
+  const deliveryItemsMap = new Map<string, InvoiceSubscriptionItem>()
   
-  dailyOrders?.forEach(order => {
-    const key = order.product.id
-    const existing = subscriptionItemsMap.get(key)
+  deliveries?.forEach(delivery => {
+    const key = delivery.product.id
+    const existing = deliveryItemsMap.get(key)
     
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
-    const actualTotalAmount = actualQuantity * Number(order.unit_price)
+    // Use actual delivered quantity (self-contained delivery data)
+    const actualQuantity = Number(delivery.actual_quantity || 0)
+    const actualTotalAmount = actualQuantity * Number(delivery.unit_price)
     
     if (existing) {
       existing.quantity += actualQuantity
       existing.totalAmount += actualTotalAmount
     } else {
-      subscriptionItemsMap.set(key, {
-        productName: order.product.name,
-        productCode: order.product.code,
+      deliveryItemsMap.set(key, {
+        productName: delivery.product.name,
+        productCode: delivery.product.code,
         quantity: actualQuantity,
-        unitPrice: Number(order.unit_price),
+        unitPrice: Number(delivery.unit_price),
         totalAmount: actualTotalAmount,
-        unitOfMeasure: order.product.unit_of_measure || order.product.unit
+        unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
       })
     }
   })
 
-  const subscriptionItems = Array.from(subscriptionItemsMap.values())
+  const deliveryItems = Array.from(deliveryItemsMap.values())
 
-  // Process manual sales items
-  const manualSalesItems: InvoiceManualSaleItem[] = manualSales?.map(sale => ({
-    productName: sale.product.name,
-    productCode: sale.product.code,
-    quantity: Number(sale.quantity),
-    unitPrice: Number(sale.unit_price),
-    totalAmount: Number(sale.total_amount),
-    gstAmount: Number(sale.gst_amount),
-    unitOfMeasure: sale.product.unit_of_measure,
-    saleDate: sale.sale_date
-  })) || []
+  // Process manual sales items with aggregation by product
+  const manualSalesItemsMap = new Map<string, InvoiceManualSaleItem>()
+  
+  manualSales?.forEach(sale => {
+    const key = sale.product.id
+    const existing = manualSalesItemsMap.get(key)
+    
+    if (existing) {
+      // Aggregate quantities and amounts
+      existing.quantity += Number(sale.quantity)
+      existing.totalAmount += Number(sale.total_amount)
+      existing.gstAmount += Number(sale.gst_amount)
+    } else {
+      manualSalesItemsMap.set(key, {
+        productName: sale.product.name,
+        productCode: sale.product.code,
+        quantity: Number(sale.quantity),
+        unitPrice: Number(sale.unit_price),
+        totalAmount: Number(sale.total_amount),
+        gstAmount: Number(sale.gst_amount),
+        unitOfMeasure: sale.product.unit_of_measure,
+        saleDate: sale.sale_date // Keep the first sale date for reference
+      })
+    }
+  })
+
+  const manualSalesItems = Array.from(manualSalesItemsMap.values())
 
   // Create daily summary (both subscription + manual sales)
   const dailySummaryMap = new Map<string, InvoiceDailySummaryItem>()
   
   // Add subscription deliveries to daily summary
-  dailyOrders?.forEach(order => {
-    const dateKey = order.order_date
+  deliveries?.forEach(delivery => {
+    const dateKey = delivery.order_date
     const existing = dailySummaryMap.get(dateKey)
     
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
+    // Use actual delivered quantity (self-contained delivery data)
+    const actualQuantity = Number(delivery.actual_quantity || 0)
     
     const item = {
-      productName: order.product.name,
+      productName: delivery.product.name,
       quantity: actualQuantity,
-      unitOfMeasure: order.product.unit_of_measure || order.product.unit
+      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
     }
     
     if (existing) {
@@ -231,10 +246,10 @@ export async function prepareInvoiceData(
     .sort((a, b) => a.date.localeCompare(b.date))
 
   // Calculate totals
-  const subscriptionAmount = subscriptionItems.reduce((sum, item) => sum + item.totalAmount, 0)
+  const deliveryAmount = deliveryItems.reduce((sum, item) => sum + item.totalAmount, 0)
   const manualSalesAmount = manualSalesItems.reduce((sum, item) => sum + item.totalAmount, 0)
   const totalGstAmount = manualSalesItems.reduce((sum, item) => sum + item.gstAmount, 0)
-  const grandTotal = subscriptionAmount + manualSalesAmount
+  const grandTotal = deliveryAmount + manualSalesAmount
 
   return {
     customer,
@@ -242,11 +257,11 @@ export async function prepareInvoiceData(
     invoiceDate: formatDateForDatabase(getCurrentISTDate()),
     periodStart,
     periodEnd,
-    subscriptionItems,
+    deliveryItems,
     manualSalesItems,
     dailySummary,
     totals: {
-      subscriptionAmount,
+      deliveryAmount,
       manualSalesAmount,
       totalGstAmount,
       grandTotal
@@ -266,7 +281,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
       invoice_date: invoiceData.invoiceDate,
       period_start: invoiceData.periodStart,
       period_end: invoiceData.periodEnd,
-      subscription_amount: invoiceData.totals.subscriptionAmount,
+      subscription_amount: invoiceData.totals.deliveryAmount,
       manual_sales_amount: invoiceData.totals.manualSalesAmount,
       total_amount: invoiceData.totals.grandTotal,
       gst_amount: invoiceData.totals.totalGstAmount,
@@ -284,8 +299,8 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
     throw new Error(`Failed to save invoice metadata: ${error?.message}`)
   }
 
-  // Create invoice line items for subscription orders
-  const orderLineItems = await createSubscriptionLineItems(
+  // Create invoice line items for delivery orders
+  await createDeliveryLineItems(
     invoiceMetadata.id, 
     invoiceData.customer.id, 
     invoiceData.periodStart, 
@@ -326,40 +341,46 @@ async function getUnbilledDeliveryAmount(
     period_end: periodEnd
   })
   
-  // Fallback to manual query if RPC function doesn't exist
+  // Fallback to manual query using self-contained deliveries table
   if (!data) {
-    // Get all delivered orders for the customer in the period
-    const { data: deliveredOrders } = await supabase
-      .from("daily_orders")
+    // Get all delivered deliveries for the customer in the period (including additional deliveries)
+    const { data: deliveredDeliveries } = await supabase
+      .from("deliveries")
       .select(`
         id,
-        total_amount,
+        daily_order_id,
+        actual_quantity,
         unit_price,
-        deliveries!inner(actual_quantity)
+        total_amount
       `)
       .eq("customer_id", customerId)
+      .eq("delivery_status", "delivered")
       .gte("order_date", periodStart)
       .lte("order_date", periodEnd)
     
-    if (!deliveredOrders || deliveredOrders.length === 0) return 0
+    if (!deliveredDeliveries || deliveredDeliveries.length === 0) return 0
     
-    // Get order IDs that are already billed
-    const orderIds = deliveredOrders.map(order => order.id)
-    const { data: billedOrders } = await supabase
+    // Get deliveries that are already billed (cleaner approach - only check delivery_id)
+    const deliveryIds = deliveredDeliveries.map(delivery => delivery.id)
+    
+    if (deliveryIds.length === 0) return 0
+      
+    // Check for billed deliveries using direct delivery_id reference
+    const { data: billedItems } = await supabase
       .from("invoice_line_items")
-      .select("order_id")
-      .in("order_id", orderIds)
-      .not("order_id", "is", null)
+      .select("delivery_id")
+      .in("delivery_id", deliveryIds)
+      .not("delivery_id", "is", null)
     
-    const billedOrderIds = new Set(billedOrders?.map(item => item.order_id) || [])
+    const billedDeliveryIds = new Set(billedItems?.map(item => item.delivery_id) || [])
     
-    // Calculate total amount for unbilled orders using actual delivered quantities
-    return deliveredOrders
-      .filter(order => !billedOrderIds.has(order.id))
-      .reduce((sum, order) => {
-        // Use actual delivered quantity instead of planned quantity
-        const actualQuantity = Number(order.deliveries[0]?.actual_quantity || 0)
-        const actualAmount = actualQuantity * Number(order.unit_price)
+    // Calculate total amount for unbilled deliveries using actual delivered quantities
+    return deliveredDeliveries
+      .filter(delivery => !billedDeliveryIds.has(delivery.id))
+      .reduce((sum, delivery) => {
+        // Use self-contained delivery data
+        const actualQuantity = Number(delivery.actual_quantity || 0)
+        const actualAmount = actualQuantity * Number(delivery.unit_price)
         return sum + actualAmount
       }, 0)
   }
@@ -869,18 +890,23 @@ export async function getInvoiceStats() {
       .select("customer_id")
       .gt("total_outstanding", 0)
 
-    // Get all customers who have delivered subscription orders this month
-    const { data: customersWithDeliveries } = await supabase
-      .from("customers")
-      .select(`
-        id,
-        daily_orders!inner(
-          id,
-          deliveries!inner(id)
-        )
-      `)
-      .gte("daily_orders.order_date", startOfMonth)
-      .lte("daily_orders.order_date", today)
+    // Get all customers who have any delivered items this month (subscription + additional)
+    // First get customer IDs from deliveries
+    const { data: deliveryCustomerIds } = await supabase
+      .from("deliveries")
+      .select("customer_id")
+      .eq("delivery_status", "delivered")
+      .gte("order_date", startOfMonth)
+      .lte("order_date", today)
+    
+    const uniqueCustomerIds = [...new Set(deliveryCustomerIds?.map(d => d.customer_id) || [])]
+    
+    const { data: customersWithDeliveries } = uniqueCustomerIds.length > 0 
+      ? await supabase
+          .from("customers")
+          .select("id")
+          .in("id", uniqueCustomerIds)
+      : { data: [] }
 
     // Combine both sets of customers (subscription dues OR outstanding amounts)
     const eligibleCustomerIds = new Set([
@@ -1073,55 +1099,59 @@ export async function bulkDeleteInvoices(invoiceIds: string[]): Promise<{
   return results
 }
 
-async function createSubscriptionLineItems(
+async function createDeliveryLineItems(
   invoiceId: string, 
   customerId: string, 
   periodStart: string, 
   periodEnd: string
-): Promise<Array<{order_id: string; invoice_id: string}>> {
+): Promise<Array<{delivery_id: string; invoice_id: string}>> {
   const supabase = await createClient()
 
-  // Get delivered orders for this period with ALL required data
-  const { data: deliveredOrders } = await supabase
-    .from("daily_orders")
+  // Get all delivered deliveries for this period (both subscription and additional)
+  const { data: deliveredDeliveries } = await supabase
+    .from("deliveries")
     .select(`
       id,
-      planned_quantity,
+      daily_order_id,
+      actual_quantity,
       unit_price,
       total_amount,
       product:products(
         id,
         name,
         gst_rate
-      ),
-      deliveries!inner(id, actual_quantity)
+      )
     `)
     .eq("customer_id", customerId)
+    .eq("delivery_status", "delivered")
     .gte("order_date", periodStart)
     .lte("order_date", periodEnd)
 
-  if (!deliveredOrders?.length) return []
+  if (!deliveredDeliveries?.length) return []
 
-  // Create line items for each delivered order with ALL required fields
-  const lineItemsData = deliveredOrders.map(order => {
-    // Use actual delivered quantity instead of planned quantity
-    const actualQuantity = Number(order.deliveries[0]?.actual_quantity || order.planned_quantity)
-    const actualLineTotal = actualQuantity * Number(order.unit_price)
+  // Create line items for each delivered delivery with ALL required fields
+  const lineItemsData = deliveredDeliveries.map(delivery => {
+    // Use actual delivered quantity from self-contained delivery data
+    const actualQuantity = Number(delivery.actual_quantity || 0)
+    const actualLineTotal = actualQuantity * Number(delivery.unit_price)
     
     // Handle product data - it should be a single object, not array
-    const product = Array.isArray(order.product) ? order.product[0] : order.product
+    const product = Array.isArray(delivery.product) ? delivery.product[0] : delivery.product
+    
+    // All deliveries use 'subscription' type (simplified architecture post-refactor)
+    const lineItemType = 'subscription'
     
     return {
       invoice_id: invoiceId,
-      order_id: order.id,
-      line_item_type: 'subscription',
+      delivery_id: delivery.id, // Direct reference to delivery record (cleaner architecture)
+      line_item_type: lineItemType,
       product_id: product.id,
       product_name: product.name,
       quantity: actualQuantity,
-      unit_price: Number(order.unit_price),
+      unit_price: Number(delivery.unit_price),
       line_total: actualLineTotal,
       gst_rate: Number(product.gst_rate || 0),
-      gst_amount: 0 // Subscriptions typically don't have GST
+      gst_amount: 0 // Deliveries typically don't have GST
     }
   })
 
@@ -1131,7 +1161,7 @@ async function createSubscriptionLineItems(
     .select()
 
   if (error) {
-    console.error('Error creating subscription line items:', error)
+    console.error('Error creating delivery line items:', error)
     return []
   }
 
@@ -1201,7 +1231,181 @@ async function createSalesLineItems(
   return lineItems || []
 }
 
+/**
+ * Enhanced function to mark invoice as paid with automatic sales completion
+ * Replaces manual invoice status updates with atomic transaction processing
+ */
+export async function markInvoiceAsPaid(
+  invoiceId: string, 
+  options: { revalidate?: boolean } = {}
+) {
+  const supabase = await createClient()
+  
+  try {
+    // Use atomic database function for consistency
+    const { data, error } = await supabase.rpc('process_invoice_payment_atomic', {
+      p_invoice_id: invoiceId,
+      p_new_status: 'Paid'
+    })
+    
+    if (error) {
+      console.error('Invoice payment processing failed:', error)
+      throw new Error(`Failed to mark invoice as paid: ${error.message}`)
+    }
+    
+    const result = data as {
+      success: boolean
+      invoice_id: string
+      new_status: string
+      updated_sales_count: number
+      timestamp: string
+    }
+    
+    console.log(`Invoice ${invoiceId} marked as paid. Updated ${result.updated_sales_count} sales to completed.`)
+    
+    // Trigger UI updates if requested (default: true)
+    if (options.revalidate !== false) {
+      const { revalidatePath } = await import("next/cache")
+      revalidatePath('/dashboard/invoices')
+      revalidatePath('/dashboard/sales')
+      revalidatePath('/dashboard/outstanding')
+      revalidatePath(`/dashboard/invoices/${invoiceId}`)
+    }
+    
+    return {
+      success: true,
+      updatedSalesCount: result.updated_sales_count,
+      timestamp: result.timestamp
+    }
+    
+  } catch (error) {
+    console.error('Invoice payment processing error:', error)
+    throw error
+  }
+}
+
+/**
+ * Enhanced function to delete invoice with automatic sales reversion
+ * Ensures sales don't remain orphaned in 'Billed' status
+ * Replaces the existing deleteInvoice function for better safety
+ */
+export async function deleteInvoiceWithSalesRevert(
+  invoiceId: string,
+  options: { revalidate?: boolean } = {}
+) {
+  const supabase = await createClient()
+  
+  try {
+    // Use atomic database function for consistency
+    const { data, error } = await supabase.rpc('delete_invoice_and_revert_sales', {
+      p_invoice_id: invoiceId
+    })
+    
+    if (error) {
+      console.error('Invoice deletion failed:', error)
+      throw new Error(`Failed to delete invoice: ${error.message}`)
+    }
+    
+    const result = data as {
+      success: boolean
+      deleted_invoice_id: string
+      reverted_sales_count: number
+      timestamp: string
+    }
+    
+    console.log(`Invoice ${invoiceId} deleted. Reverted ${result.reverted_sales_count} sales to pending.`)
+    
+    // Trigger UI updates if requested (default: true)
+    if (options.revalidate !== false) {
+      const { revalidatePath } = await import("next/cache")
+      revalidatePath('/dashboard/invoices')
+      revalidatePath('/dashboard/sales')
+      revalidatePath('/dashboard/outstanding')
+    }
+    
+    return {
+      success: true,
+      revertedSalesCount: result.reverted_sales_count,
+      timestamp: result.timestamp
+    }
+    
+  } catch (error) {
+    console.error('Invoice deletion error:', error)
+    throw error
+  }
+}
+
+/**
+ * Enhanced bulk delete invoices with automatic sales reversion
+ * Uses the enhanced deleteInvoiceWithSalesRevert for each invoice
+ */
+export async function bulkDeleteInvoicesWithSalesRevert(invoiceIds: string[]): Promise<{
+  successful: number
+  failed: number
+  errors: string[]
+  messages: string[]
+  totalRevertedSales: number
+}> {
+  const results = {
+    successful: 0,
+    failed: 0,
+    errors: [] as string[],
+    messages: [] as string[],
+    totalRevertedSales: 0
+  }
+
+  for (const invoiceId of invoiceIds) {
+    try {
+      const result = await deleteInvoiceWithSalesRevert(invoiceId, { revalidate: false })
+      if (result.success) {
+        results.successful++
+        results.totalRevertedSales += result.revertedSalesCount
+        results.messages.push(`Invoice ${invoiceId.substring(0, 8)}... deleted successfully${result.revertedSalesCount > 0 ? ` (${result.revertedSalesCount} sales reverted)` : ''}`)
+      } else {
+        results.failed++
+        results.errors.push(`Invoice ${invoiceId.substring(0, 8)}... failed to delete`)
+      }
+    } catch (error) {
+      results.failed++
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
+      results.errors.push(`Invoice ${invoiceId.substring(0, 8)}...: ${errorMsg}`)
+    }
+  }
+
+  // Trigger UI updates once at the end for better performance
+  if (results.successful > 0) {
+    const { revalidatePath } = await import("next/cache")
+    revalidatePath('/dashboard/invoices')
+    revalidatePath('/dashboard/sales')
+    revalidatePath('/dashboard/outstanding')
+  }
+
+  return results
+}
+
 export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<string> {
+  // Import the utility functions from invoice-utils
+  const { 
+    getInvoiceAssets, 
+    calculateResponsiveFontSizes, 
+    getOpenSansFontCSS,
+    formatDailySummaryForColumns 
+  } = await import('@/lib/invoice-utils')
+  
+  // Get all assets converted to base64
+  const assets = getInvoiceAssets()
+  
+  // Calculate responsive font sizes based on content volume
+  const totalLineItems = invoiceData.deliveryItems.length + invoiceData.manualSalesItems.length
+  const fontSizes = calculateResponsiveFontSizes({
+    dailySummaryDays: invoiceData.dailySummary.length,
+    productCount: [...new Set([...invoiceData.deliveryItems, ...invoiceData.manualSalesItems].map(item => item.productName))].length,
+    totalLineItems
+  })
+  
+  // Format daily summary for 4-column layout
+  const dailySummaryColumns = formatDailySummaryForColumns(invoiceData.dailySummary)
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1210,9 +1414,11 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${invoiceData.invoiceNumber} - ${invoiceData.customer.billing_name}</title>
   <style>
+    ${getOpenSansFontCSS()}
+    
     @page {
       size: A4;
-      margin: 20mm;
+      margin: 15mm 15mm 15mm 10mm; /* 15mm all sides, 10mm right as per spec */
     }
     
     * {
@@ -1222,221 +1428,270 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
     }
     
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 12px;
+      font-family: "Open Sans", sans-serif;
+      font-size: ${fontSizes.baseSize}px;
       line-height: 1.4;
       color: #333;
-      background: white;
+      background: #ffffff; /* Light off-white background as per spec */
     }
     
     .header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 3px solid #2D5F2D;
+      padding: 15px 0;
+      background: white;
     }
     
     .logo-section {
       display: flex;
       align-items: center;
-    }
-    
-    .logo {
-      width: 60px;
-      height: 60px;
-      background: #2D5F2D;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-      margin-right: 15px;
+      flex: 1; /* Equal space for centering */
     }
     
-    .company-name {
-      font-size: 28px;
-      font-weight: bold;
-      color: #2D5F2D;
-      margin-bottom: 2px;
+    .logo-img {
+      width: 120px; /* Reduced back to 120px */
+      height: auto;
     }
     
-    .company-tagline {
-      font-size: 12px;
-      color: #666;
-      font-style: italic;
+    .invoice-title {
+      text-align: left;
+      font-size: ${fontSizes.titleSize}px;
+      font-weight: 800; /* Extra bold for title */
+      color: #000000;
+      letter-spacing: 2px;
+      flex: 1; /* Equal space */
     }
     
     .company-address {
       text-align: right;
+      flex: 1; /* Equal space */
       font-size: 11px;
+      font-weight: 400; /* Regular weight */
       color: #666;
       line-height: 1.3;
     }
     
-    .invoice-title {
-      text-align: center;
-      font-size: 36px;
-      font-weight: bold;
-      color: #2D5F2D;
-      margin: 20px 0;
-      letter-spacing: 2px;
-    }
-    
-    .invoice-details {
+    .main-content {
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 30px;
+      gap: 20px;
+      margin-bottom: 20px;
     }
     
-    .customer-details {
+    .left-section {
       flex: 1;
+      max-width: 35%;
     }
     
     .customer-title {
-      font-size: 16px;
-      font-weight: bold;
-      color: #2D5F2D;
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 800; /* Extra bold for headers */
+      color: black;
       margin-bottom: 8px;
       text-transform: uppercase;
-      letter-spacing: 1px;
     }
     
     .customer-info {
-      background: #f8f9fa;
-      padding: 15px;
-      border-left: 4px solid #2D5F2D;
-      border-radius: 0 8px 8px 0;
+      font-weight: 500; /* Medium weight for content */
+      margin-bottom: 20px;
     }
     
     .customer-name {
-      font-size: 18px;
-      font-weight: bold;
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 500;
       color: #333;
-      margin-bottom: 5px;
+      margin-bottom: 8px;
     }
     
     .invoice-meta {
-      text-align: right;
-      background: #2D5F2D;
-      color: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin-left: 30px;
+      font-weight: 500;
+      margin-bottom: 20px;
     }
     
     .invoice-number {
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 8px;
+      font-size: ${fontSizes.baseSize + 2}px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    
+    .right-section {
+      flex: 2;
     }
     
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 30px 0;
-      border: 2px solid #2D5F2D;
-      border-radius: 8px;
-      overflow: hidden;
+      background: #fdfbf9; /* Main table background as per spec */
+      border: 1px solid #025e24;
     }
     
     .items-table th {
-      background: #2D5F2D;
+      background: #025e24; /* Custom green header */
       color: white;
-      padding: 15px 10px;
+      padding: 12px 8px;
+      text-align: center;
+      font-weight: 800; /* Extra bold for headers */
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
+      border: 1px solid #025e24;
+    }
+    
+    .items-table th:first-child {
       text-align: left;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-right: 1px solid rgba(255,255,255,0.2);
     }
     
     .items-table th:last-child {
-      border-right: none;
       text-align: right;
     }
     
     .items-table td {
-      padding: 12px 10px;
-      border-bottom: 1px solid #eee;
-      border-right: 1px solid #eee;
+      padding: 8px;
+      border: 1px solid #ddd;
+      font-weight: 500; /* Medium weight for content */
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
     }
     
     .items-table td:last-child {
-      border-right: none;
       text-align: right;
-      font-weight: bold;
-    }
-    
-    .items-table tbody tr:nth-child(even) {
-      background: #f8f9fa;
+      font-weight: 500;
     }
     
     .totals-section {
-      margin: 30px 0;
+      margin: 15px 0;
       display: flex;
       justify-content: flex-end;
     }
     
     .totals-table {
       border-collapse: collapse;
-      min-width: 300px;
+      background: #fdfbf9;
     }
     
     .totals-table td {
-      padding: 10px 20px;
+      padding: 6px 15px;
       border: 1px solid #ddd;
+      font-weight: 500;
+      font-size: ${Math.max(fontSizes.baseSize - 1, 9)}px;
     }
     
     .totals-table .label {
-      font-weight: bold;
-      background: #f8f9fa;
       text-align: right;
+      font-weight: 500;
     }
     
     .totals-table .amount {
       text-align: right;
-      font-family: 'Courier New', monospace;
     }
     
     .grand-total {
-      background: #2D5F2D !important;
-      color: white !important;
-      font-size: 16px;
-      font-weight: bold;
+      font-weight: 800;
+      font-size: ${fontSizes.baseSize}px;
+    }
+    
+    .qr-section {
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    .qr-code-img {
+      max-width: 105px; /* 140px * 0.75 = 105px */
+      height: auto;
+      border: 1px solid #ddd;
+    }
+    
+    .daily-summary {
+      margin: 20px 0;
+      border: 1px solid #666;
+      background: white;
+    }
+    
+    .daily-summary-title {
+      padding: 8px 15px;
+      font-size: ${fontSizes.baseSize}px;
+      font-weight: 800; /* Extra bold for headers */
+      color: black;
+      border-bottom: 1px solid #666;
+    }
+    
+    .daily-summary-content {
+      padding: 15px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      font-size: ${fontSizes.summarySize}px;
+      font-weight: 400; /* Regular weight for summary */
+    }
+    
+    .daily-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .daily-entry {
+      margin-bottom: 8px;
+    }
+    
+    .daily-date {
+      font-weight: 500;
+      color: black;
+      margin-bottom: 3px;
+    }
+    
+    .daily-product {
+      font-size: ${Math.max(fontSizes.summarySize - 1, 8)}px;
+      color: #666;
+      margin-left: 8px;
+      line-height: 1.2;
     }
     
     .footer {
-      margin-top: 50px;
-      padding-top: 20px;
-      border-top: 2px solid #2D5F2D;
+      margin-top: 20px;
+      padding-top: 15px;
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
-      font-size: 11px;
-      color: #666;
+      gap: 40px;
+      font-size: ${Math.max(fontSizes.baseSize - 2, 8)}px;
+      color: black;
+      background: white;
+      padding: 10px;
     }
     
+    .footer-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .footer-icon {
+      width: 16px;
+      height: 16px;
+    }
+    
+    /* Print optimizations for 300 DPI */
     @media print {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
       }
+      
+      .items-table, .daily-summary {
+        break-inside: avoid;
+      }
+      
+      .daily-summary-content {
+        break-inside: avoid;
+      }
     }
   </style>
 </head>
 <body>
-  <!-- Header with Logo and Company Info -->
+  <!-- Header with Invoice Title, Logo (Center), and Company Address -->
   <div class="header">
+    <h1 class="invoice-title">INVOICE</h1>
     <div class="logo-section">
-      <div class="logo">👑</div>
-      <div>
-        <div class="company-name">PureDairy</div>
-        <div class="company-tagline">Premium Quality Dairy Products</div>
-      </div>
+      ${assets.logo ? `<img src="${assets.logo}" alt="PureDairy Logo" class="logo-img">` : ''}
     </div>
     <div class="company-address">
       Plot No. G-2/8, MIDC,<br>
@@ -1444,91 +1699,117 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
     </div>
   </div>
 
-  <!-- Invoice Title -->
-  <h1 class="invoice-title">INVOICE</h1>
-
-  <!-- Customer and Invoice Details -->
-  <div class="invoice-details">
-    <div class="customer-details">
-      <div class="customer-title">Customer Name</div>
+  <!-- Main Content Layout -->
+  <div class="main-content">
+    <!-- Left Section: Customer Details + QR Code -->
+    <div class="left-section">
+      <div class="customer-title">CUSTOMER NAME</div>
       <div class="customer-info">
         <div class="customer-name">${invoiceData.customer.billing_name}</div>
-        <div>${invoiceData.customer.address}</div>
-        <div>Contact: ${invoiceData.customer.contact_person}</div>
-        <div>Phone: ${invoiceData.customer.phone_primary}</div>
+        <div>${invoiceData.customer.address || ''}</div>
+      </div>
+      
+      <div class="invoice-meta">
+        <div class="invoice-number">Invoice No: ${invoiceData.invoiceNumber}</div>
+        <div>Invoice Period: ${format(new Date(invoiceData.periodStart), 'dd/MM/yyyy')} - ${format(new Date(invoiceData.periodEnd), 'dd/MM/yyyy')}</div>
+        <div>Invoice Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
+      </div>
+
+      <!-- QR Code positioned above daily summary -->
+      ${assets.qrCode ? `
+      <div class="qr-section">
+        <img src="${assets.qrCode}" alt="Payment QR Code" class="qr-code-img">
+      </div>
+      ` : ''}
+    </div>
+
+    <!-- Right Section: Items Table -->
+    <div class="right-section">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Item Description</th>
+            <th>Quantity</th>
+            <th>Price<br><small>incl. GST</small></th>
+            <th>Totals</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(invoiceData.deliveryItems || []).map(item => `
+            <tr>
+              <td>${item.productName}</td>
+              <td style="text-align: center;">${item.quantity} ${item.unitOfMeasure}</td>
+              <td style="text-align: center;">₹ ${item.unitPrice.toFixed(2)}</td>
+              <td>₹ ${item.totalAmount.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+          ${(invoiceData.manualSalesItems || []).map(item => `
+            <tr>
+              <td>${item.productName}</td>
+              <td style="text-align: center;">${item.quantity} ${item.unitOfMeasure}</td>
+              <td style="text-align: center;">₹ ${item.unitPrice.toFixed(2)}</td>
+              <td>₹ ${item.totalAmount.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <!-- Totals -->
+      <div class="totals-section">
+        <table class="totals-table">
+          <tr>
+            <td class="label">SUB TOTAL</td>
+            <td class="amount">₹ ${(invoiceData.totals.deliveryAmount + invoiceData.totals.manualSalesAmount - invoiceData.totals.totalGstAmount).toFixed(2)}</td>
+          </tr>
+          ${invoiceData.totals.totalGstAmount > 0 ? `
+          <tr>
+            <td class="label">G.S.T.</td>
+            <td class="amount">₹ ${invoiceData.totals.totalGstAmount.toFixed(2)}</td>
+          </tr>
+          ` : ''}
+          <tr class="grand-total">
+            <td class="label">GRAND TOTAL</td>
+            <td class="amount">₹ ${invoiceData.totals.grandTotal.toFixed(2)}</td>
+          </tr>
+        </table>
       </div>
     </div>
-    
-    <div class="invoice-meta">
-      <div class="invoice-number">Invoice No: ${invoiceData.invoiceNumber}</div>
-      <div>Date: ${format(new Date(invoiceData.invoiceDate), 'dd/MM/yyyy')}</div>
-      <div>Period: ${format(new Date(invoiceData.periodStart), 'dd/MM/yyyy')} to ${format(new Date(invoiceData.periodEnd), 'dd/MM/yyyy')}</div>
+  </div>
+
+  <!-- 4-Column Daily Summary -->
+  ${invoiceData.dailySummary.length > 0 ? `
+  <div class="daily-summary">
+    <div class="daily-summary-title">Daily Summary:</div>
+    <div class="daily-summary-content">
+      ${dailySummaryColumns.map(column => `
+        <div class="daily-column">
+          ${column.map(day => `
+            <div class="daily-entry">
+              <div class="daily-date">${day.formattedDate}</div>
+              ${day.items.map(item => `
+                <div class="daily-product">${item}</div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
     </div>
   </div>
+  ` : ''}
 
-  <!-- Items Table -->
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th>Item Description</th>
-        <th>Qty</th>
-        <th>Price</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${invoiceData.subscriptionItems.map(item => `
-        <tr>
-          <td>
-            <strong>${item.productName}</strong><br>
-            <small>Subscription deliveries</small>
-          </td>
-          <td>${item.quantity} ${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.unitPrice)}/${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.totalAmount)}</td>
-        </tr>
-      `).join('')}
-      
-      ${invoiceData.manualSalesItems.map(item => `
-        <tr>
-          <td>
-            <strong>${item.productName}</strong><br>
-            <small>Manual sale (${format(new Date(item.saleDate), 'dd/MM/yyyy')})</small>
-          </td>
-          <td>${item.quantity} ${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.unitPrice)}/${item.unitOfMeasure}</td>
-          <td>${formatCurrency(item.totalAmount)}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-
-  <!-- Totals -->
-  <div class="totals-section">
-    <table class="totals-table">
-      <tr>
-        <td class="label">Sub Total:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.subscriptionAmount + invoiceData.totals.manualSalesAmount)}</td>
-      </tr>
-      ${invoiceData.totals.totalGstAmount > 0 ? `
-      <tr>
-        <td class="label">G.S.T.:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.totalGstAmount)}</td>
-      </tr>
-      ` : ''}
-      <tr class="grand-total">
-        <td class="label">Grand Total:</td>
-        <td class="amount">${formatCurrency(invoiceData.totals.grandTotal)}</td>
-      </tr>
-    </table>
-  </div>
-
-  <!-- Footer -->
+  <!-- Footer with SVG Icons -->
   <div class="footer">
-    <div>
-      <span>🌐 puredairy.net</span>
-      <span style="margin-left: 20px;">📞 8767-206-236</span>
-      <span style="margin-left: 20px;">📧 info@puredairy.net</span>
+    <div class="footer-item">
+      ${assets.footerIcons.website ? `<img src="${assets.footerIcons.website}" alt="Website" class="footer-icon">` : '🌐'}
+      <span>puredairy.net</span>
+    </div>
+    <div class="footer-item">
+      ${assets.footerIcons.phone ? `<img src="${assets.footerIcons.phone}" alt="Phone" class="footer-icon">` : '📞'}
+      <span>8767-206-236</span>
+    </div>
+    <div class="footer-item">
+      ${assets.footerIcons.email ? `<img src="${assets.footerIcons.email}" alt="Email" class="footer-icon">` : '📧'}
+      <span>info@puredairy.net</span>
     </div>
   </div>
 </body>
