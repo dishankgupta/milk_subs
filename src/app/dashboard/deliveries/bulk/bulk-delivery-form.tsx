@@ -11,6 +11,7 @@ import { bulkDeliverySchema, type BulkDeliveryFormData } from "@/lib/validations
 import { createBulkDeliveries } from "@/lib/actions/deliveries"
 import type { DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { getCurrentISTDate, formatDateTimeIST } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 
 import { Button } from "@/components/ui/button"
@@ -42,15 +43,8 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(undefined)
   const [searchTerm, setSearchTerm] = useState("")
+  const [isClientMounted, setIsClientMounted] = useState(false)
   const router = useRouter()
-  const isInitialized = useRef(false)
-
-  // Initialize deliveredAt after component mounts to avoid hydration mismatch
-  useEffect(() => {
-    if (!deliveredAt) {
-      setDeliveredAt(new Date())
-    }
-  }, [])
 
   // Create stable default values
   const defaultValues = useMemo(() => {
@@ -58,14 +52,14 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
       order_ids: orders.map(order => order.id),
       delivery_mode: "as_planned" as const,
       delivery_person: "",
-      delivered_at: deliveredAt || new Date(),
+      delivered_at: undefined, // Will be set after hydration
       delivery_notes: "",
       custom_quantities: orders.map(order => ({
         order_id: order.id,
         actual_quantity: order.planned_quantity
       }))
     }
-  }, [orders, deliveredAt])
+  }, [orders])
 
   const {
     register,
@@ -78,6 +72,14 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
     resolver: zodResolver(bulkDeliverySchema),
     defaultValues,
   })
+
+  // Initialize deliveredAt after component mounts to avoid hydration mismatch
+  useEffect(() => {
+    const now = getCurrentISTDate()
+    setDeliveredAt(now)
+    setValue("delivered_at", now)
+    setIsClientMounted(true)
+  }, [setValue])
 
   const { fields, update } = useFieldArray({
     control,
@@ -126,7 +128,7 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
         // Submit form without additional items (handled through main deliveries dashboard)
         const formData = {
           ...data,
-          delivered_at: deliveredAt || new Date()
+          delivered_at: deliveredAt || getCurrentISTDate()
         }
 
         const result = await createBulkDeliveries(formData)
@@ -144,13 +146,36 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
     })
   }
 
-  // Calculate totals - memoized to prevent infinite re-renders
-  const totals = useMemo(() => {
-    return orders.reduce(
+  // Calculate totals, product breakdown, and customer variances - memoized to prevent infinite re-renders
+  const { totals, productBreakdown, customerVariances } = useMemo(() => {
+    const breakdown = new Map<string, {
+      productName: string
+      orderCount: number
+      plannedQuantity: number
+      actualQuantity: number
+      plannedAmount: number
+      actualAmount: number
+    }>()
+
+    const variances = new Map<string, {
+      customerId: string
+      customerName: string
+      orders: Array<{
+        productName: string
+        plannedQuantity: number
+        actualQuantity: number
+        quantityVariance: number
+        amountVariance: number
+      }>
+      totalQuantityVariance: number
+      totalAmountVariance: number
+    }>()
+
+    const totals = orders.reduce(
       (acc, order, index) => {
         const plannedQty = order.planned_quantity
         const plannedAmount = order.total_amount
-        
+
         let actualQty = plannedQty
         if (deliveryMode === 'custom') {
           const customQuantity = fields[index]?.actual_quantity
@@ -159,7 +184,59 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
           }
         }
         const actualAmount = actualQty * order.unit_price
-        
+
+        // Update product breakdown
+        const productKey = order.product.id
+        const existing = breakdown.get(productKey) || {
+          productName: order.product.name,
+          orderCount: 0,
+          plannedQuantity: 0,
+          actualQuantity: 0,
+          plannedAmount: 0,
+          actualAmount: 0
+        }
+
+        breakdown.set(productKey, {
+          ...existing,
+          orderCount: existing.orderCount + 1,
+          plannedQuantity: existing.plannedQuantity + plannedQty,
+          actualQuantity: existing.actualQuantity + actualQty,
+          plannedAmount: existing.plannedAmount + plannedAmount,
+          actualAmount: existing.actualAmount + actualAmount
+        })
+
+        // Calculate customer variances (only if custom mode and there's a variance)
+        if (deliveryMode === 'custom') {
+          const qtyVariance = actualQty - plannedQty
+          const amtVariance = actualAmount - plannedAmount
+
+          if (qtyVariance !== 0 || amtVariance !== 0) {
+            const customerKey = order.customer.id
+            const existingVariance = variances.get(customerKey) || {
+              customerId: order.customer.id,
+              customerName: order.customer.billing_name,
+              orders: [],
+              totalQuantityVariance: 0,
+              totalAmountVariance: 0
+            }
+
+            const orderVariance = {
+              productName: order.product.name,
+              plannedQuantity: plannedQty,
+              actualQuantity: actualQty,
+              quantityVariance: qtyVariance,
+              amountVariance: amtVariance
+            }
+
+            variances.set(customerKey, {
+              ...existingVariance,
+              orders: [...existingVariance.orders, orderVariance],
+              totalQuantityVariance: existingVariance.totalQuantityVariance + qtyVariance,
+              totalAmountVariance: existingVariance.totalAmountVariance + amtVariance
+            })
+          }
+        }
+
         return {
           plannedQuantity: acc.plannedQuantity + plannedQty,
           plannedAmount: acc.plannedAmount + plannedAmount,
@@ -169,6 +246,12 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
       },
       { plannedQuantity: 0, plannedAmount: 0, actualQuantity: 0, actualAmount: 0 }
     )
+
+    return {
+      totals,
+      productBreakdown: Array.from(breakdown.values()).sort((a, b) => a.productName.localeCompare(b.productName)),
+      customerVariances: Array.from(variances.values()).sort((a, b) => a.customerName.localeCompare(b.customerName))
+    }
   }, [orders, deliveryMode, fields])
 
   const variance = useMemo(() => ({
@@ -306,55 +389,66 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
               {/* Delivery Time */}
               <div className="space-y-2">
                 <Label>Delivery Time</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !deliveredAt && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {deliveredAt ? (
-                        format(deliveredAt, "PPP 'at' p")
-                      ) : (
-                        <span>Pick delivery time</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={deliveredAt}
-                      onSelect={(date) => {
-                        if (date) {
-                          const currentTime = deliveredAt || new Date()
-                          date.setHours(currentTime.getHours(), currentTime.getMinutes())
-                          setDeliveredAt(date)
-                          setValue("delivered_at", date)
-                        }
-                      }}
-                      initialFocus
-                    />
-                    <div className="p-3 border-t">
-                      <input
-                        type="time"
-                        className="w-full px-3 py-1 border rounded"
-                        value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
-                        onChange={(e) => {
-                          if (deliveredAt && e.target.value) {
-                            const [hours, minutes] = e.target.value.split(':').map(Number)
-                            const newDate = new Date(deliveredAt)
-                            newDate.setHours(hours, minutes)
-                            setDeliveredAt(newDate)
-                            setValue("delivered_at", newDate)
+                {isClientMounted ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !deliveredAt && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {deliveredAt ? (
+                          format(deliveredAt, "PPP 'at' p")
+                        ) : (
+                          <span>Pick delivery time</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={deliveredAt}
+                        onSelect={(date) => {
+                          if (date) {
+                            const currentTime = deliveredAt || getCurrentISTDate()
+                            date.setHours(currentTime.getHours(), currentTime.getMinutes())
+                            setDeliveredAt(date)
+                            setValue("delivered_at", date)
                           }
                         }}
+                        initialFocus
                       />
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      <div className="p-3 border-t">
+                        <input
+                          type="time"
+                          className="w-full px-3 py-1 border rounded"
+                          value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
+                          onChange={(e) => {
+                            if (deliveredAt && e.target.value) {
+                              const [hours, minutes] = e.target.value.split(':').map(Number)
+                              const newDate = new Date(deliveredAt.getTime()) // Create copy to avoid mutation
+                              newDate.setHours(hours, minutes)
+                              setDeliveredAt(newDate)
+                              setValue("delivered_at", newDate)
+                            }
+                          }}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Button
+                    variant={"outline"}
+                    className="w-full justify-start text-left font-normal text-muted-foreground"
+                    disabled
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <span>Loading...</span>
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -526,60 +620,175 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
         <Card>
           <CardHeader>
             <CardTitle>Final Summary</CardTitle>
+            <CardDescription>
+              Product breakdown and totals for subscription deliveries
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {/* Subscription Deliveries Summary */}
+              {/* Product Breakdown Table */}
               <div>
-                <h4 className="font-medium mb-3 text-blue-600">Subscription Deliveries</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Orders</div>
-                    <div className="font-medium">{orders.length}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Total Quantity</div>
-                    <div className="font-medium">{totals.actualQuantity}L</div>
-                    {variance.quantity !== 0 && (
-                      <div className={`text-sm ${variance.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ({variance.quantity >= 0 ? '+' : ''}{variance.quantity}L variance)
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Total Amount</div>
-                    <div className="font-medium">{formatCurrency(totals.actualAmount)}</div>
-                    {variance.amount !== 0 && (
-                      <div className={`text-sm ${variance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ({variance.amount >= 0 ? '+' : ''}{formatCurrency(variance.amount)} variance)
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Status</div>
-                    <div className="font-medium">Ready to Confirm</div>
-                  </div>
+                <h4 className="font-medium mb-3 text-blue-600">Subscription Product Breakdown</h4>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center">Orders</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        {deliveryMode === 'custom' && (
+                          <TableHead className="text-right">Variance</TableHead>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {productBreakdown.map((product) => {
+                        const qtyVariance = product.actualQuantity - product.plannedQuantity
+                        const amtVariance = product.actualAmount - product.plannedAmount
+
+                        return (
+                          <TableRow key={product.productName}>
+                            <TableCell className="font-medium">
+                              {product.productName}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {product.orderCount}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {product.actualQuantity.toFixed(1)}L
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatCurrency(product.actualAmount)}
+                            </TableCell>
+                            {deliveryMode === 'custom' && (
+                              <TableCell className="text-right">
+                                <div className="space-y-1">
+                                  <div className={`text-sm font-mono ${qtyVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {qtyVariance >= 0 ? '+' : ''}{qtyVariance.toFixed(1)}L
+                                  </div>
+                                  <div className={`text-xs font-mono ${amtVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {amtVariance >= 0 ? '+' : ''}{formatCurrency(amtVariance)}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
-              
-              {/* Grand Total */}
+
+              {/* Customer Variance Summary */}
+              {deliveryMode === 'custom' && customerVariances.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 text-orange-600">Customer Variance Summary</h4>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-right">Planned (L)</TableHead>
+                          <TableHead className="text-right">Actual (L)</TableHead>
+                          <TableHead className="text-right">Quantity Variance</TableHead>
+                          <TableHead className="text-right">Amount Variance</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customerVariances.map((customer) =>
+                          customer.orders.map((order, orderIndex) => (
+                            <TableRow key={`${customer.customerId}-${orderIndex}`}>
+                              <TableCell className="font-medium">
+                                {orderIndex === 0 ? customer.customerName : ''}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {order.productName}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {order.plannedQuantity.toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {order.actualQuantity.toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className={`font-mono ${order.quantityVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {order.quantityVariance >= 0 ? '+' : ''}{order.quantityVariance.toFixed(1)}L
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className={`font-mono ${order.amountVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {order.amountVariance >= 0 ? '+' : ''}{formatCurrency(order.amountVariance)}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                        {/* Totals Row */}
+                        <TableRow className="border-t-2 bg-muted/30">
+                          <TableCell className="font-bold">
+                            Total Variances
+                          </TableCell>
+                          <TableCell className="text-muted-foreground italic">
+                            All Products
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            -
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            -
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className={`font-bold font-mono ${variance.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {variance.quantity >= 0 ? '+' : ''}{variance.quantity.toFixed(1)}L
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className={`font-bold font-mono ${variance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {variance.amount >= 0 ? '+' : ''}{formatCurrency(variance.amount)}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Showing detailed variances for {customerVariances.length} of {orders.reduce((acc, order) => {
+                      const customerId = order.customer.id
+                      return acc.has(customerId) ? acc : acc.add(customerId)
+                    }, new Set()).size} customers with delivery changes
+                  </div>
+                </div>
+              )}
+
+              {/* Overall Totals */}
               <div className="bg-green-50 rounded-lg p-4">
-                <h4 className="font-semibold mb-3 text-green-800">Grand Total</h4>
+                <h4 className="font-semibold mb-3 text-green-800">Overall Totals</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
-                    <div className="text-sm text-green-700">Total Deliveries</div>
+                    <div className="text-sm text-green-700">Total Orders</div>
                     <div className="font-bold text-green-800">{orders.length}</div>
-                    <div className="text-xs text-green-600">
-                      {orders.length} subscription + 0 additional
-                    </div>
+                    <div className="text-xs text-green-600">subscription deliveries</div>
                   </div>
                   <div>
                     <div className="text-sm text-green-700">Total Quantity</div>
-                    <div className="font-bold text-green-800">{totals.actualQuantity.toFixed(1)}</div>
+                    <div className="font-bold text-green-800">{totals.actualQuantity.toFixed(1)}L</div>
+                    {variance.quantity !== 0 && (
+                      <div className={`text-xs ${variance.quantity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ({variance.quantity >= 0 ? '+' : ''}{variance.quantity.toFixed(1)}L variance)
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <div className="text-sm text-green-700">Total Value</div>
+                    <div className="text-sm text-green-700">Total Amount</div>
                     <div className="font-bold text-green-800">{formatCurrency(totals.actualAmount)}</div>
+                    {variance.amount !== 0 && (
+                      <div className={`text-xs ${variance.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ({variance.amount >= 0 ? '+' : ''}{formatCurrency(variance.amount)} variance)
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
