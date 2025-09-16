@@ -224,7 +224,7 @@ export function SalesRow({
   }
 
   // Calculate dropdown position
-  const calculateDropdownPosition = useCallback((inputRef: React.RefObject<HTMLInputElement>) => {
+  const calculateDropdownPosition = useCallback((inputRef: React.RefObject<HTMLInputElement | null>) => {
     if (!inputRef.current) return { top: 0, left: 0, width: 0 }
 
     const rect = inputRef.current.getBoundingClientRect()
@@ -342,7 +342,7 @@ export function SalesRow({
                     }}
                   >
                     <div className="font-medium">{customer.billing_name}</div>
-                    <div className="text-xs text-gray-500">{customer.contact_phone}</div>
+                    <div className="text-xs text-gray-500">{customer.phone_primary}</div>
                   </div>
                 ))
               )}
