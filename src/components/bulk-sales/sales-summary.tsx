@@ -1,6 +1,5 @@
 "use client"
 
-import { useMemo } from "react"
 import { UseFormReturn } from "react-hook-form"
 import { TrendingUp, DollarSign, Hash, Receipt } from "lucide-react"
 
@@ -18,42 +17,41 @@ interface SalesSummaryProps {
 export function SalesSummary({ form, products }: SalesSummaryProps) {
   const sales = form.watch("sales")
 
-  const summary = useMemo(() => {
-    const validSales = sales.filter(sale =>
-      sale.product_id &&
-      sale.quantity > 0 &&
-      sale.unit_price > 0
-    )
+  // Calculate summary in real-time without memoization for immediate updates
+  const validSales = sales.filter(sale =>
+    sale.product_id &&
+    sale.quantity > 0 &&
+    sale.unit_price > 0
+  )
 
-    let totalAmount = 0
-    let totalGST = 0
-    const saleTypes = { Cash: 0, Credit: 0, QR: 0 }
+  let totalAmount = 0
+  let totalGST = 0
+  const saleTypes = { Cash: 0, Credit: 0, QR: 0 }
 
-    validSales.forEach(sale => {
-      const product = products.find(p => p.id === sale.product_id)
-      const amount = sale.quantity * sale.unit_price
+  validSales.forEach(sale => {
+    const product = products.find(p => p.id === sale.product_id)
+    const amount = sale.quantity * sale.unit_price
 
-      totalAmount += amount
+    totalAmount += amount
 
-      if (product && product.gst_rate > 0) {
-        const gstBreakdown = calculateGSTFromInclusive(amount, product.gst_rate)
-        totalGST += gstBreakdown.gstAmount
-      }
-
-      if (sale.sale_type) {
-        saleTypes[sale.sale_type]++
-      }
-    })
-
-    return {
-      totalEntries: validSales.length,
-      totalSales: sales.length,
-      totalAmount,
-      totalGST,
-      baseAmount: totalAmount - totalGST,
-      saleTypes
+    if (product && product.gst_rate > 0) {
+      const gstBreakdown = calculateGSTFromInclusive(amount, product.gst_rate)
+      totalGST += gstBreakdown.gstAmount
     }
-  }, [sales, products])
+
+    if (sale.sale_type) {
+      saleTypes[sale.sale_type]++
+    }
+  })
+
+  const summary = {
+    totalEntries: validSales.length,
+    totalSales: sales.length,
+    totalAmount,
+    totalGST,
+    baseAmount: totalAmount - totalGST,
+    saleTypes
+  }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
