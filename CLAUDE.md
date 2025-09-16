@@ -73,6 +73,8 @@ Complete Supabase database with 16 tables:
 - `getEffectiveOpeningBalance()` - **NEW** - Function to calculate remaining opening balance after payments
 - `process_invoice_payment_atomic()` - **NEW** - Atomic function for invoice payment with sales completion (Sep 4)
 - `delete_invoice_and_revert_sales()` - **NEW** - Atomic function for safe invoice deletion with sales reversion (Sep 4)
+- `allocate_payment_atomic()` - **NEW** - Race condition prevention for payment allocations (Sep 16)
+- `rollback_partial_allocation()` - **NEW** - Complete error recovery mechanism (Sep 16)
 
 **Views:**
 - `customer_outstanding_summary` - **UPDATED** - Performance view with corrected invoice status filtering ('sent' included)
@@ -89,14 +91,14 @@ Complete Supabase database with 16 tables:
 - **Phase 7-9**: Sales Management & Outstanding System Rework with invoice-based calculations
 - **Phase 10-12**: Performance Optimization (99.8% query reduction), IST Migration & Unapplied Payments
 
-### Recent Critical Achievements (August 2025)
+### Recent Critical Achievements (August-September 2025)
 - **IST Timezone Migration**: Complete system-wide migration across 25+ files ensuring data consistency
 - **Unapplied Payments System**: 4-phase enhancement with customer-first allocation workflows
 - **Invoice-Based Outstanding**: Complete overhaul from circular logic to transaction-based calculations
 - **Performance Optimization**: Eliminated N+1 queries, optimized bulk operations with real-time progress
 - **Professional PDF System**: Robust generation with retry mechanisms and Chrome integration
-- **Performance Optimization**: Customer-specific queries and batch processing for efficient unapplied payment operations
 - **Error Handling**: Comprehensive validation and graceful error handling including Invalid Date fixes for print reports
+- **Payment Security Enhancement**: ⭐ **NEW** - TDD implementation eliminates race conditions, over-allocation, and data corruption risks (Sep 16)
 
 ## Key Features Implemented
 
@@ -239,6 +241,7 @@ Complete Supabase database with 16 tables:
 - **Dual Template Architecture**: ⭐ **IMPORTANT** - Invoice generation exists in two separate locations requiring synchronized updates
 - **Modifications System Enhancement**: ⭐ **NEW** - Smart expiration handling, bulk archive operations, React.memo optimizations, and IST date compliance (Sep 8)
 - **Bulk Sales System**: ⭐ **NEW** - Complete bulk sales entry and delete functionality with dynamic table, real-time calculations, and selection management (Sep 15)
+- **Payment System Security Overhaul**: ⭐ **NEW** - TDD implementation eliminates race conditions, over-allocation risks, and implements comprehensive error recovery (Sep 16)
 
 ## Development Workflow
 
@@ -252,8 +255,8 @@ Complete Supabase database with 16 tables:
    - `/src/lib/actions/reports.ts` - Production and delivery report generation
    - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations and bulk operations (create/delete)
    - `/src/lib/actions/invoices.ts` - **ENHANCED** - Invoice generation with automatic sales completion and safe deletion (Sep 4)
-   - `/src/lib/actions/outstanding.ts` - Outstanding calculations with enhanced payment allocation and sales completion
-2. **Validation**: Zod schemas in `/src/lib/validations.ts` (includes sales and invoice schemas)
+   - `/src/lib/actions/outstanding.ts` - **ENHANCED** - Outstanding calculations with atomic payment allocation, race condition prevention, and comprehensive error recovery (Sep 16)
+2. **Validation**: Zod schemas in `/src/lib/validations.ts` - **ENHANCED** - Includes payment allocation validation with over-allocation prevention (Sep 16)
 3. **Types**: TypeScript interfaces in `/src/lib/types.ts` (extended for sales system)
 4. **Utilities**: Helper functions for business logic
    - `/src/lib/subscription-utils.ts` - Pattern calculations
@@ -282,6 +285,11 @@ Complete Supabase database with 16 tables:
     - `/src/lib/date-utils.ts` - Comprehensive IST utilities (400+ lines, 40+ functions)
     - **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
     - **ALWAYS** use `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()` for consistency
+13. **Payment System Testing**: **TDD Infrastructure** - Comprehensive test suite for payment security validation (Sep 16)
+    - `/tests/payment-system/` - Complete test infrastructure with 32/32 tests passing
+    - **Unit Tests**: Payment allocation validation and edge case testing
+    - **Integration Tests**: End-to-end payment workflows with error recovery
+    - **Database Tests**: Atomic RPC function validation with race condition prevention
 
 ## IST Date Handling Standards
 

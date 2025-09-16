@@ -101,6 +101,109 @@ export const paymentSchema = z.object({
 
 export type PaymentFormData = z.infer<typeof paymentSchema>
 
+// GAP-003: Enhanced payment allocation validation functions
+interface PaymentAllocationValidationInput {
+  payment: {
+    id: string
+    amount: number
+    existingAllocations?: number
+  }
+  allocations: Array<{
+    invoiceId: string
+    amount: number
+  }>
+}
+
+interface PaymentUpdateValidationInput {
+  oldPayment: {
+    id: string
+    amount: number
+    allocation_status: string
+  }
+  newPaymentData: {
+    amount: number
+    payment_method?: string
+  }
+  newAllocations?: Array<{
+    invoiceId: string
+    amount: number
+  }>
+}
+
+export function validatePaymentAllocation({ payment, allocations }: PaymentAllocationValidationInput) {
+  const totalAllocations = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+  const existingAllocations = payment.existingAllocations || 0
+  const maxAllowable = payment.amount - existingAllocations
+
+  // Validate individual allocation amounts
+  const invalidAllocations = allocations.filter(alloc =>
+    alloc.amount <= 0 || !Number.isFinite(alloc.amount)
+  )
+
+  if (invalidAllocations.length > 0) {
+    return {
+      isValid: false,
+      error: `Invalid allocation amounts detected. All amounts must be positive numbers.`,
+      totalAllocations,
+      maxAllowable,
+      excess: 0
+    }
+  }
+
+  // Validate total doesn't exceed available amount
+  const excess = Math.max(0, totalAllocations - maxAllowable)
+  const isValid = totalAllocations <= maxAllowable && totalAllocations >= 0
+
+  return {
+    isValid,
+    totalAllocations,
+    maxAllowable,
+    excess,
+    error: isValid ? null : `Allocation amount (₹${totalAllocations}) exceeds available balance (₹${maxAllowable})`
+  }
+}
+
+export function validatePaymentUpdate({ oldPayment, newPaymentData, newAllocations }: PaymentUpdateValidationInput) {
+  // No validation needed if amount hasn't changed
+  if (oldPayment.amount === newPaymentData.amount) {
+    return { isValid: true, error: null }
+  }
+
+  // If payment has existing allocations and amount changed, require new allocation breakdown
+  if (oldPayment.allocation_status !== 'unapplied' && !newAllocations) {
+    return {
+      isValid: false,
+      error: 'Payment amount changed but no new allocations provided. Please provide allocation breakdown for the updated amount.'
+    }
+  }
+
+  // If new allocations provided, validate they don't exceed new payment amount
+  if (newAllocations) {
+    const totalNewAllocations = newAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+
+    // Check for invalid allocation amounts
+    const invalidAllocations = newAllocations.filter(alloc =>
+      alloc.amount <= 0 || !Number.isFinite(alloc.amount)
+    )
+
+    if (invalidAllocations.length > 0) {
+      return {
+        isValid: false,
+        error: 'Invalid allocation amounts in new allocations. All amounts must be positive numbers.'
+      }
+    }
+
+    if (totalNewAllocations > newPaymentData.amount) {
+      return {
+        isValid: false,
+        error: `New allocations (₹${totalNewAllocations}) exceed updated payment amount (₹${newPaymentData.amount})`
+      }
+    }
+  }
+
+  return { isValid: true, error: null }
+}
+
 export const deliverySchema = z.object({
   // MODIFIED: Now optional for additional items
   daily_order_id: z.string().uuid("Please select a valid order").optional(),

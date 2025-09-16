@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { validatePaymentAllocation, validatePaymentUpdate } from "@/lib/validations"
 import { getCurrentISTDate, formatDateForDatabase } from "@/lib/date-utils"
 
 export interface CustomerOutstanding {
@@ -206,128 +207,103 @@ export async function allocatePayment(
   allocations: PaymentAllocation[]
 ) {
   const supabase = await createClient()
-  
+
   try {
-    // Get payment details
-    const { data: payment, error: paymentError } = await supabase
+    // GAP-003: Validate allocations before processing
+    const { data: paymentData, error: paymentError } = await supabase
       .from("payments")
-      .select("amount, customer_id")
+      .select("amount, allocation_status")
       .eq("id", paymentId)
       .single()
 
-    if (paymentError || !payment) {
-      throw new Error("Payment not found")
+    if (paymentError || !paymentData) {
+      throw new Error("Payment not found for validation")
     }
-    
-    const totalAllocation = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
-    
-    if (totalAllocation > payment.amount) {
-      throw new Error("Allocation exceeds payment amount")
-    }
-    
-    // Insert allocations
-    for (const allocation of allocations) {
-      const { error: insertError } = await supabase
-        .from("invoice_payments")
-        .insert({
-          invoice_id: allocation.invoiceId,
-          payment_id: paymentId,
-          amount_allocated: allocation.amount
-        })
-      
-      if (insertError) {
-        throw new Error(`Failed to allocate payment to invoice: ${insertError.message}`)
-      }
-      
-      // Update invoice status with enhanced sales completion
-      const { data: result, error: functionError } = await supabase.rpc('update_invoice_status_with_sales_completion', {
-        p_invoice_id: allocation.invoiceId
-      })
-      
-      if (functionError) {
-        console.error('Enhanced invoice status update failed:', functionError)
-        // Fallback to standard update
-        const { error: fallbackError } = await supabase.rpc('update_invoice_status', {
-          invoice_uuid: allocation.invoiceId
-        })
-        if (fallbackError) {
-          throw new Error(`Failed to update invoice status: ${fallbackError.message}`)
-        }
-      } else if (result?.updated_sales_count > 0) {
-        console.log(`Invoice ${allocation.invoiceId}: ${result.updated_sales_count} credit sales completed`)
-      }
-    }
-    
-    // Update payment allocation status
-    const amountApplied = totalAllocation
-    const amountUnapplied = payment.amount - totalAllocation
-    
-    const { error: updateError } = await supabase
-      .from("payments")
-      .update({
-        amount_applied: amountApplied,
-        amount_unapplied: amountUnapplied,
-        allocation_status: amountUnapplied > 0 ? 'partially_applied' : 'fully_applied'
-      })
-      .eq("id", paymentId)
 
-    if (updateError) {
-      throw new Error("Failed to update payment allocation status")
+    // Get existing allocations for validation
+    const { data: existingAllocations } = await supabase
+      .from("invoice_payments")
+      .select("amount_allocated")
+      .eq("payment_id", paymentId)
+
+    const totalExisting = existingAllocations?.reduce((sum, alloc) =>
+      sum + parseFloat(alloc.amount_allocated.toString()), 0
+    ) || 0
+
+    const validationResult = validatePaymentAllocation({
+      payment: {
+        id: paymentId,
+        amount: parseFloat(paymentData.amount.toString()),
+        existingAllocations: totalExisting
+      },
+      allocations: allocations.map(alloc => ({
+        invoiceId: alloc.invoiceId,
+        amount: alloc.amount
+      }))
+    })
+
+    if (!validationResult.isValid) {
+      throw new Error(`Validation failed: ${validationResult.error}`)
     }
-    
-    // Handle unapplied payments table updates
-    if (amountUnapplied === 0) {
-      // Payment fully allocated - remove from unapplied payments
-      await supabase
-        .from("unapplied_payments")
-        .delete()
-        .eq("payment_id", paymentId)
-    } else {
-      // Payment partially allocated - update or insert unapplied payment record
-      const { data: existingUnapplied } = await supabase
-        .from("unapplied_payments")
-        .select("id")
-        .eq("payment_id", paymentId)
-        .single()
-      
-      if (existingUnapplied) {
-        // Update existing record
-        const { error: updateError } = await supabase
-          .from("unapplied_payments")
-          .update({ 
-            amount_unapplied: amountUnapplied,
-            reason: "Awaiting invoice allocation"
-          })
-          .eq("payment_id", paymentId)
-        
-        if (updateError) {
-          console.warn("Failed to update unapplied payment:", updateError.message)
-        }
-      } else {
-        // Insert new record
-        const { error: insertError } = await supabase
-          .from("unapplied_payments")
-          .insert({
-            customer_id: payment.customer_id,
-            payment_id: paymentId,
-            amount_unapplied: amountUnapplied,
-            reason: "Awaiting invoice allocation"
-          })
-        
-        if (insertError) {
-          console.warn("Failed to record unapplied payment:", insertError.message)
-        }
-      }
+
+    console.log(`Payment ${paymentId}: Validation passed - allocating ₹${validationResult.totalAllocations}`)
+
+    // Use atomic RPC function to prevent race conditions (GAP-001 fix)
+    const { data: result, error } = await supabase.rpc('allocate_payment_atomic', {
+      p_payment_id: paymentId,
+      p_allocations: allocations.map(alloc => ({
+        invoiceId: alloc.invoiceId,
+        amount: alloc.amount
+      })),
+      p_validate_amounts: true
+    })
+
+    if (error) {
+      throw new Error(`Database error during payment allocation: ${error.message}`)
     }
-    
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Payment allocation failed')
+    }
+
+    console.log(`Payment ${paymentId}: Successfully allocated ₹${result.allocated_amount} to ${allocations.length} invoice(s)`)
+    return {
+      success: true,
+      allocated_amount: result.allocated_amount,
+      total_allocated: result.total_allocated,
+      payment_amount: result.payment_amount,
+      unapplied_amount: result.unapplied_amount || 0
+    }
+
     // Revalidate relevant pages
     revalidatePath("/dashboard/outstanding")
     revalidatePath("/dashboard/payments")
     revalidatePath("/dashboard/customers")
-    
-    return { success: true }
+
+    return result
   } catch (error) {
     console.error("Payment allocation error:", error)
+
+    // If allocation partially succeeded but then failed, attempt rollback (GAP-002 fix)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('Failed to update invoice status') ||
+        errorMessage.includes('Database error during payment allocation')) {
+      try {
+        console.log(`Attempting to rollback partial allocation for payment ${paymentId}`)
+        const { data: rollbackResult, error: rollbackError } = await supabase.rpc('rollback_partial_allocation', {
+          p_payment_id: paymentId
+        })
+
+        if (!rollbackError && rollbackResult?.success) {
+          console.log(`Successfully rolled back payment ${paymentId}:`, rollbackResult)
+        } else {
+          console.error(`Rollback failed for payment ${paymentId}:`, rollbackError?.message || rollbackResult?.error)
+        }
+      } catch (rollbackErr) {
+        console.error("Rollback error:", rollbackErr)
+      }
+    }
+
     throw error
   }
 }
