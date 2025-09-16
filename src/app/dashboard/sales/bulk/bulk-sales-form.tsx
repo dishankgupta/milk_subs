@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus, Save, RotateCcw, Download } from "lucide-react"
+import { Plus, Save, RotateCcw } from "lucide-react"
 import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,21 @@ export function BulkSalesForm({ onSuccess }: BulkSalesFormProps) {
 
   const sales = form.watch("sales")
 
+  const addSaleRow = () => {
+    const newSale: SaleFormData = {
+      customer_id: null,
+      product_id: "",
+      quantity: 1,
+      unit_price: 0,
+      sale_type: "Cash",
+      sale_date: getCurrentISTDate(),
+      notes: ""
+    }
+
+    const currentSales = form.getValues("sales")
+    form.setValue("sales", [...currentSales, newSale])
+  }
+
   // Load products and customers
   useEffect(() => {
     async function loadData() {
@@ -75,20 +90,20 @@ export function BulkSalesForm({ onSuccess }: BulkSalesFormProps) {
     loadData()
   }, [])
 
-  const addSaleRow = () => {
-    const newSale: SaleFormData = {
-      customer_id: null,
-      product_id: "",
-      quantity: 1,
-      unit_price: 0,
-      sale_type: "Cash",
-      sale_date: getCurrentISTDate(),
-      notes: ""
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey) {
+        if (e.key === 'a' || e.key === 'A') {
+          e.preventDefault()
+          addSaleRow()
+        }
+      }
     }
 
-    const currentSales = form.getValues("sales")
-    form.setValue("sales", [...currentSales, newSale])
-  }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [addSaleRow])
 
   const removeSaleRow = (index: number) => {
     const currentSales = form.getValues("sales")
@@ -224,6 +239,8 @@ export function BulkSalesForm({ onSuccess }: BulkSalesFormProps) {
                       customers={customers}
                       onRemove={removeSaleRow}
                       canRemove={sales.length > 1}
+                      onAddRow={addSaleRow}
+                      isLastRow={index === sales.length - 1}
                     />
                   ))}
                 </TableBody>

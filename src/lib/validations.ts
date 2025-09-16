@@ -191,7 +191,7 @@ export const saleSchema = z.object({
   customer_id: z.string().uuid().nullable(),
   product_id: z.string().uuid("Product selection is required"),
   quantity: z.number()
-    .min(0.001, "Quantity must be greater than 0")
+    .min(0, "Quantity cannot be negative")
     .max(10000, "Quantity too large"),
   unit_price: z.number()
     .min(0.01, "Unit price must be greater than 0")
@@ -214,6 +214,15 @@ export const saleSchema = z.object({
 }, {
   message: "Credit sales must have a customer selected",
   path: ["customer_id"]
+}).refine((data) => {
+  // Business rule: Quantity must be greater than 0 for saving
+  if (data.quantity <= 0) {
+    return false
+  }
+  return true
+}, {
+  message: "Quantity must be greater than 0",
+  path: ["quantity"]
 })
 
 export type SaleFormData = z.infer<typeof saleSchema>
