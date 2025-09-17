@@ -60,7 +60,7 @@ import {
   // Legacy compatibility
   formatDateForAPI,
   parseLocalDate,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 describe('IST Date Utilities - Core Functions', () => {
   beforeEach(() => {

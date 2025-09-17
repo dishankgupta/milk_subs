@@ -18,7 +18,7 @@ import {
   formatDateForDatabase,
   isValidISTDate,
   getCurrentISTDate,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 // Mock data representing existing customer records as they would appear from database
 const mockExistingCustomerData = {

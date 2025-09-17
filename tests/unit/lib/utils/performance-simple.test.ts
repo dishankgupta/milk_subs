@@ -12,7 +12,7 @@ import {
   parseLocalDateIST,
   isValidISTDate,
   addDaysIST,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 describe('Performance Tests - Basic Functionality', () => {
   describe('Core Function Performance', () => {

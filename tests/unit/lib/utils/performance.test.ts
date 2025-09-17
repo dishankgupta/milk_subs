@@ -44,7 +44,7 @@ import {
   getNextISTBusinessDay,
   getCurrentFinancialYearIST,
   createISTDateRange,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 // Performance measurement utilities
 const measurePerformance = (name: string, fn: () => void, iterations: number = 1000) => {

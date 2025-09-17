@@ -2,6 +2,8 @@
 
 ✅ **COMPLETED** - Test-Driven Development implementation for payment system gap fixes identified in `@docs/Pending/payment_gaps.md`.
 
+> **📁 Test Organization Update (Sep 17, 2025)**: This test suite is now part of the centralized test structure under `/tests/integration/payment-system/`. The project now uses a professional test organization with unit tests in `/tests/unit/` and integration tests in `/tests/integration/`. Use the new `pnpm test:unit` and `pnpm test:integration` commands.
+
 ## Implementation Status - 100% COMPLETE
 
 ### ✅ Week 1 Critical Fixes Implemented & Tested
@@ -340,16 +342,22 @@ it('should handle bulk operations efficiently', async () => {
 ## Running Tests
 
 ```bash
-# All payment system tests (recommended)
-cd tests/payment-system && npx vitest
+# All tests (recommended - runs entire organized test suite)
+pnpm test
 
-# Individual test suites
-npx vitest unit/gap-003-validation.test.js
-npx vitest database/database-tests.test.js
-npx vitest integration/integration-tests.test.js
+# Integration tests only (includes all payment system tests)
+pnpm test:integration
+
+# Payment system tests specifically (from project root)
+pnpm test:integration --reporter=verbose tests/integration/payment-system
+
+# Individual test suites (from project root)
+pnpm vitest tests/integration/payment-system/unit/gap-003-validation.test.js
+pnpm vitest tests/integration/payment-system/database/database-tests.test.js
+pnpm vitest tests/integration/payment-system/integration/integration-tests.test.js
 
 # Run with coverage
-npx vitest --coverage
+pnpm test:integration --coverage
 ```
 
 ## Security Achievements

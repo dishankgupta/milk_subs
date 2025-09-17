@@ -19,7 +19,7 @@ import {
   isValidISTDate,
   getDaysDifferenceIST,
   getCurrentFinancialYearIST,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 // Mock database records representing pre and post migration data
 const mockDatabaseRecords = {

@@ -11,7 +11,7 @@ import {
   convertUTCToIST,
   parseLocalDateIST,
   isValidISTDate,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 // Sample existing data as would come from database
 const sampleDatabaseRecords = {

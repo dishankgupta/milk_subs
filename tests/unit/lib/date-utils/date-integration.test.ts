@@ -23,7 +23,7 @@ import {
   getNextISTBusinessDay,
   isISTBusinessHour,
   convertUTCToIST,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 // Mock business logic functions that would typically be in server actions
 const mockBusinessLogic = {

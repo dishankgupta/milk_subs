@@ -35,7 +35,7 @@ import {
   // Validation
   isValidISTDate,
   isValidISTDateString,
-} from '../date-utils'
+} from '@/lib/date-utils'
 
 describe('Edge Cases - Leap Year Handling', () => {
   describe('Leap Year Date Operations', () => {

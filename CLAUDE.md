@@ -285,11 +285,12 @@ Complete Supabase database with 16 tables:
     - `/src/lib/date-utils.ts` - Comprehensive IST utilities (400+ lines, 40+ functions)
     - **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
     - **ALWAYS** use `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()` for consistency
-13. **Payment System Testing**: **TDD Infrastructure** - Comprehensive test suite for payment security validation (Sep 16)
-    - `/tests/payment-system/` - Complete test infrastructure with 32/32 tests passing
-    - **Unit Tests**: Payment allocation validation and edge case testing
-    - **Integration Tests**: End-to-end payment workflows with error recovery
-    - **Database Tests**: Atomic RPC function validation with race condition prevention
+13. **Test Organization**: **Centralized Structure** - Professional test organization with type-based separation (Sep 17)
+    - `/tests/unit/` - Fast, isolated unit tests (date-utils, validations, utilities)
+    - `/tests/integration/` - Multi-component integration tests including payment system
+    - `/tests/integration/payment-system/` - Complete TDD infrastructure with 126/126 tests passing
+    - **Payment Security**: Race condition prevention, atomic operations, comprehensive error recovery
+    - **Test Scripts**: `pnpm test:unit`, `pnpm test:integration`, `pnpm test:watch:unit`, `pnpm test:watch:integration`
 
 ## IST Date Handling Standards
 
