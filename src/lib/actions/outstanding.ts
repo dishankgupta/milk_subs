@@ -365,18 +365,177 @@ export async function getEffectiveOpeningBalance(customerId: string): Promise<nu
   return Math.max(0, effectiveBalance) // Ensure non-negative
 }
 
+// GAP-008: Enhanced Outstanding Calculation with Validation and Fallback
 export async function calculateCustomerOutstandingAmount(customerId: string): Promise<number> {
   const supabase = await createClient()
-  
-  const { data, error } = await supabase.rpc('calculate_customer_outstanding', {
-    customer_uuid: customerId
-  })
 
-  if (error) {
-    throw new Error("Failed to calculate outstanding amount")
+  try {
+    // Primary calculation using database function
+    const { data, error } = await supabase.rpc('calculate_customer_outstanding', {
+      customer_uuid: customerId
+    })
+
+    if (error) {
+      console.warn('Database outstanding calculation failed, using fallback:', error.message)
+      return await calculateOutstandingFallback(customerId)
+    }
+
+    const calculatedAmount = data || 0
+
+    // Validation: Outstanding amount should never be negative
+    if (calculatedAmount < 0) {
+      console.warn(`Negative outstanding amount detected for customer ${customerId}: ${calculatedAmount}. Correcting to 0.`)
+      return 0
+    }
+
+    // Validation: Check for suspiciously large amounts (potential data corruption)
+    const MAX_REASONABLE_OUTSTANDING = 1000000 // ₹10 lakh
+    if (calculatedAmount > MAX_REASONABLE_OUTSTANDING) {
+      console.warn(`Unusually large outstanding amount for customer ${customerId}: ₹${calculatedAmount}. Manual review required.`)
+
+      // Get detailed breakdown for validation
+      const breakdown = await getOutstandingBreakdown(customerId)
+      if (!breakdown.breakdown_valid) {
+        console.warn('Outstanding calculation breakdown validation failed, using fallback')
+        return await calculateOutstandingFallback(customerId)
+      }
+    }
+
+    return calculatedAmount
+
+  } catch (error) {
+    console.error('Exception in outstanding calculation:', error)
+    return await calculateOutstandingFallback(customerId)
   }
-  
-  return data || 0
+}
+
+// GAP-008: Fallback calculation using client-side logic
+async function calculateOutstandingFallback(customerId: string): Promise<number> {
+  const supabase = await createClient()
+
+  try {
+    // Get customer opening balance
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('outstanding_amount')
+      .eq('id', customerId)
+      .single()
+
+    const openingBalance = customer?.outstanding_amount || 0
+
+    // Get unpaid invoices total
+    const { data: unpaidInvoices } = await supabase
+      .from('invoice_metadata')
+      .select('net_total')
+      .eq('customer_id', customerId)
+      .eq('payment_status', 'unpaid')
+
+    const unpaidInvoicesTotal = unpaidInvoices?.reduce((sum, invoice) => sum + (invoice.net_total || 0), 0) || 0
+
+    // Get total payments allocated to opening balance
+    const { data: openingBalancePayments } = await supabase
+      .from('opening_balance_payments')
+      .select('amount_allocated')
+      .eq('customer_id', customerId)
+
+    const openingBalancePaymentsTotal = openingBalancePayments?.reduce((sum, payment) => sum + (payment.amount_allocated || 0), 0) || 0
+
+    // Calculate final outstanding
+    const totalOutstanding = Math.max(0, openingBalance + unpaidInvoicesTotal - openingBalancePaymentsTotal)
+
+    console.info(`Fallback calculation for customer ${customerId}: Opening(₹${openingBalance}) + Unpaid(₹${unpaidInvoicesTotal}) - Payments(₹${openingBalancePaymentsTotal}) = ₹${totalOutstanding}`)
+
+    return totalOutstanding
+
+  } catch (error) {
+    console.error('Fallback outstanding calculation failed:', error)
+    return 0 // Safe fallback
+  }
+}
+
+// GAP-008: Detailed breakdown for validation
+async function getOutstandingBreakdown(customerId: string): Promise<{
+  total_outstanding: number
+  opening_balance: number
+  unpaid_invoices: number
+  credit_adjustments: number
+  breakdown_valid: boolean
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase.rpc('calculate_outstanding_with_breakdown', {
+      customer_uuid: customerId
+    })
+
+    if (error || !data) {
+      return {
+        total_outstanding: 0,
+        opening_balance: 0,
+        unpaid_invoices: 0,
+        credit_adjustments: 0,
+        breakdown_valid: false
+      }
+    }
+
+    // Validate breakdown math
+    const expectedTotal = data.opening_balance + data.unpaid_invoices + data.credit_adjustments
+    const breakdown_valid = Math.abs(expectedTotal - data.total_outstanding) < 0.01 // Allow for rounding
+
+    return {
+      ...data,
+      breakdown_valid
+    }
+
+  } catch (error) {
+    console.error('Error getting outstanding breakdown:', error)
+    return {
+      total_outstanding: 0,
+      opening_balance: 0,
+      unpaid_invoices: 0,
+      credit_adjustments: 0,
+      breakdown_valid: false
+    }
+  }
+}
+
+// GAP-008: Validation function for outstanding amount anomaly detection
+export async function validateOutstandingCalculation(customerId: string): Promise<{
+  isValid: boolean
+  amount: number
+  warnings: string[]
+  requiresReview: boolean
+}> {
+  const amount = await calculateCustomerOutstandingAmount(customerId)
+  const warnings: string[] = []
+  let requiresReview = false
+
+  // Check for negative amounts
+  if (amount < 0) {
+    warnings.push('Outstanding amount is negative')
+    requiresReview = true
+  }
+
+  // Check for suspiciously large amounts
+  const MAX_REASONABLE = 1000000
+  if (amount > MAX_REASONABLE) {
+    warnings.push(`Outstanding amount (₹${amount.toLocaleString()}) exceeds reasonable limit (₹${MAX_REASONABLE.toLocaleString()})`)
+    requiresReview = true
+  }
+
+  // Get breakdown for additional validation
+  const breakdown = await getOutstandingBreakdown(customerId)
+  if (!breakdown.breakdown_valid) {
+    warnings.push('Outstanding calculation breakdown validation failed')
+    requiresReview = true
+  }
+
+  return {
+    isValid: warnings.length === 0,
+    amount,
+    warnings,
+    requiresReview
+  }
 }
 
 export interface UnappliedPayment {

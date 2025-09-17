@@ -101,6 +101,127 @@ export const paymentSchema = z.object({
 
 export type PaymentFormData = z.infer<typeof paymentSchema>
 
+// GAP-009: Payment Method Validation Enhancement
+export const STANDARD_PAYMENT_METHODS = [
+  'Cash',
+  'UPI',
+  'Bank Transfer',
+  'Cheque',
+  'Online',
+  'Card'
+] as const
+
+export type PaymentMethod = typeof STANDARD_PAYMENT_METHODS[number]
+
+export function getStandardPaymentMethods(): readonly PaymentMethod[] {
+  return STANDARD_PAYMENT_METHODS
+}
+
+export function normalizePaymentMethod(method: string): PaymentMethod | null {
+  if (!method) return null
+
+  const normalized = method.toLowerCase().trim()
+
+  const mappings: Record<string, PaymentMethod> = {
+    'cash': 'Cash',
+    'upi': 'UPI',
+    'bank transfer': 'Bank Transfer',
+    'banktransfer': 'Bank Transfer',
+    'cheque': 'Cheque',
+    'check': 'Cheque',
+    'online': 'Online',
+    'card': 'Card',
+    'credit card': 'Card',
+    'debit card': 'Card'
+  }
+
+  return mappings[normalized] || null
+}
+
+export function validatePaymentMethod(method: string | undefined): { isValid: boolean; error: string | null; normalizedMethod?: PaymentMethod } {
+  if (!method || typeof method !== 'string') {
+    return { isValid: false, error: 'Payment method is required' }
+  }
+
+  if (method.length > 50) {
+    return { isValid: false, error: 'Payment method must be less than 50 characters' }
+  }
+
+  const normalizedMethod = normalizePaymentMethod(method)
+  if (!normalizedMethod) {
+    return {
+      isValid: false,
+      error: `Invalid payment method. Allowed: ${STANDARD_PAYMENT_METHODS.join(', ')}`
+    }
+  }
+
+  return { isValid: true, error: null, normalizedMethod }
+}
+
+export function validatePaymentMethodBusinessRules(method: PaymentMethod, amount: number): { isValid: boolean; error: string | null } {
+  const rules: Record<PaymentMethod, { min: number; max: number }> = {
+    'Cash': { min: 0, max: 50000 },
+    'UPI': { min: 1, max: 100000 },
+    'Cheque': { min: 1000, max: 1000000 },
+    'Bank Transfer': { min: 1, max: 1000000 },
+    'Online': { min: 1, max: 100000 },
+    'Card': { min: 1, max: 100000 }
+  }
+
+  const rule = rules[method]
+  if (amount < rule.min || amount > rule.max) {
+    return {
+      isValid: false,
+      error: `Amount for ${method} must be between ₹${rule.min.toLocaleString()} and ₹${rule.max.toLocaleString()}`
+    }
+  }
+
+  return { isValid: true, error: null }
+}
+
+// Enhanced payment schema with enum validation
+export const enhancedPaymentSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  amount: z.number().positive("Payment amount must be positive"),
+  payment_date: z.date({ message: "Payment date is required" }),
+  payment_method: z.string()
+    .max(50, "Payment method must be less than 50 characters")
+    .refine((method) => {
+      if (!method) return true // Optional field
+      const validation = validatePaymentMethod(method)
+      return validation.isValid
+    }, {
+      message: `Invalid payment method. Allowed: ${STANDARD_PAYMENT_METHODS.join(', ')}`
+    })
+    .optional(),
+  period_start: z.date({ message: "Period start date is required" }).optional(),
+  period_end: z.date({ message: "Period end date is required" }).optional(),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional(),
+}).refine((data) => {
+  if (data.period_start && data.period_end) {
+    return data.period_end >= data.period_start
+  }
+  return true
+}, {
+  message: "Period end date must be after or equal to period start date",
+  path: ["period_end"]
+}).refine((data) => {
+  // Business rules validation for payment method and amount
+  if (data.payment_method && data.amount) {
+    const validation = validatePaymentMethod(data.payment_method)
+    if (validation.isValid && validation.normalizedMethod) {
+      const businessValidation = validatePaymentMethodBusinessRules(validation.normalizedMethod, data.amount)
+      return businessValidation.isValid
+    }
+  }
+  return true
+}, {
+  message: "Payment amount exceeds limits for selected payment method",
+  path: ["amount"]
+})
+
+export type EnhancedPaymentFormData = z.infer<typeof enhancedPaymentSchema>
+
 // GAP-003: Enhanced payment allocation validation functions
 interface PaymentAllocationValidationInput {
   payment: {

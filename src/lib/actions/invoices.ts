@@ -592,36 +592,20 @@ export async function generateBulkInvoices(params: {
 }> {
   const { output_folder, customer_ids, period_start, period_end } = params
 
-  // Check for existing invoices before starting generation
+  // GAP-010: Use atomic validation to prevent race conditions
   const supabase = await createClient()
-  const customersWithExistingInvoices: string[] = []
-  
-  for (const customerId of customer_ids) {
-    const { data: existingInvoice } = await supabase
-      .from("invoice_metadata")
-      .select("invoice_number")
-      .eq("customer_id", customerId)
-      .gte("period_start", period_start)
-      .lte("period_end", period_end)
-      .single()
-      
-    if (existingInvoice) {
-      // Get customer name separately to avoid TypeScript issues
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("billing_name")
-        .eq("id", customerId)
-        .single()
-        
-      const customerName = customer?.billing_name || 'Unknown Customer'
-      customersWithExistingInvoices.push(`${customerName} (Invoice: ${existingInvoice.invoice_number})`)
-    }
-  }
-  
-  // If any customers have existing invoices, prevent generation
-  if (customersWithExistingInvoices.length > 0) {
-    const errorMsg = `Cannot generate invoices. The following customers already have invoices for this period: ${customersWithExistingInvoices.join(', ')}. Please delete existing invoices first.`
-    
+
+  // Use atomic function to validate and lock invoice generation
+  const { data: validationResult, error: validationError } = await supabase.rpc('validate_invoice_generation_atomic', {
+    p_customer_ids: customer_ids,
+    p_period_start: period_start,
+    p_period_end: period_end,
+    p_acquire_lock: true
+  })
+
+  if (validationError || !validationResult?.success) {
+    const errorMsg = validationResult?.error || validationError?.message || 'Invoice generation validation failed'
+
     return {
       successful: 0,
       errors: [errorMsg],
@@ -1815,4 +1799,214 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
 </body>
 </html>
 `
+}
+
+// GAP-010: Enhanced Invoice Generation with Race Condition Prevention
+
+export async function validateInvoiceGenerationPreconditions(params: {
+  customer_ids: string[]
+  period_start: string
+  period_end: string
+}): Promise<{
+  success: boolean
+  error?: string
+  validation_results: {
+    customers_exist: boolean
+    period_valid: boolean
+    no_existing_invoices: boolean
+    deliveries_available: boolean
+  }
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase.rpc('validate_invoice_generation_preconditions', {
+      p_customer_ids: params.customer_ids,
+      p_period_start: params.period_start,
+      p_period_end: params.period_end
+    })
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+        validation_results: {
+          customers_exist: false,
+          period_valid: false,
+          no_existing_invoices: false,
+          deliveries_available: false
+        }
+      }
+    }
+
+    return data || {
+      success: false,
+      error: 'Validation failed',
+      validation_results: {
+        customers_exist: false,
+        period_valid: false,
+        no_existing_invoices: false,
+        deliveries_available: false
+      }
+    }
+
+  } catch (error) {
+    console.error('Error validating invoice generation preconditions:', error)
+    return {
+      success: false,
+      error: 'Validation error occurred',
+      validation_results: {
+        customers_exist: false,
+        period_valid: false,
+        no_existing_invoices: false,
+        deliveries_available: false
+      }
+    }
+  }
+}
+
+export async function generateInvoicesWithAtomicValidation(params: {
+  customer_ids: string[]
+  period_start: string
+  period_end: string
+  acquire_lock?: boolean
+}): Promise<{
+  success: boolean
+  error?: string
+  invoices_created: number
+  prevented_duplicates: number
+  lock_acquired: boolean
+  existing_invoices?: Array<{ customer_id: string; invoice_number: string }>
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase.rpc('generate_invoices_atomic', {
+      p_customer_ids: params.customer_ids,
+      p_period_start: params.period_start,
+      p_period_end: params.period_end,
+      p_acquire_lock: params.acquire_lock || true
+    })
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+        invoices_created: 0,
+        prevented_duplicates: 0,
+        lock_acquired: false
+      }
+    }
+
+    return data || {
+      success: false,
+      error: 'Unknown error occurred',
+      invoices_created: 0,
+      prevented_duplicates: 0,
+      lock_acquired: false
+    }
+
+  } catch (error) {
+    console.error('Error in atomic invoice generation:', error)
+    return {
+      success: false,
+      error: 'Invoice generation error occurred',
+      invoices_created: 0,
+      prevented_duplicates: 0,
+      lock_acquired: false
+    }
+  }
+}
+
+export async function queueInvoiceGeneration(params: {
+  customer_ids: string[]
+  period_start: string
+  period_end: string
+  priority?: 'high' | 'normal' | 'low'
+}): Promise<{
+  success: boolean
+  queued: boolean
+  position_in_queue: number
+  estimated_wait_seconds: number
+  request_id: string
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase.rpc('queue_invoice_generation', {
+      p_customer_ids: params.customer_ids,
+      p_period_start: params.period_start,
+      p_period_end: params.period_end,
+      p_priority: params.priority || 'normal'
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data || {
+      success: false,
+      queued: false,
+      position_in_queue: 0,
+      estimated_wait_seconds: 0,
+      request_id: ''
+    }
+
+  } catch (error) {
+    console.error('Error queuing invoice generation:', error)
+    return {
+      success: false,
+      queued: false,
+      position_in_queue: 0,
+      estimated_wait_seconds: 0,
+      request_id: ''
+    }
+  }
+}
+
+export async function getInvoiceGenerationStatus(requestId: string): Promise<{
+  request_id: string
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  progress: {
+    completed: number
+    total: number
+    current_customer: string
+    estimated_completion: string
+  }
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase.rpc('get_invoice_generation_status', {
+      p_request_id: requestId
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data || {
+      request_id: requestId,
+      status: 'failed',
+      progress: {
+        completed: 0,
+        total: 0,
+        current_customer: '',
+        estimated_completion: ''
+      }
+    }
+
+  } catch (error) {
+    console.error('Error getting invoice generation status:', error)
+    return {
+      request_id: requestId,
+      status: 'failed',
+      progress: {
+        completed: 0,
+        total: 0,
+        current_customer: '',
+        estimated_completion: ''
+      }
+    }
+  }
 }
