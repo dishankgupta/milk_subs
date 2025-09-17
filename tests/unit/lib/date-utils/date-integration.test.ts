@@ -312,14 +312,14 @@ describe('Date Integration Tests - Delivery Scheduling Logic', () => {
       expect(delivery.businessHourSlot).toBe('morning')
     })
 
-    it('should skip Sunday and schedule for Monday', () => {
+    it('should schedule for Sunday (7-day dairy business)', () => {
       // Order on Saturday
       const orderDate = new Date(2025, 0, 18) // Jan 18, 2025 (Saturday)
       const delivery = mockBusinessLogic.scheduleDelivery(orderDate, 'Route 2')
-      
-      // Should skip Sunday (Jan 19) and schedule for Monday (Jan 20)
-      expect(delivery.scheduledDate.getDate()).toBe(20) // Monday
-      expect(delivery.scheduledDate.getDay()).toBe(1) // Monday = 1
+
+      // Should schedule for Sunday (Jan 19) - dairy works 7 days
+      expect(delivery.scheduledDate.getDate()).toBe(19) // Sunday
+      expect(delivery.scheduledDate.getDay()).toBe(0) // Sunday = 0
       expect(delivery.isValidBusinessDay).toBe(true)
       expect(delivery.businessHourSlot).toBe('evening')
     })

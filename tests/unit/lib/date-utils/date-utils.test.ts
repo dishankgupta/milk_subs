@@ -121,7 +121,7 @@ describe('IST Date Utilities - Core Functions', () => {
 })
 
 describe('IST Date Utilities - Display Formatting', () => {
-  const testDate = new Date('2025-01-15T10:30:00.000')
+  const testDate = new Date(2025, 0, 15, 10, 30)
 
   describe('formatDateIST', () => {
     it('should format date in dd/MM/yyyy format', () => {
@@ -183,9 +183,9 @@ describe('IST Date Utilities - Database & API Functions', () => {
 
   describe('formatTimestampForDatabase', () => {
     it('should format timestamp as ISO string', () => {
-      const date = new Date('2025-01-15T10:30:00.000Z')
+      const date = new Date('2025-01-15T10:30:00+05:30')
       const result = formatTimestampForDatabase(date)
-      expect(result).toBe('2025-01-15T10:30:00.000Z')
+      expect(result).toBe('2025-01-15T05:00:00.000Z') // IST date converted to UTC
     })
 
     it('should throw error for invalid dates', () => {
@@ -352,9 +352,9 @@ describe('IST Date Utilities - Validation Functions', () => {
       expect(isISTWorkingDay(saturday)).toBe(true)
     })
 
-    it('should return false for Sunday', () => {
+    it('should return true for Sunday (7-day dairy business)', () => {
       const sunday = new Date(2025, 0, 19) // Sunday
-      expect(isISTWorkingDay(sunday)).toBe(false)
+      expect(isISTWorkingDay(sunday)).toBe(true)
     })
   })
 
@@ -394,11 +394,11 @@ describe('IST Date Utilities - Business Helper Functions', () => {
       expect(result.getDay()).toBe(4) // Thursday
     })
 
-    it('should skip Sunday and return Monday', () => {
+    it('should return Sunday (7-day dairy business)', () => {
       const saturday = new Date(2025, 0, 18) // Saturday
       const result = getNextISTBusinessDay(saturday)
-      expect(result.getDay()).toBe(1) // Monday
-      expect(result.getDate()).toBe(20)
+      expect(result.getDay()).toBe(0) // Sunday (7-day business)
+      expect(result.getDate()).toBe(19)
     })
 
     it('should skip multiple non-working days if needed', () => {
@@ -469,8 +469,8 @@ describe('IST Date Utilities - Constants and Configuration', () => {
       expect(IST_CONFIG.businessHours.evening.end).toBe('21:00')
     })
 
-    it('should have correct working days (Mon-Sat)', () => {
-      expect(IST_CONFIG.workingDays).toEqual([1, 2, 3, 4, 5, 6])
+    it('should have correct working days (7-day dairy business)', () => {
+      expect(IST_CONFIG.workingDays).toEqual([0, 1, 2, 3, 4, 5, 6])
     })
 
     it('should have correct date formats', () => {

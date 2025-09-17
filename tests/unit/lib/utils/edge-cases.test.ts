@@ -271,12 +271,12 @@ describe('Edge Cases - Business Logic Boundaries', () => {
   })
 
   describe('Business Day Calculation Edge Cases', () => {
-    it('should handle business day calculation when starting on Sunday', () => {
+    it('should handle business day calculation when starting on Sunday (7-day dairy)', () => {
       const sunday = new Date(2025, 0, 19) // Jan 19, 2025 (Sunday)
-      expect(isISTWorkingDay(sunday)).toBe(false)
-      
+      expect(isISTWorkingDay(sunday)).toBe(true) // Dairy operates 7 days
+
       const nextBusinessDay = getNextISTBusinessDay(sunday)
-      expect(nextBusinessDay.getDay()).toBe(1) // Monday
+      expect(nextBusinessDay.getDay()).toBe(1) // Monday (next day)
       expect(nextBusinessDay.getDate()).toBe(20) // Jan 20, 2025
     })
 
