@@ -89,17 +89,7 @@ export async function getSales(searchParams?: {
     `, { count: 'exact' })
     .order("sale_date", { ascending: false })
 
-  // Apply search filter
-  if (searchParams?.search && searchParams.search.trim()) {
-    const searchTerm = `%${searchParams.search.trim()}%`
-    query = query.or(`
-      customers.billing_name.ilike.${searchTerm},
-      customers.contact_person.ilike.${searchTerm},
-      products.name.ilike.${searchTerm},
-      products.code.ilike.${searchTerm},
-      notes.ilike.${searchTerm}
-    `)
-  }
+  // Search filtering is now handled client-side in the print API to support joined table searches
 
   // Apply filters
   if (searchParams?.customer_id) {
@@ -137,7 +127,8 @@ export async function getSales(searchParams?: {
   const { data, error, count } = await query
 
   if (error) {
-    throw new Error("Failed to fetch sales")
+    console.error('Supabase error in getSales:', error)
+    throw new Error(`Failed to fetch sales: ${error.message}`)
   }
 
   const totalCount = count || 0

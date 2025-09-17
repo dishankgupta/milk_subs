@@ -36,6 +36,20 @@ export async function GET(request: NextRequest) {
     })
     let { sales } = salesData
 
+    // Apply client-side search filtering for customer and product names
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase()
+      sales = sales.filter(sale => {
+        const customerMatch = sale.customer?.billing_name?.toLowerCase().includes(searchTerm) ||
+                             sale.customer?.contact_person?.toLowerCase().includes(searchTerm)
+        const productMatch = sale.product?.name?.toLowerCase().includes(searchTerm) ||
+                             sale.product?.code?.toLowerCase().includes(searchTerm)
+        const notesMatch = sale.notes?.toLowerCase().includes(searchTerm)
+
+        return customerMatch || productMatch || notesMatch
+      })
+    }
+
     // Apply client-side sorting
     sales = sales.sort((a, b) => {
       let aValue, bValue
@@ -88,7 +102,7 @@ export async function GET(request: NextRequest) {
 
     // Generate active filters summary
     const activeFilters: string[] = []
-    if (filters.search) activeFilters.push(`Search: "${filters.search}"`)
+    if (filters.search) activeFilters.push(`Search: &quot;${filters.search}&quot;`)
     if (filters.sale_type) activeFilters.push(`Type: ${filters.sale_type}`)
     if (filters.payment_status) activeFilters.push(`Status: ${filters.payment_status}`)
     if (filters.date_from) activeFilters.push(`From: ${formatDateIST(new Date(filters.date_from))}`)
@@ -434,7 +448,7 @@ export async function GET(request: NextRequest) {
         <!-- Footer -->
         <div class="footer">
           <p>PureDairy - Comprehensive Dairy Business Management System</p>
-          <p>Report generated using filters and sorted by ${sortBy} (${sortOrder}ending)</p>
+          <p>Report generated using filters and sorted by ${sortBy} (${sortOrder === 'asc' ? 'ascending' : 'descending'})</p>
         </div>
       </div>
 
@@ -455,6 +469,11 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error generating sales history print report:', error)
-    return new NextResponse('Error generating report', { status: 500 })
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      searchParams: Object.fromEntries(new URL(request.url).searchParams.entries())
+    })
+    return new NextResponse(`Error generating report: ${error instanceof Error ? error.message : 'Unknown error'}`, { status: 500 })
   }
 }
