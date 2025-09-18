@@ -1,464 +1,400 @@
-# CLAUDE.md
+# CLAUDE2.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides essential guidance for Claude Code when working with the milk_subs dairy business management system.
 
 ## Project Overview
 
-This is a Next.js 15 application called "milk_subs" - a comprehensive dairy business management system featuring both subscription management and manual sales tracking using:
-- React 19 for modern UI development
-- TypeScript for type safety
-- Tailwind CSS 4 for styling
-- pnpm as the package manager
-- Supabase for backend services (@supabase/ssr, @supabase/supabase-js)
-- Radix UI components for accessible UI primitives
-- Shadcn/ui component library for forms and UI elements
-- React Hook Form + Zod for form validation
-- Sonner for toast notifications
-- Lucide React for icons
+**milk_subs** is a comprehensive Next.js 15 dairy business management system built with modern React patterns and TypeScript. It manages subscriptions, manual sales, deliveries, payments, and invoicing for dairy businesses.
+
+### Tech Stack
+- **Framework**: Next.js 15 with App Router
+- **Frontend**: React 19, TypeScript, Tailwind CSS 4
+- **UI Components**: Radix UI primitives + Shadcn/ui component library
+- **Backend**: Supabase (PostgreSQL) with Server-Side Rendering
+- **Forms**: React Hook Form + Zod validation
+- **PDF Generation**: Puppeteer with Chrome browser
+- **Testing**: Vitest with Testing Library
+- **Package Manager**: pnpm
+- **Fonts**: Geist Sans & Geist Mono
 
 ## Development Commands
 
-- `pnpm dev` - Start development server with Turbopack (recommended)
-- `pnpm build` - Build production application
-- `pnpm start` - Start production server
-- `pnpm lint` - Run ESLint
-- `pnpm test-pdf` - Test PDF generation functionality with Chrome browser
+```bash
+pnpm dev          # Development server with Turbopack
+pnpm build        # Production build
+pnpm lint         # ESLint code quality check
+pnpm test         # Run all tests with Vitest
+pnpm test:unit    # Unit tests only
+pnpm test:integration # Integration tests only
+pnpm test-pdf     # Test PDF generation with Chrome
+```
 
 ## Architecture
 
-The project follows Next.js App Router structure:
-- `/src/app/` - App Router pages and layouts
-- `/src/app/layout.tsx` - Root layout with Geist fonts and toast provider
-- `/src/app/page.tsx` - Homepage with authentication redirect
-- `/src/app/auth/login/` - Authentication pages
-- `/src/app/dashboard/` - Protected admin dashboard
-- `/src/app/dashboard/customers/` - Customer management pages
-- `/src/app/dashboard/products/` - Product management pages
-- `/src/app/globals.css` - Global styles with CSS variables
-- `/src/components/` - Reusable UI components
-- `/src/components/ui/` - Shadcn/ui component library
-  - `/src/components/ui/error-boundary.tsx` - **NEW** - Reusable error boundary component for graceful error handling
-- `/src/lib/` - Utilities, types, validations, and server actions
-- `/public/` - Static assets
+### App Router Structure
+```
+src/app/
+├── layout.tsx              # Root layout with Geist fonts & Sonner toasts
+├── page.tsx                # Homepage with auth redirect
+├── auth/login/             # Authentication pages
+├── dashboard/              # Protected admin dashboard
+│   ├── customers/          # Customer management CRUD
+│   ├── products/           # Product catalog with GST rates
+│   ├── subscriptions/      # Subscription management
+│   ├── orders/             # Daily order generation
+│   ├── deliveries/         # Delivery tracking & confirmation
+│   ├── modifications/      # Temporary subscription changes
+│   ├── payments/           # Payment processing & allocation
+│   ├── invoices/           # Invoice generation & management
+│   ├── sales/              # Manual sales (Cash/QR/Credit)
+│   ├── outstanding/        # Outstanding amount tracking
+│   └── reports/            # Business analytics & printing
+└── api/                    # API routes
+    ├── print/              # Professional PDF report endpoints
+    ├── customers/          # Customer-specific APIs
+    └── invoices/           # Invoice processing APIs
+```
 
-## Database Schema
+### Core Library Structure
+```
+src/lib/
+├── actions/                # Server actions for database operations
+│   ├── customers.ts        # Customer CRUD & opening balance
+│   ├── products.ts         # Product management
+│   ├── subscriptions.ts    # Subscription CRUD
+│   ├── orders.ts           # Order generation & management
+│   ├── deliveries.ts       # Delivery confirmation & bulk operations
+│   ├── modifications.ts    # Subscription modifications
+│   ├── payments.ts         # Payment processing & invoice allocation
+│   ├── invoices.ts         # Invoice generation & status management
+│   ├── sales.ts            # Manual sales CRUD
+│   ├── outstanding.ts      # Outstanding calculations & payment allocation
+│   ├── reports.ts          # Report generation
+│   └── bulk-sales.ts       # Bulk sales operations
+├── supabase/               # Database client configuration
+│   ├── client.ts           # Client-side Supabase
+│   └── server.ts           # Server-side Supabase with SSR
+├── utils/                  # Business logic utilities
+│   ├── date-utils.ts       # IST timezone handling (CRITICAL)
+│   ├── gst-utils.ts        # GST calculations & tax compliance
+│   ├── invoice-utils.ts    # PDF generation & templates
+│   ├── subscription-utils.ts # Subscription pattern calculations
+│   ├── file-utils.ts       # PDF utilities with Chrome integration
+│   └── pagination.ts       # Reusable pagination utilities
+├── hooks/                  # Custom React hooks
+│   ├── useSorting.ts       # Table sorting functionality
+│   └── usePagination.ts    # Client-side pagination
+├── components/ui/          # Shadcn/ui component library
+├── types.ts                # TypeScript interfaces & types
+├── validations.ts          # Zod schemas for form validation
+└── utils.ts                # General utility functions
+```
 
-Complete Supabase database with 16 tables:
+## Database Schema (Supabase PostgreSQL)
 
 ### Core Business Tables
-- `customers` - Customer profiles with billing/contact info, routes, and opening balance (outstanding_amount removed)
-- `products` - Extended product catalog with GST rates (Cow/Buffalo Milk, Malai Paneer, Buffalo/Cow Ghee)
-- `routes` - Route 1 and Route 2 with personnel management
-- `base_subscriptions` - Daily/Pattern subscription types with 2-day cycle support
-- `modifications` - Temporary subscription changes (skip/increase/decrease)
-- `daily_orders` - Generated orders with pricing and delivery info
-- `deliveries` - **RESTRUCTURED** - Self-contained delivery tracking with additional items support (17 fields, nullable daily_order_id, nullable planned_quantity)
-- `payments` - Enhanced payment history with allocation tracking and status management
-- `product_pricing_history` - Price change audit trail
-- `sales` - Manual sales tracking (Cash/Credit/QR) with GST compliance
+- **customers** - Customer profiles with billing info, routes, opening balance
+- **products** - Product catalog with GST rates (Milk, Paneer, Ghee varieties)
+- **routes** - Route 1 & Route 2 with personnel management
+- **base_subscriptions** - Daily/Pattern subscription types with 2-day cycles
+- **modifications** - Temporary subscription changes (skip/increase/decrease)
+- **daily_orders** - Generated orders with pricing & delivery details
+- **deliveries** - Self-contained delivery tracking with additional items
+- **payments** - Payment history with allocation tracking
+- **sales** - Manual sales tracking (Cash/Credit/QR) with GST compliance
 
-### Invoice & Outstanding Management Tables
-- `invoice_metadata` - Enhanced invoice generation with status tracking, payment tracking, and financial year numbering
-- `invoice_line_items` - **ENHANCED** - Detailed line items with direct delivery_id references for cleaner architecture (subscriptions, additional deliveries, manual sales, adjustments)
-- `invoice_payments` - Payment allocation tracking for invoice-to-payment mapping
-- `unapplied_payments` - Payments not yet allocated to specific invoices
-- `opening_balance_payments` - **NEW** - Tracks payments allocated to opening balance (immutable historical data)
-- `gst_calculations` - GST breakdowns for compliance reporting
+### Financial Management Tables
+- **invoice_metadata** - Invoice generation with status & payment tracking
+- **invoice_line_items** - Detailed line items with delivery references
+- **invoice_payments** - Payment allocation for invoice-to-payment mapping
+- **unapplied_payments** - Payments not yet allocated to invoices
+- **opening_balance_payments** - Historical opening balance payment tracking
+- **product_pricing_history** - Price change audit trail
 
-### Database Functions & Views
-**Functions:**
-- `calculate_customer_outstanding()` - **ENHANCED** - Function to calculate outstanding using immutable opening balance logic
-- `update_invoice_status()` - Function to automatically update invoice status based on payments
-- `update_invoice_status_with_sales_completion()` - **NEW** - Enhanced version with automatic sales completion (Sep 4)
-- `getEffectiveOpeningBalance()` - **NEW** - Function to calculate remaining opening balance after payments
-- `process_invoice_payment_atomic()` - **NEW** - Atomic function for invoice payment with sales completion (Sep 4)
-- `delete_invoice_and_revert_sales()` - **NEW** - Atomic function for safe invoice deletion with sales reversion (Sep 4)
-- `allocate_payment_atomic()` - **NEW** - Race condition prevention for payment allocations (Sep 16)
-- `rollback_partial_allocation()` - **NEW** - Complete error recovery mechanism (Sep 16)
+### Additional System Tables
+- **invoice_sales_mapping** - Invoice-to-sales relationship mapping for legacy compatibility
+- **audit_trail** - System audit logging for compliance tracking
+- **bulk_operation_logs** - Bulk operation progress and error tracking
 
-**Views:**
-- `customer_outstanding_summary` - **UPDATED** - Performance view with corrected invoice status filtering ('sent' included)
-- `customer_payment_breakdown` - Payment history reporting with customer details
-- `customer_subscription_breakdown` - Monthly subscription analytics with product breakdowns
-- `customer_sales_breakdown` - Manual sales reporting through invoice line items
-- `outstanding_report_data` - Extended outstanding reporting with full customer details
+### Database Functions
+- `calculate_customer_outstanding()` - Outstanding calculations with opening balance
+- `update_invoice_status()` - Automatic invoice status management
+- `process_invoice_payment_atomic()` - Atomic payment processing
+- `allocate_payment_atomic()` - Race condition prevention for payments
+- `delete_invoice_and_revert_sales()` - Safe invoice deletion with sales reversion
+- `rollback_partial_allocation()` - Complete error recovery mechanism
+- `update_invoice_status_with_sales_completion()` - Enhanced status flow with sales completion
 
-## Current Implementation Status
+**Additional Functions** (18 more): Including bulk operations (`generate_bulk_invoices_atomic`), data reconciliation (`fix_unapplied_payments_inconsistencies`), and advanced business logic functions for comprehensive dairy business management.
 
-### ✅ All Major Phases Complete
-- **Phase 1-3**: Foundation, Customer & Subscription Management with complete CRUD operations
-- **Phase 4-6**: Order Generation, Payment & Delivery Systems with advanced automation  
-- **Phase 7-9**: Sales Management & Outstanding System Rework with invoice-based calculations
-- **Phase 10-12**: Performance Optimization (99.8% query reduction), IST Migration & Unapplied Payments
+## Key Features
 
-### Recent Critical Achievements (August-September 2025)
-- **IST Timezone Migration**: Complete system-wide migration across 25+ files ensuring data consistency
-- **Unapplied Payments System**: 4-phase enhancement with customer-first allocation workflows
-- **Invoice-Based Outstanding**: Complete overhaul from circular logic to transaction-based calculations
-- **Performance Optimization**: Eliminated N+1 queries, optimized bulk operations with real-time progress
-- **Professional PDF System**: Robust generation with retry mechanisms and Chrome integration
-- **Error Handling**: Comprehensive validation and graceful error handling including Invalid Date fixes for print reports
-- **Payment Security Enhancement**: ⭐ **NEW** - TDD implementation eliminates race conditions, over-allocation, and data corruption risks (Sep 16)
+### Business Management Modules
+1. **Customer Management** - Complete CRUD with searchable tables & opening balances
+2. **Product Management** - GST-integrated catalog with real-time calculations
+3. **Subscription Management** - Pattern-based subscriptions with cycle preview
+4. **Order Generation** - Automated daily orders with modification support
+5. **Delivery Management** - Individual & bulk confirmation with additional items
+6. **Payment Management** - Invoice allocation with unapplied payment tracking
+7. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
+8. **Invoice Management** - Professional PDF generation with automatic status flow
+9. **Outstanding Management** - Three-tier display (Gross→Credit→Net)
 
-## Key Features Implemented
+### Professional Features
+- **IST Date Compliance** - System-wide Indian Standard Time utilities
+- **Professional PDF Reports** - Puppeteer-based generation with Chrome integration
+- **Real-time Search** - Client-side filtering across all data tables
+- **Mobile-responsive Design** - Optimized for mobile devices throughout
+- **Comprehensive Error Handling** - Graceful error boundaries & validation
+- **Performance Optimization** - Bulk operations with real-time progress tracking
 
-### Core Management Modules
-- **Customer Management** (`/dashboard/customers`): Complete CRUD with searchable tables, sortable columns, opening balance tracking
-- **Product Management** (`/dashboard/products`): GST-integrated catalog with subscription support and real-time calculations
-- **Subscription Management** (`/dashboard/subscriptions`): Pattern-based subscriptions with 2-day cycle preview and customer integration
-- **Order Generation** (`/dashboard/orders`): Automated daily order generation with modification support and bulk operations
-- **Modification System** (`/dashboard/modifications`): ⭐ **ENHANCED** - Temporary subscription changes with smart expiration handling, bulk archive operations, and performance optimizations (Sep 8)
+## Critical Development Guidelines
 
-### Financial & Operations Modules
-- **Payment Management** (`/dashboard/payments`): Invoice allocation system with unapplied payments tracking and credit management
-- **Outstanding Management** (`/dashboard/outstanding`): Invoice-based calculations with three-tier display (Gross→Credit→Net)
-- **Delivery Management** (`/dashboard/deliveries`): ⭐ **RESTRUCTURED** - Self-contained delivery tracking with additional items support (32% performance improvement)
-- **Sales Management** (`/dashboard/sales`): Manual sales tracking (Cash/QR/Credit) with GST compliance, bulk entry system, and professional reporting with select/bulk delete
-- **Invoice Management** (`/dashboard/invoices`): ⭐ **REFACTORED** - Complete revenue capture with direct delivery-invoice relationships
-
-### Reports & Analytics
-- **Production Reports**: Daily planning with route and product breakdowns
-- **Delivery Reports**: Mobile-friendly lists with modification tracking and variance analysis
-- **Outstanding Reports**: Triple-level expandable reports with comprehensive print options
-- **Professional Print System**: Dedicated API routes with PureDairy branding across all modules
-
-### Technical Features
-- Form validation with Zod schemas and React Hook Form
-- Toast notifications with Sonner for user feedback  
-- Loading states and comprehensive error handling
-- Mobile-responsive design throughout all interfaces
-- TypeScript strict mode with proper type definitions
-- ESLint compliant codebase
-- **IST Date Compliance** - Complete system-wide migration to Indian Standard Time utilities for timezone consistency
-- **Comprehensive table sorting functionality** - All data tables support column sorting with visual indicators
-- **Professional print system** - Dedicated API routes for all reports with PureDairy branding
-- **Bulk operations** - Efficient bulk delivery confirmation and invoice generation
-- **PDF generation** - Robust Puppeteer-based system with retry mechanisms
-- **Real-time search** - Client-side search and filtering across all data tables
-- **Standard pagination system** - Reusable pagination components with dual controls (top/bottom) and smart configuration
-
-## TypeScript Configuration
-
-- Uses path mapping with `@/*` pointing to `./src/*`
-- Strict mode enabled
-- ES2017 target for modern browser support
-
-## Development Notes
-
-- Application currently running at localhost:3002 with Turbopack for optimal development
-- Authentication: Admin-only access with Supabase Auth and SSR support
-- All core business features are fully functional and production-ready
-- Complete dairy business management system with subscription and manual sales capabilities
-
-## Critical Architecture Decisions (September 2025)
-
-### Invoice System Complete Refactor (September 3, 2025)
-**Problem**: Additional deliveries (daily_order_id = NULL) were excluded from invoicing, creating revenue leakage and complex billing logic.
-
-**Solution**: Revolutionary architectural simplification with complete revenue capture
-- **Direct Delivery-Invoice Relationships**: Added delivery_id field to invoice_line_items, eliminated complex order/subscription dependencies
-- **Unified Delivery Processing**: Single deliveryItems grouping instead of separate subscription/additional categories
-- **Business Process Streamlining**: Additional deliveries default to "delivered" status for immediate billing
-- **Database Function Optimization**: Updated get_bulk_invoice_preview_optimized() for complete delivery inclusion
-
-**Technical Benefits**:
-- ✅ Eliminated ~50+ lines of complex separation logic
-- ✅ Cleaner invoice architecture with direct delivery references
-- ✅ Simplified data model with single delivery category
-- ✅ Improved database query performance with self-contained delivery data
-
-**Business Impact**:
-- ✅ **Complete Revenue Capture**: All delivered products now properly billed regardless of source
-- ✅ **Simplified Billing Process**: No manual status changes required for additional deliveries
-- ✅ **Professional Invoice Layout**: Clean "Delivered products" presentation with simplified totals
-- ✅ **Accurate Financial Reporting**: Invoice previews show complete customer billing amounts
-
-### Bulk Delivery Form Optimization (September 2, 2025)
-**Problem**: React infinite loop errors ("Maximum update depth exceeded") when handling 91+ deliveries in bulk confirmation.
-
-**Solution**: Architectural simplification and performance optimization
-- **BulkAdditionalItemsManager Removed**: Complex component causing rendering loops eliminated
-- **Simplified Workflow**: Bulk form focuses on core delivery confirmation without additional items complexity
-- **Radio Button Interface**: Professional radio button cards replace dropdown for better UX
-- **Alternative Path**: Additional items managed through individual delivery pages (Phase 1 functionality preserved)
-
-**Technical Benefits**:
-- ✅ Eliminated React rendering loops and performance issues
-- ✅ Improved form stability with large datasets (91+ deliveries tested)
-- ✅ Better user experience with radio button interface
-- ✅ Simplified codebase maintenance and debugging
-
-**Business Impact**:
-- ✅ Reliable bulk delivery confirmation for high-volume operations
-- ✅ Preserved additional items functionality through alternative workflow
-- ✅ Enhanced user experience with professional interface design
-- ✅ Scalable architecture supporting business growth
-
-### Development Journal
-- Journal entries stored in /dev-journal/ folder using format YYYYMMDDHHMM-dev-journal.md
-- New Entries to /dev-journal/ have to be in the following format of sections:
-   **Date - Title**
-   **Time**
-   **Goals**
-   **What I accomplished:**
-   **Challenges faced:**
-   **Key learnings:**
-   **Next session goals:**
-- Development history shows systematic implementation from basic CRUD to advanced features
-- Latest entries document complete sales management system implementation
-
-### System Status
-- ✅ **ALL MAJOR PHASES COMPLETE**: Customer management, subscriptions, orders, payments, deliveries, sales, invoicing, IST date migration
-- ✅ **PRODUCTION-READY**: All features tested and validated with comprehensive error handling
-- ✅ **MOBILE-OPTIMIZED**: Responsive design throughout with mobile-friendly interfaces
-- ✅ **PROFESSIONAL REPORTS**: Complete print system with PureDairy branding across all reports
-- ✅ **GST COMPLIANCE**: Full GST integration with proper tax calculations and invoice formatting
-- ✅ **ROBUST PDF GENERATION**: Puppeteer-based system with retry mechanisms and Chrome integration
-- ✅ **COMPREHENSIVE DATA MANAGEMENT**: Advanced search, filtering, and sorting across all data tables
-- ✅ **IST TIMEZONE COMPLIANCE**: Complete system-wide migration to IST date utilities ensuring data consistency and accuracy
-
-### Recent Major Achievements (Aug-Sep 2025)
-
-**Critical System Enhancements:**
-- **IST Date Migration**: Complete system-wide migration across 25+ files ensuring timezone consistency (Aug 25)
-- **Outstanding System Overhaul**: Invoice-based calculations with immutable opening balance logic (Aug 20-22)
-- **Unapplied Payments System**: 4-phase enhancement with customer-first allocation workflows (Aug 27)
-- **Performance Optimization**: 99.8% query reduction with bulk operations and real-time progress
-
-**Major Architectural Improvements:**
-- **Deliveries Restructure**: Self-contained data model with 17 fields, 32% performance improvement (Sep 2)
-- **Invoice System Refactor**: Complete revenue capture with direct delivery-invoice relationships (Sep 3)
-- **Bulk Form Optimization**: Resolved React infinite loops, radio button interface for 91+ deliveries (Sep 2)
-- **Professional PDF System**: Robust generation with retry mechanisms and Chrome integration
-
-**Business Logic Fixes:**
-- **Additional Deliveries Billing**: Fixed critical gap where additional deliveries were excluded from invoicing
-- **QR Sales Implementation**: New payment method tracking identical to Cash but separate reporting (Aug 29)
-- **Sales History Enhancement**: Professional reporting with advanced filtering and print integration (Sep 3)
-- **Filter-Responsive Dashboards**: Dynamic statistics with print system integration (Sep 1)
-- **Credit Sales Status Completion**: ⭐ **NEW** - Automated status flow from 'Billed' to 'Completed' when invoices are paid (Sep 4)
-- **Invoice Template Enhancement**: ⭐ **NEW** - Complete visual overhaul matching PureDairy branding with professional layout (Sep 8)
-- **Dual Template Architecture**: ⭐ **IMPORTANT** - Invoice generation exists in two separate locations requiring synchronized updates
-- **Modifications System Enhancement**: ⭐ **NEW** - Smart expiration handling, bulk archive operations, React.memo optimizations, and IST date compliance (Sep 8)
-- **Bulk Sales System**: ⭐ **NEW** - Complete bulk sales entry and delete functionality with dynamic table, real-time calculations, and selection management (Sep 15)
-- **Payment System Security Overhaul**: ⭐ **NEW** - TDD implementation eliminates race conditions, over-allocation risks, and implements comprehensive error recovery (Sep 16)
-
-## Development Workflow
-
-1. **Server Actions**: Use `/src/lib/actions/` for database operations
-   - `/src/lib/actions/customers.ts` - Customer CRUD operations and opening balance management
-   - `/src/lib/actions/subscriptions.ts` - Subscription CRUD operations
-   - `/src/lib/actions/orders.ts` - Order generation and management operations
-   - `/src/lib/actions/modifications.ts` - **ENHANCED** - Modification CRUD with smart expiration detection and bulk archive operations (Sep 8)
-   - `/src/lib/actions/payments.ts` - Enhanced payment CRUD with invoice allocation and sales completion integration
-   - `/src/lib/actions/deliveries.ts` - **RESTRUCTURED** - Individual and bulk delivery confirmation with additional items support (684 lines rewritten)
-   - `/src/lib/actions/reports.ts` - Production and delivery report generation
-   - `/src/lib/actions/sales.ts` - Manual sales CRUD operations with GST calculations and bulk operations (create/delete)
-   - `/src/lib/actions/invoices.ts` - **ENHANCED** - Invoice generation with automatic sales completion and safe deletion (Sep 4)
-   - `/src/lib/actions/outstanding.ts` - **ENHANCED** - Outstanding calculations with atomic payment allocation, race condition prevention, and comprehensive error recovery (Sep 16)
-2. **Validation**: Zod schemas in `/src/lib/validations.ts` - **ENHANCED** - Includes payment allocation validation with over-allocation prevention (Sep 16)
-3. **Types**: TypeScript interfaces in `/src/lib/types.ts` (extended for sales system)
-4. **Utilities**: Helper functions for business logic
-   - `/src/lib/subscription-utils.ts` - Pattern calculations
-   - `/src/lib/gst-utils.ts` - GST calculations and invoice numbering
-   - `/src/lib/invoice-utils.ts` - **ENHANCED** - PDF generation, asset conversion, and professional template utilities (Sep 8)
-5. **UI Components**: Shadcn/ui components in `/src/components/ui/`
-6. **Forms**: React Hook Form with Zod resolver for validation
-7. **Database**: Supabase with MCP server integration for CLI operations
-8. **Print System**: Dedicated API routes under `/src/app/api/print/` for professional report printing
-   - `/src/app/api/print/deliveries/` - **NEW** - Professional deliveries report with filter and sort integration
-   - `/src/app/api/print/sales-history/` - **NEW** - Comprehensive sales history reports with advanced filtering and statistics
-9. **PDF Generation**: Puppeteer-based PDF generation with Chrome browser integration
-   - `/src/lib/file-utils.ts` - PDF generation utilities with retry mechanisms and timeout handling
-   - `/scripts/test-pdf.js` - PDF generation testing script for validation
-   - Automatic Chrome installation via postinstall script
-10. **Sorting Infrastructure**:
-    - `/src/hooks/useSorting.ts` - Reusable sorting hook with support for nested objects
-    - `/src/components/ui/sortable-table-head.tsx` - Sortable table headers with visual indicators
-    - Sort types and configurations in `/src/lib/types.ts`
-11. **Pagination System**: **STANDARD** - Reusable client-side pagination for all data tables
-    - `/src/hooks/usePagination.ts` - Core pagination hook with URL sync support
-    - `/src/components/ui/pagination.tsx` - Complete pagination UI components
-    - `/src/lib/pagination.ts` - Utility library with pre-configured settings
-    - **Usage**: Import `usePagination` and `SimplePagination` for instant pagination on any data table
-12. **IST Date Handling**: **MANDATORY** - Use only IST utilities from `/src/lib/date-utils.ts` for ALL date operations
-    - `/src/lib/date-utils.ts` - Comprehensive IST utilities (400+ lines, 40+ functions)
-    - **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]` patterns
-    - **ALWAYS** use `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()` for consistency
-13. **Test Organization**: **Centralized Structure** - Professional test organization with type-based separation (Sep 17)
-    - `/tests/unit/` - Fast, isolated unit tests (date-utils, validations, utilities)
-    - `/tests/integration/` - Multi-component integration tests including payment system
-    - `/tests/integration/payment-system/` - Complete TDD infrastructure with 126/126 tests passing
-    - **Payment Security**: Race condition prevention, atomic operations, comprehensive error recovery
-    - **Test Scripts**: `pnpm test:unit`, `pnpm test:integration`, `pnpm test:watch:unit`, `pnpm test:watch:integration`
-
-## IST Date Handling Standards
-
-**🇮🇳 CRITICAL: ALL date operations MUST use IST utilities from `/src/lib/date-utils.ts` (400+ lines, 40+ functions)**
-
-### Mandatory Functions
-- **Core**: `getCurrentISTDate()`, `formatDateIST()`, `parseLocalDateIST()`, `formatDateForDatabase()`, `formatTimestampForDatabase()`
-- **Business**: `calculateFinancialYear()`, `addDaysIST()`, `isWithinBusinessHours()`
-- **Display**: `formatDateTimeIST()`, `formatBusinessDate()`, `getRelativeTimeIST()`
-- **Validation**: `isValidISTDate()`, `validateDateRange()`, `checkTimezoneConsistency()`
-
-### Critical Rules
-❌ **NEVER** use `new Date()`, `Date.now()`, or `toISOString().split('T')[0]`
-✅ **ALWAYS** use IST utilities for consistency across financial calculations and business logic
-
-## Testing & Validation
-
-- Build process: `pnpm build` (zero TypeScript errors)
-- Linting: `pnpm lint` (ESLint compliant)
-- Form validation: Prevents invalid data entry
-- Database constraints: Proper foreign key relationships
-- Authentication: Protected routes with middleware
-
-## Database Operations Guidelines
-
-**CRITICAL: To optimize token usage and avoid context consumption:**
-
-### Database Query Strategy
-- **ALWAYS use Task tool with general-purpose agent** for any database schema exploration, table discovery, or structural analysis
-- **NEVER use `mcp__supabase__list_tables` directly** - delegate to Task tool to preserve context
-- **Reference CLAUDE.md schema documentation first** before making any live database calls
-- **Use targeted SQL queries** with `mcp__supabase__execute_sql` for specific data operations only
-
-### When to Use Live Database Calls
-- ✅ Specific data queries (`SELECT * FROM customers WHERE...`)
-- ✅ Data modifications (`INSERT`, `UPDATE`, `DELETE`)
-- ✅ Function calls (`SELECT calculate_customer_outstanding(...)`)
-- ❌ Schema exploration (use Task tool instead)
-- ❌ Table structure discovery (use CLAUDE.md reference above)
-- ❌ Column listing (reference existing code patterns)
-
-### Context Preservation Rules
-1. **Schema Discovery**: Always delegate to Task tool
-2. **Data Operations**: Use direct MCP calls for efficiency
-3. **Code References**: Use existing server actions as schema reference
-4. **Documentation**: This CLAUDE.md file contains complete schema information
-
-## Performance Optimization Standards
-
-**🚀 CRITICAL: All customer-facing pages MUST follow these performance optimization patterns implemented in the outstanding detail page (`/dashboard/outstanding/[customer_id]`).**
-
-### Server-Side Data Fetching (MANDATORY)
-- **Move data fetching to server components** for better caching and faster initial load
-- **Use Promise.all for parallel queries** instead of sequential database calls
-- **Pre-fetch essential data** on server to eliminate client-side loading waterfalls
-- **Limit large datasets** by default (e.g., recent payments only, with "view more" options)
-
-### Component Performance Standards
-- **Wrap components with React.memo** to prevent unnecessary re-renders
-- **Use useMemo for expensive calculations** (date comparisons, filtering, aggregations)
-- **Accept initialData props** to avoid double-fetching when data is available server-side
-- **Implement progressive loading** with meaningful skeleton states
-
-### Error Handling & UX Requirements
-- **ErrorBoundary components** must wrap all major page sections
-- **Suspense boundaries** with detailed skeleton loading states
-- **Graceful error recovery** with retry functionality
-- **Meaningful loading states** that match the actual content structure
-
-### Database Query Optimization
-- **Parallel query execution** using Promise.all for independent data
-- **Smart query limits** (default 5-10 items, expandable on demand)
-- **Efficient joins** and proper indexing considerations
-- **Avoid N+1 query patterns** through batched operations
-
-### Implementation Example (Outstanding Detail Page)
+### IST Date Handling (MANDATORY)
 ```typescript
-// ✅ Correct Pattern - Server Component with Parallel Data Fetching
-export default async function Page({ params }) {
-  const [data, payments] = await Promise.all([
-    getCustomerOutstanding(customerId),
-    getCustomerPayments(customerId, 5) // Limited for performance
+// ❌ NEVER use these patterns
+new Date()
+Date.now()
+toISOString().split('T')[0]
+
+// ✅ ALWAYS use IST utilities from /src/lib/date-utils.ts
+import { getCurrentISTDate, formatDateIST, parseLocalDateIST } from '@/lib/date-utils'
+
+const today = getCurrentISTDate()
+const formatted = formatDateIST(date)
+const parsed = parseLocalDateIST(dateString)
+```
+
+### Database Operations
+```typescript
+// Use server actions for all database operations
+import { createCustomer } from '@/lib/actions/customers'
+import { generateDailyOrders } from '@/lib/actions/orders'
+
+// Prefer Promise.all for parallel operations
+const [customers, products] = await Promise.all([
+  getCustomers(),
+  getProducts()
+])
+```
+
+### Form Validation
+```typescript
+// Use Zod schemas from validations.ts
+import { customerSchema } from '@/lib/validations'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+
+const form = useForm({
+  resolver: zodResolver(customerSchema),
+  defaultValues: { ... }
+})
+```
+
+### PDF Generation
+```typescript
+// Use robust PDF utilities with retry mechanisms
+import { generatePDF } from '@/lib/file-utils'
+import { createInvoiceTemplate } from '@/lib/invoice-utils'
+
+const pdfBuffer = await generatePDF(htmlContent, {
+  format: 'A4',
+  margin: { top: '0.5in', bottom: '0.5in' }
+})
+```
+
+## Business Logic Patterns
+
+### Subscription Flow
+1. Create base subscriptions with patterns (daily/alternate/custom)
+2. Generate daily orders from active subscriptions
+3. Apply temporary modifications (skip/increase/decrease)
+4. Confirm deliveries with additional items support
+5. Generate invoices from delivered items
+6. Process payments with automatic allocation
+
+### Payment Processing
+1. Record payments (Cash/QR/Credit/UPI)
+2. Allocate to specific invoices or leave unapplied
+3. Automatic invoice status updates (Pending→Paid→Completed)
+4. Outstanding calculation with opening balance consideration
+
+### Invoice Generation
+- Bulk invoice generation with delivery consolidation
+- Professional PDF templates with PureDairy branding
+- Automatic sales status completion for credit transactions
+- GST compliance with proper tax calculations
+
+## Error Handling Standards
+
+```typescript
+// Use error boundaries for component isolation
+import { ErrorBoundary } from '@/components/ui/error-boundary'
+
+<ErrorBoundary>
+  <SuspenseWrapper fallback={<LoadingSkeleton />}>
+    <DataComponent />
+  </SuspenseWrapper>
+</ErrorBoundary>
+
+// Server action error handling
+try {
+  const result = await serverAction(data)
+  if (result.error) {
+    toast.error(result.error)
+    return
+  }
+  toast.success('Operation completed successfully')
+} catch (error) {
+  console.error('Action failed:', error)
+  toast.error('An unexpected error occurred')
+}
+```
+
+## Performance Best Practices
+
+### Server-Side Data Fetching
+```typescript
+// Parallel queries in server components
+export default async function Page() {
+  const [data1, data2] = await Promise.all([
+    getData1(),
+    getData2()
   ])
-  
+
+  return <Component initialData={data1} additionalData={data2} />
+}
+```
+
+### Component Optimization
+```typescript
+// Use React.memo for expensive components
+import { memo } from 'react'
+
+const ExpensiveComponent = memo(({ data }: Props) => {
+  const processed = useMemo(() =>
+    processData(data), [data]
+  )
+
+  return <div>{processed}</div>
+})
+```
+
+### Pagination & Sorting
+```typescript
+// Use standard pagination hooks
+import { usePagination } from '@/hooks/usePagination'
+import { useSorting } from '@/hooks/useSorting'
+
+const { currentPage, itemsPerPage, paginatedData } = usePagination(data)
+const { sortedData, sortConfig, handleSort } = useSorting(paginatedData)
+```
+
+## Testing Strategy
+
+### Unit Tests (`tests/unit/`)
+- Date utilities and business logic functions
+- Form validation schemas
+- Utility functions and calculations
+
+### Integration Tests (`tests/integration/`)
+- Payment system with race condition prevention
+- Multi-component workflows
+- Database operations with mock data
+
+### Test Commands
+```bash
+pnpm test:unit              # Fast unit tests
+pnpm test:integration       # Multi-component tests
+pnpm test:watch:unit        # Unit tests in watch mode
+pnpm test:watch:integration # Integration tests in watch mode
+```
+
+## Production Considerations
+
+### Environment Variables
+```bash
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_key
+
+# PDF Generation
+PUPPETEER_EXECUTABLE_PATH=/path/to/chrome  # Production Chrome path
+```
+
+### Build Optimization
+- TypeScript strict mode enabled
+- ESLint compliance required (`pnpm lint`)
+- Chrome browser auto-installation for PDF generation
+- Production build verification (`pnpm build`)
+
+### Security Standards
+- Row Level Security (RLS) enabled on all Supabase tables
+- Server-side authentication with middleware protection
+- Input validation with Zod schemas
+- SQL injection prevention through parameterized queries
+
+## Common Patterns
+
+### Data Tables with Search & Sorting
+```typescript
+const DataTable = ({ data }: Props) => {
+  const [searchTerm, setSearchTerm] = useState('')
+  const { sortedData, handleSort } = useSorting(data)
+  const { paginatedData, pagination } = usePagination(sortedData)
+
+  const filteredData = paginatedData.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<DetailedSkeleton />}>
-        <OptimizedComponent 
-          initialData={data} 
-          initialPayments={payments} 
-        />
-      </Suspense>
-    </ErrorBoundary>
+    <>
+      <SearchInput value={searchTerm} onChange={setSearchTerm} />
+      <Table data={filteredData} onSort={handleSort} />
+      <Pagination {...pagination} />
+    </>
   )
 }
 ```
 
-### Performance Metrics to Achieve
-- **First Contentful Paint**: < 1.5s on average network
-- **Time to Interactive**: < 3s on average network  
-- **Database Queries**: < 3 parallel queries per page load
-- **Bundle Size**: Minimize client-side JavaScript for data fetching
+### Server Actions with Validation
+```typescript
+import { revalidatePath } from 'next/cache'
+import { customerSchema } from '@/lib/validations'
 
-## Deployment Notes
+export async function createCustomer(formData: FormData) {
+  try {
+    const validatedData = customerSchema.parse({
+      name: formData.get('name'),
+      phone: formData.get('phone'),
+      // ... other fields
+    })
 
-- Remember to use MCP servers as per your need.
-- IMPORTANT - All Linear issues have to be created and updated in the Milk Subs - Dairy Management System Project in Linear. URL is https://linear.app/dishank/project/milk-subs-dairy-business-management-system-638a16f66b40
+    const { error } = await supabase
+      .from('customers')
+      .insert(validatedData)
 
-## Documentation References
+    if (error) throw error
 
-### Core Architecture Documentation
-- **DELIVERIES-RESTRUCTURE-PLAN.md**: Complete 5-phase deliveries table architectural restructure implementation plan with database schema changes, performance improvements, and migration procedures
-- **deliveries-new-ui-plan.md**: Comprehensive deliveries UI enhancement plan including Phase 1-4 completion reports and critical architecture revision decisions (BulkAdditionalItemsManager removal and radio button interface implementation)
-- **sales_status_plan.md**: ⭐ **NEW** - Complete credit sales status completion implementation plan with automated 'Billed' to 'Completed' transitions (Sep 4)
-- **docs/inv_temp.md**: ⭐ **NEW** - Complete invoice template enhancement implementation plan with PureDairy branding, asset management, and responsive design (Sep 8)
+    revalidatePath('/dashboard/customers')
+    return { success: true }
+  } catch (error) {
+    return { error: 'Failed to create customer' }
+  }
+}
+```
 
-### Key Documentation Status
-- ✅ **Database Migration**: Complete deliveries table restructure with 17 fields, nullable foreign keys
-- ✅ **Performance Optimization**: 32% query performance improvement with self-contained data model  
-- ✅ **UI Enhancement**: Additional items support through individual delivery pages
-- ✅ **Bulk Form Optimization**: React infinite loop resolution and radio button interface implementation
-- ✅ **Credit Sales Automation**: Complete 4-phase implementation with database RPC functions and enhanced server actions
-- ✅ **Invoice Template System**: Professional PureDairy-branded template with asset management and responsive design (Sep 8)
-- ✅ **Production Ready**: All phases tested and validated with rollback procedures documented
+## Project Status
 
-## Credit Sales Status Completion System (Sep 4, 2025)
+This is a production-ready dairy business management system with:
+- ✅ Complete CRUD operations for all entities
+- ✅ Professional PDF report generation
+- ✅ GST compliance and tax calculations
+- ✅ Mobile-responsive design throughout
+- ✅ Comprehensive error handling and validation
+- ✅ Performance optimization with bulk operations
+- ✅ Race condition prevention in payment systems
+- ✅ IST timezone compliance for Indian market
 
-### Implementation Overview
-**Problem Solved**: Credit sales remained in 'Billed' status indefinitely, even after invoice payment, causing data inconsistencies and manual overhead.
-
-**Solution Architecture**: Hybrid server action + database RPC approach for atomic operations with comprehensive error handling.
-
-### Key Components Implemented
-1. **Database RPC Functions**:
-   - `process_invoice_payment_atomic()` - Atomic invoice payment with sales completion
-   - `delete_invoice_and_revert_sales()` - Safe invoice deletion with sales reversion
-
-2. **Enhanced Server Actions**:
-   - `markInvoiceAsPaid()` in `invoices.ts` - Enhanced payment processing with automatic sales completion
-   - `deleteInvoiceWithSalesRevert()` in `invoices.ts` - Safe deletion with sales reversion
-   - `bulkDeleteInvoicesWithSalesRevert()` in `invoices.ts` - Bulk operations support
-
-3. **Integrated Payment Flow**:
-   - `payments.ts` enhanced with `update_invoice_status_with_sales_completion()` integration
-   - `outstanding.ts` updated for enhanced payment allocation workflows
-   - All UI components updated with comprehensive user feedback
-
-### Business Impact
-- ✅ **Automated Status Flow**: Credit sales automatically transition 'Billed' → 'Completed' when invoices are paid
-- ✅ **Safe Deletion**: Sales revert to 'Pending' when invoices are deleted, preventing orphaned records
-- ✅ **Data Integrity**: Atomic transactions ensure consistency between invoices and sales
-- ✅ **User Experience**: Enhanced UI feedback with sales count details and comprehensive error handling
-- ✅ **Production Ready**: All phases complete with comprehensive testing and validation
-
-### Technical Benefits
-- **Atomic Operations**: Database RPC functions ensure transaction safety
-- **Enhanced Error Handling**: Graceful fallback mechanisms with detailed logging
-- **UI Integration**: Immediate updates with `revalidatePath()` for responsive user experience
-- **TypeScript Safety**: Full type checking with proper error propagation
-- **Scalable Architecture**: Easily extensible for future business rule enhancements
-
-## Invoice Template Dual Architecture
-
-⚠️ **CRITICAL**: Invoice template changes must be made in **TWO LOCATIONS**:
-
-1. **Main System**: `/src/lib/actions/invoices.ts` (lines 1371-1814) - Bulk generation
-2. **Print API**: `/src/app/api/print/customer-invoice/route.ts` (lines 39-468) - Direct printing
-
-**Why**: Historical evolution created separate paths for bulk processing vs immediate rendering.
-
-**Rule**: All CSS, HTML, font, and layout changes must be synchronized in both files to maintain consistency.
+The system successfully manages subscriptions, deliveries, sales, payments, and invoicing for dairy businesses with robust financial tracking and professional reporting capabilities.
