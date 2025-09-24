@@ -58,7 +58,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
   const commonFolders = [
     "C:\\PureDairy\\Invoices",
     "C:\\Users\\%USERNAME%\\Documents\\PureDairy\\Invoices",
-    "D:\\PureDairy\\Invoices"
+    "C:\\PureDairy\\test\\Invoices"
   ]
 
   const handleQuickSelect = (folderPath: string) => {
