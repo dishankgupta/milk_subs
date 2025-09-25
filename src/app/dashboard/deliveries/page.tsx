@@ -144,6 +144,24 @@ function DeliveriesContent() {
     window.open(printUrl, '_blank')
   }
 
+  const handlePrintCustomerSummary = () => {
+    const params = new URLSearchParams()
+    if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
+
+    // Handle enhanced date filter for print
+    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
+      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
+      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+    } else {
+      params.append('datePreset', currentFilters.dateFilter.preset)
+    }
+
+    if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
+
+    const printUrl = `/api/print/customer-delivered-quantity?${params.toString()}`
+    window.open(printUrl, '_blank')
+  }
+
   useEffect(() => {
     loadData()
   }, [])
@@ -252,6 +270,10 @@ function DeliveriesContent() {
           <Button variant="outline" onClick={handlePrintReport}>
             <Printer className="mr-2 h-4 w-4" />
             Print Report
+          </Button>
+          <Button variant="outline" onClick={handlePrintCustomerSummary}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print Product-wise Summary
           </Button>
           <Link href="/dashboard/deliveries/additional/new">
             <Button variant="secondary" className="bg-orange-600 hover:bg-orange-700 text-white">
