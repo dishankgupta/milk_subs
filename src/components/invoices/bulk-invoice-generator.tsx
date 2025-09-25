@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarIcon, Download, AlertTriangle, X } from "lucide-react"
+import { CalendarIcon, Download, AlertTriangle, X, Search, Printer } from "lucide-react"
 import { format } from "date-fns"
 import { getCurrentISTDate } from "@/lib/date-utils"
 
@@ -18,10 +18,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { bulkInvoiceSchema, type BulkInvoiceFormData } from "@/lib/validations"
 import { getBulkInvoicePreview, type GenerationProgress } from "@/lib/actions/invoices"
+import { useSorting } from "@/hooks/useSorting"
 import { toast } from "sonner"
 
 interface BulkInvoicePreviewItem {
@@ -55,6 +58,37 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
   const eventSourceRef = useRef<EventSource | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [amountFilter, setAmountFilter] = useState<string>("all")
+
+  // Filter preview data based on search and filters
+  const filteredPreviewData = previewData.filter(item => {
+    const matchesSearch = searchQuery === "" ||
+      item.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesStatus = statusFilter === "all" ||
+      (statusFilter === "ready" && !item.hasExistingInvoice && item.totalAmount > 0) ||
+      (statusFilter === "duplicate" && item.hasExistingInvoice) ||
+      (statusFilter === "no_amount" && !item.hasExistingInvoice && item.totalAmount === 0)
+
+    const matchesAmount = amountFilter === "all" ||
+      (amountFilter === "with_subscription" && item.subscriptionAmount > 0) ||
+      (amountFilter === "with_credit_sales" && item.creditSalesAmount > 0) ||
+      (amountFilter === "above_100" && item.totalAmount > 100) ||
+      (amountFilter === "below_100" && item.totalAmount <= 100 && item.totalAmount > 0)
+
+    return matchesSearch && matchesStatus && matchesAmount
+  })
+
+  // Apply sorting to filtered data
+  const { sortedData: sortedPreviewData, sortConfig, handleSort } = useSorting(
+    filteredPreviewData,
+    'customerName',
+    'asc'
+  )
+
   const commonFolders = [
     "C:\\PureDairy\\Invoices",
     "C:\\Users\\%USERNAME%\\Documents\\PureDairy\\Invoices",
@@ -70,6 +104,25 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
     const item = previewData.find(p => p.customerId === customerId)
     return item?.hasExistingInvoice
   })
+
+  // Print functionality
+  const handlePrintReport = () => {
+    const params = new URLSearchParams()
+    if (searchQuery) params.append('search', searchQuery)
+    if (statusFilter !== 'all') params.append('status', statusFilter)
+    if (amountFilter !== 'all') params.append('amount', amountFilter)
+    if (sortConfig.key) params.append('sortKey', sortConfig.key)
+    params.append('sortDirection', sortConfig.direction)
+
+    // Add period dates
+    const formData = form.getValues()
+    if (formData.period_start) params.append('period_start', formatDateForAPI(formData.period_start))
+    if (formData.period_end) params.append('period_end', formatDateForAPI(formData.period_end))
+    params.append('customer_selection', formData.customer_selection)
+
+    const printUrl = `/api/print/invoice-preview?${params.toString()}`
+    window.open(printUrl, '_blank')
+  }
 
   const form = useForm<BulkInvoiceFormData>({
     resolver: zodResolver(bulkInvoiceSchema),
@@ -303,7 +356,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
 
   const selectAllCustomers = (select: boolean) => {
     if (select) {
-      setSelectedCustomers(new Set(previewData.map(item => item.customerId)))
+      setSelectedCustomers(new Set(sortedPreviewData.map(item => item.customerId)))
     } else {
       setSelectedCustomers(new Set())
     }
@@ -487,7 +540,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
               <CardTitle>Invoice Preview</CardTitle>
               <div className="flex items-center space-x-4">
                 <div className="text-sm text-gray-600">
-                  {selectedCustomers.size} of {previewData.length} customers selected
+                  {selectedCustomers.size} of {sortedPreviewData.length} customers selected
                 </div>
                 <div className="text-sm font-medium">
                   Total: {formatCurrency(selectedTotal)}
@@ -496,20 +549,97 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
             </div>
           </CardHeader>
           <CardContent>
-            {/* Select All Controls */}
-            <div className="flex items-center space-x-4 mb-4">
-              <Checkbox
-                checked={selectedCustomers.size === previewData.length}
-                onCheckedChange={selectAllCustomers}
-              />
-              <Label>Select All</Label>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => selectAllCustomers(false)}
-              >
-                Clear All
-              </Button>
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="ready">Ready</SelectItem>
+                    <SelectItem value="duplicate">Duplicate</SelectItem>
+                    <SelectItem value="no_amount">No Amount</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={amountFilter} onValueChange={setAmountFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Amount" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Amounts</SelectItem>
+                    <SelectItem value="with_subscription">With Subscription</SelectItem>
+                    <SelectItem value="with_credit_sales">With Credit Sales</SelectItem>
+                    <SelectItem value="above_100">Above ₹100</SelectItem>
+                    <SelectItem value="below_100">Below ₹100</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" onClick={handlePrintReport}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print
+                </Button>
+              </div>
+            </div>
+
+            {/* Results count */}
+            <div className="text-sm text-muted-foreground mb-4">
+              Showing {sortedPreviewData.length} of {previewData.length} customers
+            </div>
+
+            {/* Select All Controls and Generate Button (Top) */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-4">
+                <Checkbox
+                  checked={selectedCustomers.size === sortedPreviewData.length && sortedPreviewData.length > 0}
+                  onCheckedChange={selectAllCustomers}
+                />
+                <Label>Select All</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selectAllCustomers(false)}
+                >
+                  Clear All
+                </Button>
+              </div>
+
+              {/* Generate Invoice Button (Top) */}
+              <div className="flex gap-3">
+                {isGenerating && (
+                  <Button
+                    onClick={() => {
+                      if (abortControllerRef.current) {
+                        abortControllerRef.current.abort()
+                      }
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  onClick={handleGenerateInvoices}
+                  disabled={selectedCustomers.size === 0 || !outputFolder || isGenerating || hasSelectedDuplicates}
+                  size="sm"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {isGenerating ? 'Generating...' : hasSelectedDuplicates ? 'Remove Duplicates' : `Generate ${selectedCustomers.size} Invoices`}
+                </Button>
+              </div>
             </div>
 
             {/* Preview Table */}
@@ -518,53 +648,87 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">Select</TableHead>
-                    <TableHead>Customer Name</TableHead>
-                    <TableHead>Subscription Dues</TableHead>
-                    <TableHead>Credit Sales</TableHead>
-                    <TableHead>Total Amount</TableHead>
+                    <SortableTableHead
+                      sortKey="customerName"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    >
+                      Customer Name
+                    </SortableTableHead>
+                    <SortableTableHead
+                      sortKey="subscriptionAmount"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    >
+                      Subscription Dues
+                    </SortableTableHead>
+                    <SortableTableHead
+                      sortKey="creditSalesAmount"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    >
+                      Credit Sales
+                    </SortableTableHead>
+                    <SortableTableHead
+                      sortKey="totalAmount"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    >
+                      Total Amount
+                    </SortableTableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {previewData.map((item) => (
-                    <TableRow key={item.customerId}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedCustomers.has(item.customerId)}
-                          onCheckedChange={() => toggleCustomerSelection(item.customerId)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {item.customerName}
-                      </TableCell>
-                      <TableCell>
-                        {formatCurrency(item.subscriptionAmount)}
-                      </TableCell>
-                      <TableCell>
-                        {formatCurrency(item.creditSalesAmount)}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {formatCurrency(item.totalAmount)}
-                      </TableCell>
-                      <TableCell>
-                        {item.hasExistingInvoice ? (
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="destructive">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              Duplicate
-                            </Badge>
-                            <span className="text-xs text-gray-500">
-                              {item.existingInvoiceNumber}
-                            </span>
-                          </div>
-                        ) : item.totalAmount > 0 ? (
-                          <Badge variant="default">Ready</Badge>
-                        ) : (
-                          <Badge variant="secondary">No Amount Due</Badge>
-                        )}
+                  {sortedPreviewData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        {searchQuery || statusFilter !== 'all' || amountFilter !== 'all'
+                          ? "No customers found matching your filters."
+                          : "No customers found."}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    sortedPreviewData.map((item) => (
+                      <TableRow key={item.customerId}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCustomers.has(item.customerId)}
+                            onCheckedChange={() => toggleCustomerSelection(item.customerId)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {item.customerName}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(item.subscriptionAmount)}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(item.creditSalesAmount)}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(item.totalAmount)}
+                        </TableCell>
+                        <TableCell>
+                          {item.hasExistingInvoice ? (
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="destructive">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Duplicate
+                              </Badge>
+                              <span className="text-xs text-gray-500">
+                                {item.existingInvoiceNumber}
+                              </span>
+                            </div>
+                          ) : item.totalAmount > 0 ? (
+                            <Badge variant="default">Ready</Badge>
+                          ) : (
+                            <Badge variant="secondary">No Amount Due</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
