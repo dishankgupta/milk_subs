@@ -417,11 +417,11 @@ async function calculateOutstandingFallback(customerId: string): Promise<number>
     // Get customer opening balance
     const { data: customer } = await supabase
       .from('customers')
-      .select('outstanding_amount')
+      .select('opening_balance')
       .eq('id', customerId)
       .single()
 
-    const openingBalance = customer?.outstanding_amount || 0
+    const openingBalance = customer?.opening_balance || 0
 
     // Get unpaid invoices total
     const { data: unpaidInvoices } = await supabase
