@@ -92,6 +92,16 @@ src/lib/
 
 ## Database Schema (Supabase PostgreSQL)
 
+### Migration Files Setup
+Complete database recreation available through migration files in `supabase/migrations/`:
+- **001_initial_schema.sql** - All 20+ core tables with constraints & relationships
+- **002_functions_and_procedures.sql** - 25+ business logic functions & procedures
+- **003_triggers_and_policies.sql** - RLS policies, triggers & security settings
+- **004_indexes_and_constraints.sql** - 50+ performance indexes & constraints
+- **005_seed_data.sql** - Essential routes & product data with validation
+
+**Setup Instructions**: Apply migrations in numerical order to recreate complete database structure on any fresh Supabase project.
+
 ### Core Business Tables
 - **customers** - Customer profiles with billing info, routes, opening balance
 - **products** - Product catalog with GST rates (Milk, Paneer, Ghee varieties)
@@ -179,6 +189,18 @@ const [customers, products] = await Promise.all([
   getProducts()
 ])
 ```
+
+### Database Migration Guidelines
+```bash
+# Creating new migration files after successful database changes
+# Use Supabase MCP server through Task tool for proper migration creation
+
+**Migration Best Practices:**
+- Always test migrations on development branch before production
+- Use `IF EXISTS` clauses for safe drops and rollbacks
+- Include descriptive comments explaining business logic
+- Maintain numerical order (001, 002, 003...) for proper sequencing
+- Never modify existing migration files - always create new ones
 
 ### Form Validation
 ```typescript

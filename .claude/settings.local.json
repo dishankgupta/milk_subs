@@ -44,7 +44,9 @@
       "Bash(dir:*)",
       "Bash(npx tsc:*)",
       "mcp__filesystem__write_file",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__list_migrations"
     ]
   },
   "enabledMcpjsonServers": [
