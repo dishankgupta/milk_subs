@@ -116,7 +116,7 @@ export async function getPayments(searchParams?: {
   limit?: number
 }) {
   const supabase = await createClient()
-  
+
   let query = supabase
     .from("payments")
     .select(`
@@ -127,11 +127,7 @@ export async function getPayments(searchParams?: {
     `)
     .order("payment_date", { ascending: false })
 
-  // Apply filters
-  if (searchParams?.search) {
-    query = query.or(`customer.billing_name.ilike.%${searchParams.search}%,customer.contact_person.ilike.%${searchParams.search}%,payment_method.ilike.%${searchParams.search}%`)
-  }
-
+  // Apply non-search filters first
   if (searchParams?.customer_id) {
     query = query.eq("customer_id", searchParams.customer_id)
   }
@@ -154,8 +150,20 @@ export async function getPayments(searchParams?: {
     throw new Error(`Failed to fetch payments: ${error.message}`)
   }
 
-  return { 
-    payments: payments as Payment[], 
+  let filteredPayments = payments as Payment[]
+
+  // Apply search filter client-side after fetching data (same pattern as UnappliedPaymentsSection)
+  if (searchParams?.search) {
+    const search = searchParams.search.trim().toLowerCase()
+    filteredPayments = filteredPayments.filter(payment =>
+      (payment.customer?.billing_name || '').toLowerCase().includes(search) ||
+      (payment.customer?.contact_person || '').toLowerCase().includes(search) ||
+      (payment.payment_method || '').toLowerCase().includes(search)
+    )
+  }
+
+  return {
+    payments: filteredPayments,
     total: count || 0,
     page,
     limit
