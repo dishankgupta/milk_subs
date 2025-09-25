@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer, X } from 'lucide-react'
+import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer, X, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { useRouter } from 'next/navigation'
 import { formatDateIST, formatWithIST, parseLocalDateIST, formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 import { toast } from 'sonner'
+import { QuickPayModal } from '@/components/sales/QuickPayModal'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +55,7 @@ interface SalesHistoryTableProps {
 }
 
 export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
@@ -68,6 +71,10 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   const [selectedSales, setSelectedSales] = useState<Set<string>>(new Set())
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+
+  // Quick Pay state
+  const [quickPayModalOpen, setQuickPayModalOpen] = useState(false)
+  const [selectedSaleForQuickPay, setSelectedSaleForQuickPay] = useState<Sale | null>(null)
 
   // Fix hydration mismatch by ensuring client-side rendering
   useEffect(() => {
@@ -232,6 +239,23 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     setDateFromFilter(formatDateForDatabase(firstDay))
     setDateToFilter(formatDateForDatabase(today))
     setDateFiltersModified(false) // Back to system defaults
+  }
+
+  const handleQuickPayClick = (sale: Sale) => {
+    setSelectedSaleForQuickPay(sale)
+    setQuickPayModalOpen(true)
+  }
+
+  const handleQuickPaySuccess = () => {
+    setQuickPayModalOpen(false)
+    setSelectedSaleForQuickPay(null)
+    // Refresh server data while preserving client state (filters, search, etc.)
+    router.refresh()
+  }
+
+  const handleQuickPayClose = () => {
+    setQuickPayModalOpen(false)
+    setSelectedSaleForQuickPay(null)
   }
 
   const handlePrint = () => {
@@ -619,7 +643,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                             Edit
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        {sale.sale_type === 'Credit' && sale.payment_status === 'Pending' && (
+                          <DropdownMenuItem onClick={() => handleQuickPayClick(sale)}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Quick Pay
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
                           onClick={() => handleDeleteClick(sale)}
                           className="text-red-600 hover:text-red-700"
                         >
@@ -714,6 +744,24 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Quick Pay Modal */}
+      {selectedSaleForQuickPay && (
+        <QuickPayModal
+          sale={{
+            id: selectedSaleForQuickPay.id,
+            customer_id: selectedSaleForQuickPay.customer_id,
+            customer_name: selectedSaleForQuickPay.customer?.billing_name || 'Unknown Customer',
+            total_amount: selectedSaleForQuickPay.total_amount,
+            sale_date: selectedSaleForQuickPay.sale_date,
+            sale_type: selectedSaleForQuickPay.sale_type,
+            payment_status: selectedSaleForQuickPay.payment_status
+          }}
+          isOpen={quickPayModalOpen}
+          onClose={handleQuickPayClose}
+          onSuccess={handleQuickPaySuccess}
+        />
+      )}
     </div>
   )
 }

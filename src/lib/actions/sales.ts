@@ -466,3 +466,56 @@ export async function getSale(saleId: string) {
 
   return sale
 }
+
+export async function quickPaySale(
+  saleId: string,
+  paymentDate: Date,
+  paymentMethod: string
+) {
+  const supabase = await createClient()
+
+  try {
+    // Get sale details
+    const { data: sale, error: saleError } = await supabase
+      .from("sales")
+      .select(`
+        *,
+        customer:customers(*)
+      `)
+      .eq("id", saleId)
+      .eq("sale_type", "Credit")
+      .eq("payment_status", "Pending")
+      .single()
+
+    if (saleError || !sale) {
+      return { error: "Sale not found or not eligible for quick pay" }
+    }
+
+    // Import payment functions
+    const { createPayment } = await import('@/lib/actions/payments')
+
+    // Create payment with allocation data to prevent unapplied payment record
+    const paymentData = {
+      customer_id: sale.customer_id,
+      amount: sale.total_amount,
+      payment_date: paymentDate,
+      payment_method: paymentMethod,
+      notes: `Quick payment for sale ${saleId}`
+    }
+
+    const payment = await createPayment(paymentData, [
+      { id: saleId, type: 'sales', amount: sale.total_amount }
+    ])
+
+    revalidatePath("/dashboard/sales/history")
+    revalidatePath("/dashboard/payments")
+    revalidatePath("/dashboard/outstanding")
+
+    return { success: true, payment }
+  } catch (error) {
+    console.error('Quick pay error:', error)
+    return {
+      error: error instanceof Error ? error.message : "Failed to process quick payment"
+    }
+  }
+}
