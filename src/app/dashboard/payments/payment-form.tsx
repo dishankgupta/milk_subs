@@ -31,9 +31,9 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [paymentAllocations, setPaymentAllocations] = useState<{
-    id: string; 
-    type: 'invoice' | 'opening_balance'; 
-    amount: number 
+    id: string;
+    type: 'invoice' | 'opening_balance' | 'sales';
+    amount: number
   }[]>([])
 
   const form = useForm<PaymentFormData>({

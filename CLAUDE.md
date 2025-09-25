@@ -107,6 +107,7 @@ src/lib/
 - **invoice_metadata** - Invoice generation with status & payment tracking
 - **invoice_line_items** - Detailed line items with delivery references
 - **invoice_payments** - Payment allocation for invoice-to-payment mapping
+- **sales_payments** - Direct payment allocation to sales (bypassing invoices)
 - **unapplied_payments** - Payments not yet allocated to invoices
 - **opening_balance_payments** - Historical opening balance payment tracking
 - **product_pricing_history** - Price change audit trail
@@ -397,5 +398,9 @@ This is a production-ready dairy business management system with:
 - ✅ Performance optimization with bulk operations
 - ✅ Race condition prevention in payment systems
 - ✅ IST timezone compliance for Indian market
+- ✅ Direct sales payment allocation (bypassing invoice generation)
 
 The system successfully manages subscriptions, deliveries, sales, payments, and invoicing for dairy businesses with robust financial tracking and professional reporting capabilities.
+
+### Recent Features
+- **Sales Payment Bypass (Sep 2025)**: Direct payment allocation to credit sales without invoice generation. Enables mixed allocations (invoices + opening balance + sales) from payment screen. Outstanding calculations remain unaffected.

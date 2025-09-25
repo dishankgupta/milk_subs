@@ -775,3 +775,201 @@ export async function getUnappliedPaymentStats(): Promise<UnappliedPaymentStats>
     throw error
   }
 }
+
+// Direct Sales Payment Allocation (bypassing invoices)
+export interface PendingCreditSale {
+  id: string
+  product_name: string
+  product_code: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  gst_amount: number
+  sale_date: string
+  sale_type: string
+  payment_status: string
+  notes?: string
+  unit_of_measure: string
+}
+
+export async function getCustomerPendingCreditSales(customerId: string): Promise<PendingCreditSale[]> {
+  const supabase = await createClient()
+
+  try {
+    const { data: salesRaw, error } = await supabase
+      .from("sales")
+      .select(`
+        id,
+        quantity,
+        unit_price,
+        total_amount,
+        gst_amount,
+        sale_date,
+        sale_type,
+        payment_status,
+        notes,
+        product:products(
+          name,
+          code,
+          unit_of_measure
+        )
+      `)
+      .eq("customer_id", customerId)
+      .eq("sale_type", "Credit")
+      .eq("payment_status", "Pending")
+      .order("sale_date", { ascending: false })
+
+    if (error) {
+      throw new Error("Failed to fetch pending credit sales")
+    }
+
+    const sales = salesRaw || []
+
+    return sales.map((sale) => {
+      // Handle the case where product might be an array or single object
+      const product = Array.isArray(sale.product) ? sale.product[0] : sale.product
+
+      return {
+        id: sale.id,
+        product_name: product?.name || 'Unknown Product',
+        product_code: product?.code || 'N/A',
+        quantity: sale.quantity,
+        unit_price: sale.unit_price,
+        total_amount: sale.total_amount,
+        gst_amount: sale.gst_amount,
+        sale_date: sale.sale_date,
+        sale_type: sale.sale_type,
+        payment_status: sale.payment_status,
+        notes: sale.notes,
+        unit_of_measure: product?.unit_of_measure || 'Unit'
+      }
+    })
+  } catch (error) {
+    console.error("Failed to get customer pending credit sales:", error)
+    throw error
+  }
+}
+
+// Function to allocate payment directly to sales (bypassing invoice)
+export async function allocatePaymentToSales(
+  paymentId: string,
+  salesAllocations: { salesId: string; amount: number }[]
+) {
+  const supabase = await createClient()
+
+  try {
+    // Validate payment exists and get details
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("id, amount, customer_id, amount_applied, amount_unapplied")
+      .eq("id", paymentId)
+      .single()
+
+    if (paymentError || !payment) {
+      throw new Error("Payment not found")
+    }
+
+    // Validate all sales belong to the same customer and are pending credit sales
+    for (const allocation of salesAllocations) {
+      const { data: sale, error: saleError } = await supabase
+        .from("sales")
+        .select("customer_id, sale_type, payment_status, total_amount")
+        .eq("id", allocation.salesId)
+        .single()
+
+      if (saleError || !sale) {
+        throw new Error(`Sales record not found: ${allocation.salesId}`)
+      }
+
+      if (sale.customer_id !== payment.customer_id) {
+        throw new Error("Sales record does not belong to payment customer")
+      }
+
+      if (sale.sale_type !== "Credit" || sale.payment_status !== "Pending") {
+        throw new Error(`Sales record ${allocation.salesId} is not eligible for direct payment allocation`)
+      }
+
+      if (allocation.amount > sale.total_amount) {
+        throw new Error(`Allocation amount exceeds sales amount for ${allocation.salesId}`)
+      }
+
+      // Check if allocation amount equals total amount (we only support full payment for now)
+      if (allocation.amount !== sale.total_amount) {
+        throw new Error(`Partial payment not supported. Must pay full amount: ${sale.total_amount}`)
+      }
+    }
+
+    // Calculate total allocation
+    const totalAllocation = salesAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+    const newAmountApplied = payment.amount_applied + totalAllocation
+    const newAmountUnapplied = payment.amount - newAmountApplied
+
+    if (newAmountApplied > payment.amount) {
+      throw new Error("Total allocation exceeds payment amount")
+    }
+
+    // Begin transaction-like operations
+    // 1. Insert sales payment records
+    const salesPaymentInserts = salesAllocations.map(allocation => ({
+      sales_id: allocation.salesId,
+      payment_id: paymentId,
+      amount_allocated: allocation.amount
+    }))
+
+    const { error: insertError } = await supabase
+      .from("sales_payments")
+      .insert(salesPaymentInserts)
+
+    if (insertError) {
+      throw new Error(`Failed to create sales payment records: ${insertError.message}`)
+    }
+
+    // 2. Update sales status to Completed
+    for (const allocation of salesAllocations) {
+      const { error: salesUpdateError } = await supabase
+        .from("sales")
+        .update({ payment_status: "Completed" })
+        .eq("id", allocation.salesId)
+
+      if (salesUpdateError) {
+        throw new Error(`Failed to update sales status: ${salesUpdateError.message}`)
+      }
+    }
+
+    // 3. Update payment allocation status
+    const allocationStatus = newAmountUnapplied > 0 ? 'partially_applied' : 'fully_applied'
+    const { error: paymentUpdateError } = await supabase
+      .from("payments")
+      .update({
+        amount_applied: newAmountApplied,
+        amount_unapplied: newAmountUnapplied,
+        allocation_status: allocationStatus
+      })
+      .eq("id", paymentId)
+
+    if (paymentUpdateError) {
+      throw new Error(`Failed to update payment status: ${paymentUpdateError.message}`)
+    }
+
+    // Revalidate relevant pages
+    revalidatePath("/dashboard/payments")
+    revalidatePath("/dashboard/sales")
+    revalidatePath("/dashboard/customers")
+    if (payment.customer_id) {
+      revalidatePath(`/dashboard/customers/${payment.customer_id}`)
+    }
+
+    return {
+      success: true,
+      allocated_amount: totalAllocation,
+      total_allocated: newAmountApplied,
+      payment_amount: payment.amount,
+      unapplied_amount: newAmountUnapplied,
+      sales_count: salesAllocations.length
+    }
+
+  } catch (error) {
+    console.error("Sales payment allocation error:", error)
+    throw error
+  }
+}

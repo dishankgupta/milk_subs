@@ -23,7 +23,7 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedPayment, setSelectedPayment] = useState<UnappliedPayment | null>(null)
-  const [pendingAllocations, setPendingAllocations] = useState<{ id: string; type: 'invoice' | 'opening_balance'; amount: number }[]>([])
+  const [pendingAllocations, setPendingAllocations] = useState<{ id: string; type: 'invoice' | 'opening_balance' | 'sales'; amount: number }[]>([])
   const [isAllocating, setIsAllocating] = useState(false)
 
   const loadUnappliedPayments = useCallback(async () => {
@@ -43,19 +43,19 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
   }, [loadUnappliedPayments])
 
   const handleAllocatePayment = async (
-    paymentId: string, 
-    allocations: { id: string; type: 'invoice' | 'opening_balance'; amount: number }[]
+    paymentId: string,
+    allocations: { id: string; type: 'invoice' | 'opening_balance' | 'sales'; amount: number }[]
   ) => {
     try {
       // Convert new format to old format for invoice allocations only
       const invoiceAllocations = allocations
         .filter(alloc => alloc.type === 'invoice')
         .map(alloc => ({ invoiceId: alloc.id, amount: alloc.amount }))
-      
+
       if (invoiceAllocations.length > 0) {
         await allocatePayment(paymentId, invoiceAllocations)
       }
-      
+
       // Handle opening balance allocations
       const openingBalanceAllocations = allocations.filter(alloc => alloc.type === 'opening_balance')
       if (openingBalanceAllocations.length > 0) {
@@ -64,6 +64,16 @@ export function UnappliedPaymentsSection({ customerId, onAllocationComplete }: U
         for (const allocation of openingBalanceAllocations) {
           await allocatePaymentToOpeningBalance(paymentId, allocation.amount)
         }
+      }
+
+      // Handle sales allocations
+      const salesAllocations = allocations
+        .filter(alloc => alloc.type === 'sales')
+        .map(alloc => ({ salesId: alloc.id, amount: alloc.amount }))
+
+      if (salesAllocations.length > 0) {
+        const { allocatePaymentToSales } = await import('@/lib/actions/outstanding')
+        await allocatePaymentToSales(paymentId, salesAllocations)
       }
       
       toast.success('Payment allocated successfully!')

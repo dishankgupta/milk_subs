@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { PaymentFormData, paymentSchema } from "@/lib/validations"
 import type { Payment } from "@/lib/types"
-import { allocatePayment, allocatePaymentToOpeningBalance } from "@/lib/actions/outstanding"
+import {
+  allocatePayment,
+  allocatePaymentToOpeningBalance,
+  allocatePaymentToSales
+} from "@/lib/actions/outstanding"
 import { 
   formatDateForDatabase, 
   formatTimestampForDatabase, 
@@ -14,7 +18,7 @@ import {
 
 interface PaymentAllocation {
   id: string
-  type: 'invoice' | 'opening_balance'
+  type: 'invoice' | 'opening_balance' | 'sales'
   amount: number
 }
 
@@ -71,27 +75,36 @@ export async function createPayment(data: PaymentFormData, paymentAllocations?: 
   return payment
 }
 
-// Helper function to process both invoice and opening balance allocations
+// Helper function to process invoice, opening balance, and sales allocations
 async function processPaymentAllocations(
-  paymentId: string, 
+  paymentId: string,
   allocations: PaymentAllocation[]
 ) {
-  // Separate invoice and opening balance allocations
+  // Separate different types of allocations
   const invoiceAllocations = allocations
     .filter(alloc => alloc.type === 'invoice')
     .map(alloc => ({ invoiceId: alloc.id, amount: alloc.amount }))
-  
+
   const openingBalanceAllocations = allocations
     .filter(alloc => alloc.type === 'opening_balance')
-  
+
+  const salesAllocations = allocations
+    .filter(alloc => alloc.type === 'sales')
+    .map(alloc => ({ salesId: alloc.id, amount: alloc.amount }))
+
   // Process invoice allocations
   if (invoiceAllocations.length > 0) {
     await allocatePayment(paymentId, invoiceAllocations)
   }
-  
+
   // Process opening balance allocations
   for (const allocation of openingBalanceAllocations) {
     await allocatePaymentToOpeningBalance(paymentId, allocation.amount)
+  }
+
+  // Process sales allocations
+  if (salesAllocations.length > 0) {
+    await allocatePaymentToSales(paymentId, salesAllocations)
   }
 }
 
