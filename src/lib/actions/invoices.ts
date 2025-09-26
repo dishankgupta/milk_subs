@@ -710,14 +710,14 @@ export async function generateBulkInvoices(params: {
       progress.completed = i + 1
     }
 
-    // Generate combined PDF
-    if (individualPdfPaths.length > 0) {
+    // Generate combined PDF only when multiple customers are processed
+    if (individualPdfPaths.length > 1) {
       const combinedFileName = invoiceFileManager.getCombinedFileName(
         results.invoiceNumbers[0],
         results.invoiceNumbers[results.invoiceNumbers.length - 1]
       )
       const combinedPdfPath = path.join(dateFolder, combinedFileName)
-      
+
       await combinePdfs(individualPdfPaths, combinedPdfPath)
       results.combinedPdfPath = combinedPdfPath
     }

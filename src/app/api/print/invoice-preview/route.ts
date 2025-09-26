@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     const previewData = await getBulkInvoicePreview({
       period_start: periodStart,
       period_end: periodEnd,
-      customer_selection: customerSelection as any
+      customer_selection: customerSelection as 'all' | 'with_unbilled_deliveries' | 'with_unbilled_credit_sales' | 'with_unbilled_transactions' | 'selected'
     })
 
     // Apply filters
