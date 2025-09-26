@@ -258,11 +258,9 @@ export function EnhancedViewSaleDetails({ sale, billingDetails, completionDetail
         <SaleBillingDetails
           saleId={sale.id}
           saleAmount={sale.total_amount}
-          invoiceDetails={billingDetails}
+          invoiceDetails={billingDetails ?? null}
         />
       )}
-
-      {/* Completion Details for 'Completed' Status */}
       {sale.payment_status === 'Completed' && (
         <SaleCompletionDetails
           saleType={sale.sale_type}

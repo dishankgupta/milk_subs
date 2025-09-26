@@ -607,11 +607,11 @@ export async function getSaleWithBillingDetails(saleId: string) {
         : directPaymentData.payments
 
       completionDetails = {
-        type: 'direct_payment',
-        amount_allocated: directPaymentData.amount_allocated,
+        type: 'direct_payment' as const,
+        amount_allocated: Number(directPaymentData.amount_allocated),
         payment_date: paymentData.payment_date,
         payment_method: paymentData.payment_method,
-        total_payment_amount: paymentData.amount,
+        total_payment_amount: Number(paymentData.amount),
         payment_notes: paymentData.notes,
         allocation_status: paymentData.allocation_status,
         payment_id: paymentData.id
@@ -653,9 +653,9 @@ export async function getSaleWithBillingDetails(saleId: string) {
             : paymentData.payments
 
           completionDetails = {
-            type: 'invoice_payment',
+            type: 'invoice_payment' as const,
             invoice_number: invoiceMetadata.invoice_number,
-            amount_allocated: paymentData.amount_allocated,
+            amount_allocated: Number(paymentData.amount_allocated),
             payment_date: paymentRecord.payment_date,
             payment_method: paymentRecord.payment_method,
             payment_id: paymentRecord.id

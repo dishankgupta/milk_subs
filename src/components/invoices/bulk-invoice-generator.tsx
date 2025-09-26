@@ -111,8 +111,8 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
     if (searchQuery) params.append('search', searchQuery)
     if (statusFilter !== 'all') params.append('status', statusFilter)
     if (amountFilter !== 'all') params.append('amount', amountFilter)
-    if (sortConfig.key) params.append('sortKey', sortConfig.key)
-    params.append('sortDirection', sortConfig.direction)
+    if (sortConfig?.key) params.append('sortKey', sortConfig.key)
+    if (sortConfig?.direction) params.append('sortDirection', sortConfig.direction)
 
     // Add period dates
     const formData = form.getValues()

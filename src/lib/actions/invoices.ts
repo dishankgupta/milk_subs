@@ -139,17 +139,18 @@ export async function prepareInvoiceData(
   // Generate invoice number
   const { invoiceNumber } = await getNextInvoiceNumber()
 
-  // Process all delivery items (both subscription and additional deliveries)
+  // Process all delivery items - separate line items for different prices
   const deliveryItemsMap = new Map<string, InvoiceSubscriptionItem>()
-  
+
   deliveries?.forEach(delivery => {
-    const key = delivery.product.id
+    // Create unique key combining product ID and unit price
+    const key = `${delivery.product.id}_${delivery.unit_price}`
     const existing = deliveryItemsMap.get(key)
-    
+
     // Use actual delivered quantity (self-contained delivery data)
     const actualQuantity = Number(delivery.actual_quantity || 0)
     const actualTotalAmount = actualQuantity * Number(delivery.unit_price)
-    
+
     if (existing) {
       existing.quantity += actualQuantity
       existing.totalAmount += actualTotalAmount
@@ -166,16 +167,24 @@ export async function prepareInvoiceData(
   })
 
   const deliveryItems = Array.from(deliveryItemsMap.values())
+    .sort((a, b) => {
+      // Sort by product name first, then by unit price
+      if (a.productName !== b.productName) {
+        return a.productName.localeCompare(b.productName)
+      }
+      return a.unitPrice - b.unitPrice
+    })
 
-  // Process manual sales items with aggregation by product
+  // Process manual sales items - separate line items for different prices
   const manualSalesItemsMap = new Map<string, InvoiceManualSaleItem>()
-  
+
   manualSales?.forEach(sale => {
-    const key = sale.product.id
+    // Create unique key combining product ID and unit price
+    const key = `${sale.product.id}_${sale.unit_price}`
     const existing = manualSalesItemsMap.get(key)
-    
+
     if (existing) {
-      // Aggregate quantities and amounts
+      // Aggregate quantities and amounts for same product at same price
       existing.quantity += Number(sale.quantity)
       existing.totalAmount += Number(sale.total_amount)
       existing.gstAmount += Number(sale.gst_amount)
@@ -194,6 +203,13 @@ export async function prepareInvoiceData(
   })
 
   const manualSalesItems = Array.from(manualSalesItemsMap.values())
+    .sort((a, b) => {
+      // Sort by product name first, then by unit price
+      if (a.productName !== b.productName) {
+        return a.productName.localeCompare(b.productName)
+      }
+      return a.unitPrice - b.unitPrice
+    })
 
   // Create daily summary (both subscription + manual sales)
   const dailySummaryMap = new Map<string, InvoiceDailySummaryItem>()

@@ -750,7 +750,7 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
         <QuickPayModal
           sale={{
             id: selectedSaleForQuickPay.id,
-            customer_id: selectedSaleForQuickPay.customer_id,
+            customer_id: selectedSaleForQuickPay.customer_id || '',
             customer_name: selectedSaleForQuickPay.customer?.billing_name || 'Unknown Customer',
             total_amount: selectedSaleForQuickPay.total_amount,
             sale_date: selectedSaleForQuickPay.sale_date,
