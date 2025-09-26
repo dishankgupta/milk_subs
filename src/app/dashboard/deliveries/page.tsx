@@ -128,8 +128,8 @@ function DeliveriesContent() {
 
     // Handle enhanced date filter for print
     if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
-      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
-      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+      params.append('date_from', currentFilters.dateFilter.fromDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.dateFilter.toDate.toISOString().split('T')[0])
     } else {
       params.append('datePreset', currentFilters.dateFilter.preset)
     }
@@ -150,8 +150,8 @@ function DeliveriesContent() {
 
     // Handle enhanced date filter for print
     if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
-      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
-      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+      params.append('date_from', currentFilters.dateFilter.fromDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.dateFilter.toDate.toISOString().split('T')[0])
     } else {
       params.append('datePreset', currentFilters.dateFilter.preset)
     }

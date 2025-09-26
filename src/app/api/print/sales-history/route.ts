@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getSales } from '@/lib/actions/sales'
-import { formatDateIST, getCurrentISTDate, parseLocalDateIST } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate, parseLocalDateIST, formatDateForDatabase } from '@/lib/date-utils'
 import { formatCurrency } from '@/lib/utils'
 import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns'
 import type { Sale } from '@/lib/types'
@@ -263,8 +263,14 @@ export async function GET(request: NextRequest) {
 
     // Apply date range filters at database level
     if (dateRange) {
-      getSalesParams.date_from = dateRange.fromDate.toISOString().split('T')[0]
-      getSalesParams.date_to = dateRange.toDate.toISOString().split('T')[0]
+      getSalesParams.date_from = formatDateForDatabase(dateRange.fromDate)
+      getSalesParams.date_to = formatDateForDatabase(dateRange.toDate)
+    } else {
+      // No date filters provided - apply default current month range like the sales history page
+      const today = getCurrentISTDate()
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      getSalesParams.date_from = formatDateForDatabase(firstDay)
+      getSalesParams.date_to = formatDateForDatabase(today)
     }
 
     const salesData = await getSales(getSalesParams)
@@ -320,6 +326,68 @@ export async function GET(request: NextRequest) {
     }
     if (saleTypeFilter) filterParts.push(`Type: ${saleTypeFilter}`)
     if (paymentStatusFilter) filterParts.push(`Status: ${paymentStatusFilter}`)
+    // Generate document title following the new convention
+    // Format: SalesHistoryReport_FilterType_Value_FilterType_Value_Generated_YYYY-MM-DD
+    const titleParts = ['SalesHistoryReport']
+
+    // Add date filter to title - prioritize preset names over date ranges
+    if (datePreset) {
+      if (datePreset === 'mostRecent' && dateRange) {
+        // For most recent, show the actual date
+        const targetDate = formatDateForDatabase(dateRange.fromDate)
+        titleParts.push(`Date_MostRecent_${targetDate}`)
+      } else {
+        // For other presets, use descriptive names
+        const presetNames: Record<string, string> = {
+          'today': 'Today',
+          'yesterday': 'Yesterday',
+          'last7days': 'Last7Days',
+          'last30days': 'Last30Days',
+          'thisWeek': 'ThisWeek',
+          'thisMonth': 'ThisMonth',
+          'lastMonth': 'LastMonth'
+        }
+        const presetName = presetNames[datePreset] || datePreset.charAt(0).toUpperCase() + datePreset.slice(1)
+        titleParts.push(`Date_${presetName}`)
+      }
+    } else if (dateRange) {
+      // Custom date range
+      const fromDateISO = formatDateForDatabase(dateRange.fromDate)
+      const toDateISO = formatDateForDatabase(dateRange.toDate)
+      titleParts.push(`Date_${fromDateISO}_to_${toDateISO}`)
+    } else {
+      // No date filters applied - use default current month range like the sales history page
+      const today = getCurrentISTDate()
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      const fromDateISO = formatDateForDatabase(firstDay)
+      const toDateISO = formatDateForDatabase(today)
+      titleParts.push(`Date_${fromDateISO}_to_${toDateISO}`)
+    }
+
+    // Add sale type filter to title
+    if (saleTypeFilter) {
+      titleParts.push(`Type_${saleTypeFilter}`)
+    }
+
+    // Add payment status filter to title
+    if (paymentStatusFilter) {
+      titleParts.push(`Status_${paymentStatusFilter}`)
+    }
+
+    // Add search filter to title
+    if (searchQuery) {
+      // Clean search query for filename safety
+      const cleanQuery = searchQuery.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)
+      titleParts.push(`Search_${cleanQuery}`)
+    }
+
+    // Add generated date
+    const generatedDate = formatDateForDatabase(getCurrentISTDate())
+    titleParts.push(`Generated_${generatedDate}`)
+
+    const documentTitle = titleParts.join('_')
+
+    // Keep the old format for the filter display card
     const filterDescription = filterParts.length > 0 ? ` (${filterParts.join(', ')})` : ''
 
     const html = `
@@ -328,7 +396,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales History Report${filterDescription} - ${formatDateIST(getCurrentISTDate())}</title>
+  <title>${documentTitle}</title>
   <style>
     @page {
       size: A4;

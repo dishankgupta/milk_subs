@@ -66,7 +66,7 @@ export function QuickPayModal({ sale, isOpen, onClose, onSuccess }: QuickPayModa
       // Call the server action via a form action approach
       const formData = new FormData()
       formData.set('saleId', sale.id)
-      formData.set('paymentDate', data.payment_date.toISOString())
+      formData.set('paymentDate', data.payment_date.toISOString().split('T')[0])
       formData.set('paymentMethod', data.payment_method)
 
       const response = await fetch('/api/sales/quick-pay', {

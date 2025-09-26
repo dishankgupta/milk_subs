@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getDeliveries } from '@/lib/actions/deliveries'
-import { formatDateIST, getCurrentISTDate, parseLocalDateIST } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate, parseLocalDateIST, formatDateForDatabase } from '@/lib/date-utils'
 import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns'
 import type { DeliveryExtended } from '@/lib/types'
 
@@ -209,11 +209,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get('search') || undefined
     const datePreset = searchParams.get('datePreset') || undefined
-    const dateFrom = searchParams.get('dateFrom') || undefined
-    const dateTo = searchParams.get('dateTo') || undefined
+    const dateFrom = searchParams.get('date_from') || searchParams.get('dateFrom') || undefined
+    const dateTo = searchParams.get('date_to') || searchParams.get('dateTo') || undefined
     const routeFilter = searchParams.get('route') || undefined
-    const sortKey = searchParams.get('sortKey') || 'order_date'
-    const sortDirection = (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc'
+    const sortKey = searchParams.get('sort_by') || searchParams.get('sortKey') || 'order_date'
+    const sortDirection = ((searchParams.get('sort_order') || searchParams.get('sortDirection')) as 'asc' | 'desc') || 'desc'
 
     // Fetch all deliveries
     const allDeliveries = await getDeliveries()
@@ -221,9 +221,9 @@ export async function GET(request: NextRequest) {
     // Determine date range for filtering
     let dateRange: { fromDate: Date, toDate: Date } | undefined = undefined
 
+    let mostRecentDate: string | undefined = undefined
     if (datePreset) {
       // Find the most recent date from deliveries for "mostRecent" preset
-      let mostRecentDate: string | undefined = undefined
       if (datePreset === 'mostRecent' && allDeliveries.length > 0) {
         const sortedByDate = [...allDeliveries].sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
         mostRecentDate = sortedByDate[0].order_date
@@ -299,6 +299,56 @@ export async function GET(request: NextRequest) {
       }
     }
     if (routeFilter) filterParts.push(`Route: ${routeFilter}`)
+
+    // Generate document title following the new convention
+    // Format: DeliveryReport_FilterType_Value_FilterType_Value_Generated_YYYY-MM-DD
+    const titleParts = ['DeliveryReport']
+
+    // Add date filter to title - prioritize preset names over date ranges
+    if (datePreset) {
+      if (datePreset === 'mostRecent' && mostRecentDate) {
+        // For most recent, use the original database date to avoid timezone issues
+        titleParts.push(`Date_MostRecent_${mostRecentDate}`)
+      } else {
+        // For other presets, use descriptive names
+        const presetNames: Record<string, string> = {
+          'today': 'Today',
+          'yesterday': 'Yesterday',
+          'last7days': 'Last7Days',
+          'last30days': 'Last30Days',
+          'thisWeek': 'ThisWeek',
+          'thisMonth': 'ThisMonth',
+          'lastMonth': 'LastMonth'
+        }
+        const presetName = presetNames[datePreset] || datePreset.charAt(0).toUpperCase() + datePreset.slice(1)
+        titleParts.push(`Date_${presetName}`)
+      }
+    } else if (dateRange) {
+      // Custom date range
+      const fromDateISO = formatDateForDatabase(dateRange.fromDate)
+      const toDateISO = formatDateForDatabase(dateRange.toDate)
+      titleParts.push(`Date_${fromDateISO}_to_${toDateISO}`)
+    }
+
+    // Add route filter to title
+    if (routeFilter) {
+      titleParts.push(`Route_${routeFilter.replace(/[^a-zA-Z0-9]/g, '')}`)
+    }
+
+    // Add search filter to title
+    if (searchQuery) {
+      // Clean search query for filename safety
+      const cleanQuery = searchQuery.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)
+      titleParts.push(`Search_${cleanQuery}`)
+    }
+
+    // Add generated date
+    const generatedDate = formatDateForDatabase(getCurrentISTDate())
+    titleParts.push(`Generated_${generatedDate}`)
+
+    const documentTitle = titleParts.join('_')
+
+    // Keep the old format for the filter display card
     const filterDescription = filterParts.length > 0 ? ` (${filterParts.join(', ')})` : ''
     
     const html = `
@@ -307,7 +357,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Delivery Report${filterDescription} - ${formatDateIST(getCurrentISTDate())}</title>
+  <title>${documentTitle}</title>
   <style>
     @page {
       size: A4;
