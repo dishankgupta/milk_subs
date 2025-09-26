@@ -8,7 +8,7 @@ import { formatTimestampForDatabase, getCurrentISTDate, formatDateForDatabase } 
 export async function createModification(data: {
   customer_id: string
   product_id: string
-  modification_type: 'Skip' | 'Increase' | 'Decrease'
+  modification_type: 'Skip' | 'Increase' | 'Decrease' | 'Add Note'
   start_date: string
   end_date: string
   quantity_change?: number
@@ -157,7 +157,7 @@ export async function getModificationById(id: string) {
 }
 
 export async function updateModification(id: string, data: {
-  modification_type?: 'Skip' | 'Increase' | 'Decrease'
+  modification_type?: 'Skip' | 'Increase' | 'Decrease' | 'Add Note'
   start_date?: string
   end_date?: string
   quantity_change?: number

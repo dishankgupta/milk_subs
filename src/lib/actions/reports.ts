@@ -57,7 +57,7 @@ export interface RouteDeliveryReport {
     isModified: boolean
     isSkipped: boolean
     appliedModifications: Array<{
-      type: 'Skip' | 'Increase' | 'Decrease'
+      type: 'Skip' | 'Increase' | 'Decrease' | 'Add Note'
       reason: string | null
       quantityChange: number | null
     }>
@@ -71,6 +71,7 @@ export interface RouteDeliveryReport {
       skip: number
       increase: number
       decrease: number
+      addNote: number
     }
     productBreakdown: {
       [productCode: string]: {
@@ -253,7 +254,8 @@ export async function getRouteDeliveryReport(
             modificationSummary: {
               skip: 0,
               increase: 0,
-              decrease: 0
+              decrease: 0,
+              addNote: 0
             },
             productBreakdown: {}
           }
@@ -333,7 +335,8 @@ export async function getRouteDeliveryReport(
             modificationSummary: {
               skip: 0,
               increase: 0,
-              decrease: 0
+              decrease: 0,
+              addNote: 0
             },
             productBreakdown: {}
           }
@@ -365,7 +368,7 @@ export async function getRouteDeliveryReport(
     let totalQuantity = 0
     let totalValue = 0
     let modifiedOrders = 0
-    const modificationSummary = { skip: 0, increase: 0, decrease: 0 }
+    const modificationSummary = { skip: 0, increase: 0, decrease: 0, addNote: 0 }
 
     // Process all subscriptions (including those that might be skipped)
     for (const subscription of subscriptions) {
@@ -390,7 +393,7 @@ export async function getRouteDeliveryReport(
       let isModified = false
       let isSkipped = false
       const appliedModifications: Array<{
-        type: 'Skip' | 'Increase' | 'Decrease'
+        type: 'Skip' | 'Increase' | 'Decrease' | 'Add Note'
         reason: string | null
         quantityChange: number | null
       }> = []
@@ -403,13 +406,13 @@ export async function getRouteDeliveryReport(
 
         for (const mod of mods) {
           appliedModifications.push({
-            type: mod.modification_type as 'Skip' | 'Increase' | 'Decrease',
+            type: mod.modification_type as 'Skip' | 'Increase' | 'Decrease' | 'Add Note',
             reason: mod.reason || null,
             quantityChange: mod.quantity_change || null
           })
 
           // Count modification types
-          const modType = mod.modification_type.toLowerCase() as keyof typeof modificationSummary
+          const modType = mod.modification_type === 'Add Note' ? 'addNote' : mod.modification_type.toLowerCase() as keyof typeof modificationSummary
           if (modType in modificationSummary) {
             modificationSummary[modType]++
           }
@@ -425,6 +428,9 @@ export async function getRouteDeliveryReport(
               break
             case "Decrease":
               finalQuantity -= mod.quantity_change || 0
+              break
+            case "Add Note":
+              // Add Note doesn't affect quantity, just adds note
               break
           }
         }
@@ -668,7 +674,7 @@ export async function getDeliveryPerformanceReport(
       if (isDelivered) {
         customerStats[customerName].deliveredOrders++
         customerStats[customerName].quantityVariances.push(quantityVariance)
-        const unitPrice = delivery?.unit_price || order.unit_price
+        const unitPrice = order.delivery?.[0]?.unit_price || order.unit_price
         customerStats[customerName].valueVariances.push(quantityVariance * unitPrice)
       }
 

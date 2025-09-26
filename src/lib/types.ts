@@ -153,7 +153,7 @@ export interface Modification {
   id: string
   customer_id: string
   product_id: string
-  modification_type: "Skip" | "Increase" | "Decrease"
+  modification_type: "Skip" | "Increase" | "Decrease" | "Add Note"
   start_date: string
   end_date: string
   quantity_change: number | null

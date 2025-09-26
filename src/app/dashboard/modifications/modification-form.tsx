@@ -345,7 +345,7 @@ export function ModificationForm({
         <Label htmlFor="modification_type">Modification Type</Label>
         <Select
           value={watch('modification_type') || ''}
-          onValueChange={(value) => setValue('modification_type', value as 'Skip' | 'Increase' | 'Decrease')}
+          onValueChange={(value) => setValue('modification_type', value as 'Skip' | 'Increase' | 'Decrease' | 'Add Note')}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select modification type" />
@@ -354,6 +354,7 @@ export function ModificationForm({
             <SelectItem value="Skip">Skip Delivery</SelectItem>
             <SelectItem value="Increase">Increase Quantity</SelectItem>
             <SelectItem value="Decrease">Decrease Quantity</SelectItem>
+            <SelectItem value="Add Note">Add Note</SelectItem>
           </SelectContent>
         </Select>
         {errors.modification_type && (
@@ -449,10 +450,16 @@ export function ModificationForm({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="reason">Reason (Optional)</Label>
+        <Label htmlFor="reason">
+          {modificationType === 'Add Note' ? 'Note (Required)' : 'Reason (Optional)'}
+        </Label>
         <Textarea
           id="reason"
-          placeholder="Reason for modification..."
+          placeholder={
+            modificationType === 'Add Note'
+              ? "Enter your note here..."
+              : "Reason for modification..."
+          }
           rows={3}
           {...register('reason')}
         />

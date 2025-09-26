@@ -336,6 +336,7 @@ export async function GET(request: NextRequest) {
     .mod-skip { background-color: #dc2626; }
     .mod-increase { background-color: #059669; }
     .mod-decrease { background-color: #ea580c; }
+    .mod-add-note { background-color: #3b82f6; }
     
     .modification-details {
       margin-bottom: 15px;
@@ -416,8 +417,8 @@ export async function GET(request: NextRequest) {
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
             ${order.appliedModifications.map(mod => `
               <div style="display: flex; align-items: center; gap: 4px;">
-                <span class="modification-icon mod-${mod.type.toLowerCase()}">
-                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : '↓'}
+                <span class="modification-icon mod-${mod.type.toLowerCase().replace(' ', '-')}">
+                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : mod.type === 'Decrease' ? '↓' : mod.type === 'Add Note' ? '📝' : '?'}
                 </span>
                 <span style="font-size: 9px; color: #333;">
                   <strong>${mod.type}</strong>
@@ -456,6 +457,12 @@ export async function GET(request: NextRequest) {
       <div class="product-item" style="background: #fed7aa;">
         <div class="name" style="color: #ea580c;">Total Decreased</div>
         <div class="value" style="color: #ea580c;">${report.summary.modificationSummary.decrease}</div>
+      </div>
+      ` : ''}
+      ${report.summary.modificationSummary.addNote > 0 ? `
+      <div class="product-item" style="background: #dbeafe;">
+        <div class="name" style="color: #3b82f6;">Notes Added</div>
+        <div class="value" style="color: #3b82f6;">${report.summary.modificationSummary.addNote}</div>
       </div>
       ` : ''}
     </div>
@@ -520,8 +527,8 @@ export async function GET(request: NextRequest) {
           ${order.isModified && order.appliedModifications.length > 0 ? 
             order.appliedModifications.map(mod => `
               <div style="margin-bottom: 2px;">
-                <span class="modification-icon mod-${mod.type.toLowerCase()}">
-                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : '↓'}
+                <span class="modification-icon mod-${mod.type.toLowerCase().replace(' ', '-')}">
+                  ${mod.type === 'Skip' ? '−' : mod.type === 'Increase' ? '+' : mod.type === 'Decrease' ? '↓' : mod.type === 'Add Note' ? '📝' : '?'}
                 </span>
                 ${mod.type}${mod.quantityChange ? ` (${mod.quantityChange > 0 ? '+' : ''}${mod.quantityChange}L)` : ''}
                 ${mod.reason ? `<br><em>${mod.reason}</em>` : ''}

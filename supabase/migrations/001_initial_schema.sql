@@ -106,7 +106,7 @@ CREATE TABLE public.modifications (
     CONSTRAINT modifications_pkey PRIMARY KEY (id),
     CONSTRAINT modifications_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
     CONSTRAINT modifications_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
-    CONSTRAINT modifications_modification_type_check CHECK (modification_type = ANY (ARRAY['Skip'::text, 'Increase'::text, 'Decrease'::text]))
+    CONSTRAINT modifications_modification_type_check CHECK (modification_type = ANY (ARRAY['Skip'::text, 'Increase'::text, 'Decrease'::text, 'Add Note'::text])) -- Added 'Add Note' on 26-09-2025 for note-only modifications
 );
 
 -- Daily orders table: Generated orders with pricing & delivery details

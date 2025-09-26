@@ -46,7 +46,7 @@ export const subscriptionSchema = z.object({
 export const modificationSchema = z.object({
   customer_id: z.string().uuid("Please select a valid customer"),
   product_id: z.string().uuid("Please select a valid product"),
-  modification_type: z.enum(["Skip", "Increase", "Decrease"], { message: "Please select modification type" }),
+  modification_type: z.enum(["Skip", "Increase", "Decrease", "Add Note"], { message: "Please select modification type" }),
   start_date: z.date({ message: "Start date is required" }),
   end_date: z.date({ message: "End date is required" }),
   quantity_change: z.number().optional(),
@@ -64,6 +64,14 @@ export const modificationSchema = z.object({
 }, {
   message: "Quantity change is required for increase/decrease modifications",
   path: ["quantity_change"]
+}).refine((data) => {
+  if (data.modification_type === "Add Note") {
+    return data.reason !== undefined && data.reason.trim().length > 0
+  }
+  return true
+}, {
+  message: "Note is required when adding a note modification",
+  path: ["reason"]
 })
 
 export type CustomerFormData = z.infer<typeof customerSchema>
