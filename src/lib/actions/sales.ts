@@ -239,7 +239,7 @@ export async function updateSalePaymentStatus(saleId: string, status: 'Pending' 
 }
 
 // Bulk update payment status for invoice generation
-export async function markSalesAsBilled(saleIds: string[], invoiceNumber: string) {
+export async function markSalesAsBilled(saleIds: string[]) {
   const supabase = await createClient()
 
   const { error } = await supabase
@@ -517,5 +517,157 @@ export async function quickPaySale(
     return {
       error: error instanceof Error ? error.message : "Failed to process quick payment"
     }
+  }
+}
+
+export async function getSaleWithBillingDetails(saleId: string) {
+  const supabase = await createClient()
+
+  // Get basic sale information
+  const { data: sale, error: saleError } = await supabase
+    .from("sales")
+    .select(`
+      *,
+      customer:customers(*),
+      product:products(*)
+    `)
+    .eq("id", saleId)
+    .single()
+
+  if (saleError) {
+    throw new Error("Sale not found")
+  }
+
+  let billingDetails = null
+  let completionDetails = null
+
+  // If sale is 'Billed', get invoice details
+  if (sale.payment_status === 'Billed') {
+    const { data: invoiceData, error: invoiceError } = await supabase
+      .from("invoice_sales_mapping")
+      .select(`
+        invoice_id,
+        invoice_metadata!inner(
+          invoice_number,
+          invoice_date,
+          total_amount,
+          status,
+          invoice_status,
+          amount_paid,
+          amount_outstanding,
+          due_date,
+          last_payment_date
+        )
+      `)
+      .eq("sale_id", saleId)
+      .single()
+
+    if (!invoiceError && invoiceData?.invoice_metadata) {
+      const invoiceMetadata = Array.isArray(invoiceData.invoice_metadata)
+        ? invoiceData.invoice_metadata[0]
+        : invoiceData.invoice_metadata
+
+      billingDetails = {
+        invoice_number: invoiceMetadata.invoice_number,
+        invoice_date: invoiceMetadata.invoice_date,
+        total_amount: invoiceMetadata.total_amount,
+        status: invoiceMetadata.status,
+        invoice_status: invoiceMetadata.invoice_status,
+        amount_paid: invoiceMetadata.amount_paid,
+        amount_outstanding: invoiceMetadata.amount_outstanding,
+        due_date: invoiceMetadata.due_date,
+        last_payment_date: invoiceMetadata.last_payment_date
+      }
+    }
+  }
+
+  // If sale is 'Completed', get completion details
+  if (sale.payment_status === 'Completed') {
+    // Check for direct payment first
+    const { data: directPaymentData, error: directPaymentError } = await supabase
+      .from("sales_payments")
+      .select(`
+        amount_allocated,
+        created_at,
+        payments!inner(
+          id,
+          payment_date,
+          payment_method,
+          amount,
+          notes,
+          allocation_status
+        )
+      `)
+      .eq("sales_id", saleId)
+      .single()
+
+    if (!directPaymentError && directPaymentData) {
+      const paymentData = Array.isArray(directPaymentData.payments)
+        ? directPaymentData.payments[0]
+        : directPaymentData.payments
+
+      completionDetails = {
+        type: 'direct_payment',
+        amount_allocated: directPaymentData.amount_allocated,
+        payment_date: paymentData.payment_date,
+        payment_method: paymentData.payment_method,
+        total_payment_amount: paymentData.amount,
+        payment_notes: paymentData.notes,
+        allocation_status: paymentData.allocation_status,
+        payment_id: paymentData.id
+      }
+    } else {
+      // Check for invoice payment
+      const { data: invoicePaymentData, error: invoicePaymentError } = await supabase
+        .from("invoice_sales_mapping")
+        .select(`
+          invoice_metadata!inner(
+            invoice_number
+          )
+        `)
+        .eq("sale_id", saleId)
+        .single()
+
+      if (!invoicePaymentError && invoicePaymentData) {
+        const invoiceMetadata = Array.isArray(invoicePaymentData.invoice_metadata)
+          ? invoicePaymentData.invoice_metadata[0]
+          : invoicePaymentData.invoice_metadata
+
+        // Get the payment details for this invoice
+        const { data: paymentData, error: paymentError } = await supabase
+          .from("invoice_payments")
+          .select(`
+            amount_allocated,
+            payments!inner(
+              id,
+              payment_date,
+              payment_method
+            )
+          `)
+          .eq("invoice_id", invoiceMetadata.invoice_number)
+          .single()
+
+        if (!paymentError && paymentData) {
+          const paymentRecord = Array.isArray(paymentData.payments)
+            ? paymentData.payments[0]
+            : paymentData.payments
+
+          completionDetails = {
+            type: 'invoice_payment',
+            invoice_number: invoiceMetadata.invoice_number,
+            amount_allocated: paymentData.amount_allocated,
+            payment_date: paymentRecord.payment_date,
+            payment_method: paymentRecord.payment_method,
+            payment_id: paymentRecord.id
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    sale,
+    billingDetails,
+    completionDetails
   }
 }
