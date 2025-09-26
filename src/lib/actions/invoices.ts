@@ -52,6 +52,7 @@ export interface InvoiceDailySummaryItem {
     productName: string
     quantity: number
     unitOfMeasure: string
+    unitPrice: number
   }[]
 }
 
@@ -208,7 +209,8 @@ export async function prepareInvoiceData(
     const item = {
       productName: delivery.product.name,
       quantity: actualQuantity,
-      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
+      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit,
+      unitPrice: Number(delivery.unit_price)
     }
     
     if (existing) {
@@ -229,7 +231,8 @@ export async function prepareInvoiceData(
     const item = {
       productName: sale.product.name,
       quantity: Number(sale.quantity),
-      unitOfMeasure: sale.product.unit_of_measure
+      unitOfMeasure: sale.product.unit_of_measure,
+      unitPrice: Number(sale.unit_price)
     }
     
     if (existing) {
@@ -319,7 +322,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
   if (invoiceData.manualSalesItems.length > 0) {
     const saleIds = salesLineItems.map(item => item.sale_id).filter(id => id)
     if (saleIds.length > 0) {
-      await markSalesAsBilled(saleIds, invoiceData.invoiceNumber)
+      await markSalesAsBilled(saleIds)
     }
   }
 

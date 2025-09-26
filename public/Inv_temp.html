@@ -1,0 +1,301 @@
+import React from 'react';
+
+interface InvoiceItem {
+  description: string;
+  quantity: string;
+  price: string;
+  total: string;
+}
+
+interface Props {
+  customerName?: string;
+  customerAddress?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  plotAddress?: string;
+  items?: InvoiceItem[];
+  subtotal?: string;
+  gst?: string;
+  grandTotal?: string;
+}
+
+const DairyInvoice = (props: Props) => {
+  const {
+    customerName = "Mrs. Helene Paquet",
+    customerAddress = "123 Anywhere St., Any City",
+    invoiceNumber = "01234",
+    invoiceDate = "31/08/2025",
+    plotAddress = "Plot No. G-2/8, MIDC, Jalgaon - 3, MS, India.",
+    subtotal = "₹ 2,350.00",
+    gst = "₹ 175.00",
+    grandTotal = "₹ 2,175.00"
+  } = props;
+
+  const defaultItems: InvoiceItem[] = [
+    { description: "Cow Milk", quantity: "31 L", price: "₹ 25.00 per Lit", total: "₹ 775.00" },
+    { description: "Buffalo Milk", quantity: "62 L", price: "₹ 80.00 per Lit", total: "₹ 4960.00" },
+    { description: "Malai Paneer", quantity: "250 gms.", price: "₹ 480.00 per Kg", total: "₹ 120.00" }
+  ];
+
+  const items = props.items || defaultItems;
+
+  const dailySummaryData = [
+    {
+      date: "01/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "02/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "03/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "04/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "05/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "06/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "07/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "08/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "09/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "10/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "11/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "12/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "13/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "14/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "15/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "16/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "17/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "18/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "19/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "20/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "21/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "22/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "23/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "24/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "25/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "26/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "27/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "28/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "29/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "30/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    },
+    {
+      date: "31/08/2025",
+      items: ["Cow Milk - 1L", "Buffalo Milk - 2L", "Malai Paneer - 250 gms."]
+    }
+  ];
+
+  return (
+    <div className="max-w-4xl mx-auto bg-white p-8 font-sans">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-8">
+        <div className="flex items-center">
+          <div className="mr-4">
+            <div className="text-green-700 text-4xl font-bold mb-1">
+              <span className="text-green-700">👑</span>
+            </div>
+            <div className="flex items-center">
+              <span className="text-green-700 font-bold text-2xl">pure</span>
+              <span className="text-orange-500 font-bold text-2xl">Dairy</span>
+            </div>
+            <div className="w-20 h-1 bg-orange-500 mt-1"></div>
+          </div>
+        </div>
+        
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-700 mb-2">INVOICE</h1>
+        </div>
+        
+        <div className="text-right text-sm text-gray-600">
+          <p>{plotAddress}</p>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-300 mb-6"></div>
+
+      {/* Customer and Invoice Info */}
+      <div className="flex justify-between mb-8">
+        <div className="w-1/3">
+          <h3 className="font-bold text-gray-700 mb-2">CUSTOMER NAME</h3>
+          <p className="text-gray-600">{customerName}</p>
+          <p className="text-gray-600">{customerAddress}</p>
+          
+          <div className="mt-6">
+            <p className="text-gray-600">Invoice No: {invoiceNumber}</p>
+            <p className="text-gray-600">Date: {invoiceDate}</p>
+          </div>
+
+          {/* QR Code */}
+          <div className="mt-6">
+            <div className="w-32 h-32 bg-black flex items-center justify-center">
+              <img src="https://csspicker.dev/api/image/?q=qr+code&image_type=photo" alt="QR Code" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex items-center mt-2 space-x-2">
+              <span className="text-blue-600 text-xs">G</span>
+              <span className="text-blue-600 text-xs font-bold">Pay</span>
+              <span className="text-blue-600 text-xs font-bold">paytm</span>
+              <span className="text-blue-600 text-xs">PhonePe</span>
+              <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Invoice Table */}
+        <div className="w-2/3 ml-8">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-green-700 text-white">
+                <th className="text-left p-3 font-bold">ITEM DESCRIPTION</th>
+                <th className="text-center p-3 font-bold">QTY</th>
+                <th className="text-center p-3 font-bold">PRICE<br/><span className="text-xs">INCL. GST</span></th>
+                <th className="text-right p-3 font-bold">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={index} className="border-b border-gray-200">
+                  <td className="p-3 text-gray-700">{item.description}</td>
+                  <td className="p-3 text-center text-gray-700">{item.quantity}</td>
+                  <td className="p-3 text-center text-gray-700">{item.price}</td>
+                  <td className="p-3 text-right text-gray-700">{item.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals */}
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="font-bold text-gray-700">SUB TOTAL</span>
+              <span className="text-gray-700">{subtotal}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-bold text-gray-700">G.S.T.</span>
+              <span className="text-gray-700">{gst}</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg">
+              <span className="text-gray-700">GRAND TOTAL</span>
+              <span className="text-gray-700">{grandTotal}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t-2 border-dashed border-gray-400 my-8"></div>
+
+      {/* Daily Summary */}
+      <div className="border border-gray-400 p-6">
+        <h3 className="font-bold text-gray-700 mb-4">Daily Summary:</h3>
+        <div className="grid grid-cols-3 gap-6 text-sm text-gray-600">
+          {dailySummaryData.map((day, index) => (
+            <div key={index}>
+              <p className="font-semibold mb-2">{day.date} -</p>
+              {day.items.map((item, itemIndex) => (
+                <p key={itemIndex} className="ml-4">{item}</p>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-center items-center space-x-8 mt-8 text-sm text-gray-600">
+        <div className="flex items-center">
+          <span className="text-orange-500 mr-2">🌐</span>
+          <span>puredairy.net</span>
+        </div>
+        <div className="flex items-center">
+          <span className="text-orange-500 mr-2">📞</span>
+          <span>8767-206-236</span>
+        </div>
+        <div className="flex items-center">
+          <span className="text-orange-500 mr-2">✉️</span>
+          <span>info@puredairy.net</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DairyInvoice;

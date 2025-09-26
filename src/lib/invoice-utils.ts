@@ -293,6 +293,28 @@ export function getOpenSansFontCSS(): string {
 }
 
 /**
+ * Convert unit of measure to short form
+ * Used in daily summary for compact display
+ */
+function getShortUnit(unitOfMeasure: string): string {
+  const unitMap: Record<string, string> = {
+    'liter': 'L',
+    'liters': 'L',
+    'packet': 'pack',
+    'packets': 'packs',
+    'pack': 'packs',
+    'packs': 'packs',
+    'piece': 'pcs',
+    'pieces': 'pcs',
+    'kg': 'kg',
+    'gram': 'g',
+    'grams': 'g'
+  }
+
+  return unitMap[unitOfMeasure.toLowerCase()] || unitOfMeasure
+}
+
+/**
  * Format daily summary data for 4-column layout
  * Distributes transaction days dynamically across columns
  */
@@ -302,6 +324,7 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
     productName: string
     quantity: number
     unitOfMeasure: string
+    unitPrice: number
   }>
 }>): Array<Array<{
   date: string
@@ -315,9 +338,11 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
       month: 'short', 
       day: 'numeric' 
     }).format(new Date(day.date)),
-    items: day.items.map(item => 
-      `${item.productName} - ${item.quantity} ${item.unitOfMeasure}`
-    )
+    items: day.items.map(item => {
+      const shortUnit = getShortUnit(item.unitOfMeasure)
+      const totalPrice = item.quantity * item.unitPrice
+      return `${item.productName} - ${item.quantity} ${shortUnit} - ₹${totalPrice.toFixed(0)}`
+    })
   }))
 
   // Distribute into 4 columns dynamically
