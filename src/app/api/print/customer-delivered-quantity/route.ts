@@ -115,32 +115,46 @@ function createCustomerProductSummary(deliveries: DeliveryExtended[]) {
   // Get unique products
   const products = [...new Set(deliveredItems.map(d => d.product?.name || 'Unknown Product'))].sort()
 
-  // Group by customer and calculate totals per product
+  // Group by customer and calculate totals per product (both quantity and amount)
   const customerSummary = deliveredItems.reduce((acc, delivery) => {
     const customerName = delivery.customer?.billing_name || 'Unknown Customer'
     const productName = delivery.product?.name || 'Unknown Product'
     const quantity = delivery.actual_quantity || 0
+    const amount = delivery.total_amount || 0
 
     if (!acc[customerName]) {
       acc[customerName] = {}
     }
 
     if (!acc[customerName][productName]) {
-      acc[customerName][productName] = 0
+      acc[customerName][productName] = { quantity: 0, amount: 0 }
     }
 
-    acc[customerName][productName] += quantity
+    acc[customerName][productName].quantity += quantity
+    acc[customerName][productName].amount += amount
 
     return acc
-  }, {} as Record<string, Record<string, number>>)
+  }, {} as Record<string, Record<string, { quantity: number, amount: number }>>)
 
-  // Calculate product totals
+  // Calculate product totals (both quantity and amount)
   const productTotals = products.reduce((acc, product) => {
-    acc[product] = Object.values(customerSummary).reduce((total, customerData) => {
-      return total + (customerData[product] || 0)
-    }, 0)
+    const totals = Object.values(customerSummary).reduce((total, customerData) => {
+      const productData = customerData[product] || { quantity: 0, amount: 0 }
+      return {
+        quantity: total.quantity + productData.quantity,
+        amount: total.amount + productData.amount
+      }
+    }, { quantity: 0, amount: 0 })
+
+    acc[product] = totals
     return acc
-  }, {} as Record<string, number>)
+  }, {} as Record<string, { quantity: number, amount: number }>)
+
+  // Calculate grand totals
+  const grandTotals = Object.values(productTotals).reduce((sum, totals) => ({
+    quantity: sum.quantity + totals.quantity,
+    amount: sum.amount + totals.amount
+  }), { quantity: 0, amount: 0 })
 
   return {
     customerSummary,
@@ -148,7 +162,7 @@ function createCustomerProductSummary(deliveries: DeliveryExtended[]) {
     productTotals,
     totalCustomers: Object.keys(customerSummary).length,
     totalDeliveries: deliveredItems.length,
-    grandTotal: Object.values(productTotals).reduce((sum, total) => sum + total, 0)
+    grandTotals
   }
 }
 
@@ -326,7 +340,7 @@ export async function GET(request: NextRequest) {
 
     .summary-stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 12px;
       margin-bottom: 25px;
     }
@@ -400,6 +414,12 @@ export async function GET(request: NextRequest) {
       font-weight: bold;
     }
 
+    .summary-table .amount {
+      text-align: right;
+      font-weight: bold;
+      color: #333;
+    }
+
     .summary-table .total-row {
       background: #e9ecef !important;
       font-weight: bold;
@@ -466,7 +486,11 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="stat-card">
       <h3>Total Quantity</h3>
-      <div class="value">${summary.grandTotal}L</div>
+      <div class="value">${summary.grandTotals.quantity.toFixed(2)}L</div>
+    </div>
+    <div class="stat-card">
+      <h3>Total Amount</h3>
+      <div class="value">₹${summary.grandTotals.amount.toFixed(2)}</div>
     </div>
   </div>
 
@@ -477,24 +501,30 @@ export async function GET(request: NextRequest) {
       <tr>
         <th class="customer-name">Customer Name</th>
         ${summary.products.map(product =>
-          `<th class="quantity">${product}</th>`
+          `<th class="quantity">${product} Qty</th><th class="amount">${product} Amount</th>`
         ).join('')}
-        <th class="quantity">Total</th>
+        <th class="quantity">Total Qty</th>
+        <th class="amount">Total Amount</th>
       </tr>
     </thead>
     <tbody>
       ${Object.entries(summary.customerSummary)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([customerName, customerProducts]) => {
-          const customerTotal = Object.values(customerProducts).reduce((sum, qty) => sum + qty, 0)
+          const customerTotals = Object.values(customerProducts).reduce((sum, data) => ({
+            quantity: sum.quantity + data.quantity,
+            amount: sum.amount + data.amount
+          }), { quantity: 0, amount: 0 })
+
           return `
           <tr>
             <td class="customer-name">${customerName}</td>
             ${summary.products.map(product => {
-              const quantity = customerProducts[product] || 0
-              return `<td class="quantity">${quantity > 0 ? quantity + 'L' : '-'}</td>`
+              const productData = customerProducts[product] || { quantity: 0, amount: 0 }
+              return `<td class="quantity">${productData.quantity > 0 ? productData.quantity.toFixed(2) + 'L' : '-'}</td><td class="amount">${productData.amount > 0 ? '₹' + productData.amount.toFixed(2) : '-'}</td>`
             }).join('')}
-            <td class="quantity" style="font-weight: bold; color: #22c55e;">${customerTotal}L</td>
+            <td class="quantity" style="font-weight: bold; color: #15803d;">${customerTotals.quantity.toFixed(2)}L</td>
+            <td class="amount" style="font-weight: bold; color: #15803d;">₹${customerTotals.amount.toFixed(2)}</td>
           </tr>
           `
         }).join('')}
@@ -502,9 +532,10 @@ export async function GET(request: NextRequest) {
       <tr class="total-row">
         <td class="customer-name">TOTAL</td>
         ${summary.products.map(product =>
-          `<td class="quantity">${summary.productTotals[product]}L</td>`
+          `<td class="quantity">${summary.productTotals[product].quantity.toFixed(2)}L</td><td class="amount">₹${summary.productTotals[product].amount.toFixed(2)}</td>`
         ).join('')}
-        <td class="quantity">${summary.grandTotal}L</td>
+        <td class="quantity" style="color: #15803d;">${summary.grandTotals.quantity.toFixed(2)}L</td>
+        <td class="amount" style="color: #15803d;">₹${summary.grandTotals.amount.toFixed(2)}</td>
       </tr>
     </tbody>
   </table>
