@@ -85,7 +85,7 @@ export function InvoiceAllocationSection({
 
       setUnpaidInvoices(invoices)
       setPendingCreditSales(pendingSales)
-      const customerOpeningBalance = customerData.openingBalance || 0
+      const customerOpeningBalance = customerData.effectiveOpeningBalance || 0
       setOpeningBalance(customerOpeningBalance)
       
       // Initialize allocations - opening balance first, then invoices
