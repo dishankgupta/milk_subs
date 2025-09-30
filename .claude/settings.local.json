@@ -47,7 +47,8 @@
       "Bash(npx vitest:*)",
       "mcp__supabase__list_extensions",
       "mcp__supabase__list_migrations",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(git log:*)"
     ]
   },
   "enabledMcpjsonServers": [
