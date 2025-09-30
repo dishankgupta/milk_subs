@@ -160,7 +160,7 @@ export async function createDelivery(data: DeliveryFormData) {
     order_date: formatDateForDatabase(data.order_date),
     delivery_time: data.delivery_time,
     unit_price: data.unit_price,
-    total_amount: data.total_amount,
+    // total_amount is now a computed column (actual_quantity * unit_price) - cannot be manually set
     planned_quantity: data.planned_quantity || null,
     delivery_status: data.delivery_status || 'pending',
     actual_quantity: data.actual_quantity,
@@ -261,7 +261,7 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
       order_date: order.order_date,
       delivery_time: order.delivery_time,
       unit_price: order.unit_price,
-      total_amount: order.total_amount,
+      // total_amount is now a computed column (actual_quantity * unit_price) - cannot be manually set
       planned_quantity: order.planned_quantity,
       delivery_status: 'delivered',
       actual_quantity: actualQuantity,
@@ -283,7 +283,7 @@ export async function createBulkDeliveries(data: BulkDeliveryFormData) {
           order_date: formatDateForDatabase(getCurrentISTDate()),
           delivery_time: 'Morning', // Default for additional items
           unit_price: item.unit_price,
-          total_amount: item.quantity * item.unit_price,
+          // total_amount is now a computed column (actual_quantity * unit_price) - cannot be manually set
           delivery_status: 'delivered',
           actual_quantity: item.quantity,
           delivery_notes: item.notes || null,
@@ -344,7 +344,7 @@ export async function updateDelivery(id: string, data: Partial<DeliveryFormData>
   if (data.order_date !== undefined) updateData.order_date = formatDateForDatabase(data.order_date)
   if (data.delivery_time !== undefined) updateData.delivery_time = data.delivery_time
   if (data.unit_price !== undefined) updateData.unit_price = data.unit_price
-  if (data.total_amount !== undefined) updateData.total_amount = data.total_amount
+  // total_amount is now a computed column (actual_quantity * unit_price) - cannot be manually set
   if (data.planned_quantity !== undefined) updateData.planned_quantity = data.planned_quantity
   if (data.delivery_status !== undefined) updateData.delivery_status = data.delivery_status
   

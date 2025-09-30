@@ -85,7 +85,7 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
       order_date: delivery?.order_date ? new Date(delivery.order_date) : new Date(initialData?.order_date || Date.now()),
       delivery_time: (delivery?.delivery_time || initialData?.delivery_time || "Morning") as "Morning" | "Evening",
       unit_price: delivery?.unit_price || initialData?.unit_price || 0,
-      total_amount: delivery?.total_amount || initialData?.total_amount || 0,
+      // total_amount is now a computed column (actual_quantity * unit_price) - removed from form
       planned_quantity: delivery?.planned_quantity || initialData?.planned_quantity || undefined,
       delivery_status: delivery?.delivery_status || undefined, // Let default in schema handle this
       actual_quantity: delivery?.actual_quantity || orderData?.planned_quantity || 0,

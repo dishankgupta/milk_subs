@@ -53,7 +53,7 @@ export function AdditionalDeliveryForm({ products, customers, routes }: Addition
       order_date: getCurrentISTDate(),
       delivery_time: "Morning",
       unit_price: 0,
-      total_amount: 0,
+      // total_amount is now a computed column (actual_quantity * unit_price) - removed from form
       planned_quantity: undefined, // No planned quantity for additional items
       delivery_status: "delivered",
       actual_quantity: 0, // Will be sum of additional items
@@ -84,7 +84,7 @@ export function AdditionalDeliveryForm({ products, customers, routes }: Addition
       setValue("product_id", firstProduct.product.id)
       setValue("unit_price", firstProduct.product.current_price)
       setValue("actual_quantity", totalQuantity)
-      setValue("total_amount", totalAmount)
+      // total_amount is now a computed column - no need to set it
       
       // Set additional items
       setValue("additional_items", selectedProducts.map(item => ({
@@ -98,7 +98,7 @@ export function AdditionalDeliveryForm({ products, customers, routes }: Addition
       setValue("product_id", "")
       setValue("unit_price", 0)
       setValue("actual_quantity", 0)
-      setValue("total_amount", 0)
+      // total_amount is now a computed column - no need to set it
       setValue("additional_items", [])
     }
   }, [selectedProducts, totalQuantity, totalAmount, setValue])

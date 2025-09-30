@@ -346,8 +346,8 @@ export const deliverySchema = z.object({
   
   // NEW: Pricing fields
   unit_price: z.number().positive("Unit price must be positive"),
-  total_amount: z.number().positive("Total amount must be positive"),
-  
+  // total_amount is now a computed column in database (actual_quantity * unit_price) - removed from validation
+
   // MODIFIED: Now optional for additional items
   planned_quantity: z.number().min(0, "Planned quantity cannot be negative").optional(),
   
