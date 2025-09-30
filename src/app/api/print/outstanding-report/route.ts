@@ -5,6 +5,62 @@ import { formatCurrency, parseLocalDate } from '@/lib/utils'
 import { getCurrentISTDate, formatDateIST, formatDateTimeIST } from '@/lib/date-utils'
 import type { OutstandingCustomerData, OutstandingReportSummary } from '@/lib/types/outstanding-reports'
 
+// Helper function to sort customers based on sort key and direction
+function sortCustomers(
+  customers: OutstandingCustomerData[],
+  sortKey: string,
+  sortDirection: 'asc' | 'desc'
+): OutstandingCustomerData[] {
+  const sorted = [...customers].sort((a, b) => {
+    let aValue: number | string = 0
+    let bValue: number | string = 0
+
+    // Extract the value based on the sort key (matching dashboard logic)
+    switch (sortKey) {
+      case 'customer.billing_name':
+        aValue = a.customer.billing_name
+        bValue = b.customer.billing_name
+        break
+      case 'opening_balance':
+        aValue = a.opening_balance
+        bValue = b.opening_balance
+        break
+      case 'subscription_amount':
+        aValue = a.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+        bValue = b.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+        break
+      case 'manual_sales_amount':
+        aValue = a.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+        bValue = b.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+        break
+      case 'payments_amount':
+        aValue = a.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+        bValue = b.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+        break
+      case 'total_outstanding':
+        aValue = a.total_outstanding
+        bValue = b.total_outstanding
+        break
+      default:
+        aValue = a.customer.billing_name
+        bValue = b.customer.billing_name
+    }
+
+    // Compare values
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sortDirection === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue)
+    } else {
+      return sortDirection === 'asc'
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    }
+  })
+
+  return sorted
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -13,6 +69,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date')
     const customerSelection = searchParams.get('customer_selection') || 'with_outstanding'
     const selectedCustomerIds = searchParams.get('selected_customer_ids')?.split(',')
+    const sortKey = searchParams.get('sort_key') || 'customer.billing_name'
+    const sortDirection = searchParams.get('sort_direction') || 'asc'
 
     if (!startDate || !endDate) {
       return new Response('Missing required date parameters', { status: 400 })
@@ -24,6 +82,9 @@ export async function GET(request: NextRequest) {
       customer_selection: customerSelection as 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'selected',
       selected_customer_ids: selectedCustomerIds
     })
+
+    // Apply sorting based on the sort configuration from the dashboard
+    reportData.customers = sortCustomers(reportData.customers, sortKey, sortDirection as 'asc' | 'desc')
 
     let html: string
     switch (printType) {
@@ -169,7 +230,6 @@ function generateSummaryHTML(
       </thead>
       <tbody>
         ${reportData.customers
-          .sort((a, b) => b.total_outstanding - a.total_outstanding) // Sort by outstanding desc
           .map(customer => `
             <tr>
               <td>

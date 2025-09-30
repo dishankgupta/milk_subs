@@ -179,12 +179,14 @@ export function OutstandingReport() {
 
   const printReport = (printType: 'summary' | 'statements' | 'complete') => {
     if (!reportData) return
-    
+
     const params = new URLSearchParams({
       type: printType,
       start_date: formatDateForAPI(form.getValues("start_date")),
       end_date: formatDateForAPI(form.getValues("end_date")),
       customer_selection: form.getValues("customer_selection"),
+      sort_key: sortConfig?.key || 'customer.billing_name',
+      sort_direction: sortConfig?.direction || 'asc',
     })
 
     if (printType === 'statements' && selectedCustomers.size > 0) {
