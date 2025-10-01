@@ -231,6 +231,49 @@ function generateCustomerStatementsHTML(
       </div>
       ` : ''}
 
+      <!-- Invoices Section -->
+      ${customerData.invoice_breakdown.length > 0 ? `
+      <div class="transaction-section">
+        <h4>Invoices</h4>
+        <table class="transaction-table">
+          <thead>
+            <tr>
+              <th>Invoice Number</th>
+              <th>Invoice Date</th>
+              <th style="text-align: right;">Amount</th>
+              <th>Status</th>
+              <th>Payment Date(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${customerData.invoice_breakdown.map(invoiceGroup =>
+              invoiceGroup.invoice_details.map(invoice => `
+                <tr>
+                  <td>${invoice.invoice_number}</td>
+                  <td>${formatDateIST(new Date(invoice.invoice_date))}</td>
+                  <td style="text-align: right;">${formatCurrency(invoice.total_amount)}</td>
+                  <td>
+                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; background: ${
+                      invoice.invoice_status === 'paid' || invoice.invoice_status === 'completed' ? '#dcfce7' :
+                      invoice.invoice_status === 'partially_paid' ? '#fef3c7' :
+                      invoice.invoice_status === 'overdue' ? '#fee2e2' : '#e0e7ff'
+                    }; color: ${
+                      invoice.invoice_status === 'paid' || invoice.invoice_status === 'completed' ? '#166534' :
+                      invoice.invoice_status === 'partially_paid' ? '#92400e' :
+                      invoice.invoice_status === 'overdue' ? '#991b1b' : '#3730a3'
+                    };">
+                      ${invoice.invoice_status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>${invoice.payment_dates.length > 0 ? invoice.payment_dates.map(date => formatDateIST(new Date(date))).join(', ') : '-'}</td>
+                </tr>
+              `).join('')
+            ).join('')}
+          </tbody>
+        </table>
+      </div>
+      ` : ''}
+
       <!-- Final Balance -->
       <div class="balance-summary final-balance">
         <div class="balance-row total-row">

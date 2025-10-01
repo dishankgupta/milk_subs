@@ -4,18 +4,20 @@ import { createClient } from "@/lib/supabase/server"
 import { formatDateForAPI } from "@/lib/utils"
 import type { Customer } from "@/lib/types"
 import { formatTimestampForDatabase, getCurrentISTDate, addDaysIST, formatDateForDatabase } from "@/lib/date-utils"
-import type { 
-  OutstandingReportConfiguration, 
+import type {
+  OutstandingReportConfiguration,
   OutstandingCustomerData,
   OutstandingReportSummary,
   MonthlySubscriptionBreakdown,
   ManualSalesBreakdown,
   PaymentBreakdown,
   UnappliedPaymentsBreakdown,
+  InvoiceBreakdown,
   SubscriptionProductDetail,
   ManualSaleDetail,
   PaymentDetail,
-  UnappliedPaymentDetail
+  UnappliedPaymentDetail,
+  InvoiceDetail
 } from "@/lib/types/outstanding-reports"
 
 /**
@@ -259,12 +261,14 @@ export async function generateOutstandingReport(
     subscriptionData,
     salesData,
     paymentData,
+    invoiceData,
     unappliedPaymentsData
   ] = await Promise.all([
     calculateOpeningBalancesBatch(customerIds, startDate), // Opening balance as of start_date - 1
     getSubscriptionBreakdownBatch(customerIds, startDate, endDate),
     getManualSalesBreakdownBatch(customerIds, startDate, endDate),
     getPaymentBreakdownBatch(customerIds, startDate, endDate),
+    getInvoiceBreakdownBatch(customerIds, startDate, endDate),
     getUnappliedPaymentsBreakdownBatch(customerIds)
   ])
 
@@ -312,6 +316,7 @@ export async function generateOutstandingReport(
     const subscriptionBreakdown = subscriptionData.get(customerSummary.customer_id) || []
     const manualSalesBreakdown = salesData.get(customerSummary.customer_id) || []
     const paymentBreakdown = paymentData.get(customerSummary.customer_id) || []
+    const invoiceBreakdown = invoiceData.get(customerSummary.customer_id) || []
     const unappliedPaymentsBreakdown = unappliedPaymentsData.get(customerSummary.customer_id)
     const openingBalance = openingBalancesData.get(customerSummary.customer_id) || 0
 
@@ -335,6 +340,7 @@ export async function generateOutstandingReport(
       subscription_breakdown: subscriptionBreakdown,
       manual_sales_breakdown: manualSalesBreakdown,
       payment_breakdown: paymentBreakdown,
+      invoice_breakdown: invoiceBreakdown,
       unapplied_payments_breakdown: unappliedPaymentsBreakdown,
       current_outstanding: customerSummary.invoice_outstanding,
       total_outstanding: calculatedTotalOutstanding
@@ -661,6 +667,101 @@ async function getPaymentBreakdownBatch(
     breakdown.total_amount += Number(row.amount)
   }
   
+  return customerMap
+}
+
+async function getInvoiceBreakdownBatch(
+  customerIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Map<string, InvoiceBreakdown[]>> {
+  const supabase = await createClient()
+
+  // Query invoices in the period
+  const { data: invoiceData, error: invoiceError } = await supabase
+    .from("invoice_metadata")
+    .select(`
+      id,
+      customer_id,
+      invoice_number,
+      invoice_date,
+      total_amount,
+      invoice_status
+    `)
+    .in("customer_id", customerIds)
+    .gte("invoice_date", startDate)
+    .lte("invoice_date", endDate)
+    .order("customer_id, invoice_date")
+
+  if (invoiceError) {
+    console.error("Invoice breakdown error:", invoiceError)
+    throw new Error("Failed to fetch invoice breakdown")
+  }
+
+  // Query invoice payments to get payment dates
+  const invoiceIds = (invoiceData || []).map(inv => inv.id)
+  let invoicePaymentsMap = new Map<string, string[]>()
+
+  if (invoiceIds.length > 0) {
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from("invoice_payments")
+      .select(`
+        invoice_id,
+        payment:payments (
+          payment_date
+        )
+      `)
+      .in("invoice_id", invoiceIds)
+      .order("invoice_id")
+
+    if (!paymentsError && paymentsData) {
+      for (const paymentRow of paymentsData) {
+        if (!invoicePaymentsMap.has(paymentRow.invoice_id)) {
+          invoicePaymentsMap.set(paymentRow.invoice_id, [])
+        }
+        const payment = Array.isArray(paymentRow.payment) ? paymentRow.payment[0] : paymentRow.payment
+        if (payment?.payment_date) {
+          invoicePaymentsMap.get(paymentRow.invoice_id)!.push(payment.payment_date)
+        }
+      }
+    }
+  }
+
+  // Group by customer
+  const customerMap = new Map<string, InvoiceBreakdown[]>()
+
+  // Handle case where no invoice data exists
+  if (!invoiceData || invoiceData.length === 0) {
+    return customerMap
+  }
+
+  for (const invoice of invoiceData) {
+    if (!customerMap.has(invoice.customer_id)) {
+      customerMap.set(invoice.customer_id, [])
+    }
+
+    const customerBreakdowns = customerMap.get(invoice.customer_id)!
+    let breakdown = customerBreakdowns[0]
+
+    if (!breakdown) {
+      breakdown = {
+        invoice_details: []
+      }
+      customerBreakdowns.push(breakdown)
+    }
+
+    const invoiceDetail: InvoiceDetail = {
+      invoice_id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      invoice_date: invoice.invoice_date,
+      total_amount: Number(invoice.total_amount),
+      invoice_status: invoice.invoice_status,
+      payment_dates: invoicePaymentsMap.get(invoice.id) || []
+    }
+
+    breakdown.invoice_details.push(invoiceDetail)
+  }
+
   return customerMap
 }
 
