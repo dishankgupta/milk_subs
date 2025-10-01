@@ -15,12 +15,18 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customer_id')
     const periodStart = searchParams.get('period_start')
     const periodEnd = searchParams.get('period_end')
+    const invoiceDateOverride = searchParams.get('invoice_date_override')
+    const invoiceNumberOverride = searchParams.get('invoice_number_override')
+
     if (!customerId || !periodStart || !periodEnd) {
       return new Response('Missing required parameters', { status: 400 })
     }
 
-    // If invoice number provided, use it; otherwise generate new one
-    const invoiceData = await prepareInvoiceData(customerId, periodStart, periodEnd)
+    // Prepare invoice data with optional overrides
+    const invoiceData = await prepareInvoiceData(customerId, periodStart, periodEnd, {
+      invoiceDateOverride: invoiceDateOverride || undefined,
+      invoiceNumberOverride: invoiceNumberOverride || undefined
+    })
 
     const html = generateInvoiceHTML(invoiceData)
 

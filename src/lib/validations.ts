@@ -519,7 +519,9 @@ export const bulkInvoiceSchema = z.object({
   period_end: z.date(),
   customer_selection: z.enum(['all', 'with_unbilled_deliveries', 'with_unbilled_credit_sales', 'with_unbilled_transactions', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional(),
-  output_folder: z.string().min(1, "Output folder is required")
+  output_folder: z.string().min(1, "Output folder is required"),
+  invoice_date_override: z.date().optional(),
+  invoice_number_override: z.string().regex(/^\d{11}$/, "Invoice number must be 11 digits (e.g., 20242500001)").optional()
 }).refine((data) => {
   // End date must be after start date
   if (data.period_end <= data.period_start) {
@@ -527,7 +529,7 @@ export const bulkInvoiceSchema = z.object({
   }
   return true
 }, {
-  message: "End date must be after start date", 
+  message: "End date must be after start date",
   path: ["period_end"]
 }).refine((data) => {
   // Selected customers must be provided if selection is 'selected'
@@ -548,7 +550,9 @@ export const singleInvoiceSchema = z.object({
   period_end: z.date(),
   include_subscriptions: z.boolean(),
   include_credit_sales: z.boolean(),
-  output_folder: z.string().optional()
+  output_folder: z.string().optional(),
+  invoice_date_override: z.date().optional(),
+  invoice_number_override: z.string().regex(/^\d{11}$/, "Invoice number must be 11 digits (e.g., 20242500001)").optional()
 }).refine((data) => {
   // End date must be after start date
   if (data.period_end <= data.period_start) {

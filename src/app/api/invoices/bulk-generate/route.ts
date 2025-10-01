@@ -9,6 +9,8 @@ interface BulkGenerationParams {
   period_end: string
   customer_ids: string[]
   output_folder: string
+  invoice_date_override?: string
+  invoice_number_start_override?: string
 }
 
 interface ProgressUpdate {
@@ -24,11 +26,11 @@ interface ProgressUpdate {
 
 export async function POST(request: NextRequest) {
   const params: BulkGenerationParams = await request.json()
-  const { output_folder, customer_ids, period_start, period_end } = params
+  const { output_folder, customer_ids, period_start, period_end, invoice_date_override, invoice_number_start_override } = params
 
   // Set up Server-Sent Events
   const encoder = new TextEncoder()
-  
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
 
         // Create dated subfolder
         const dateFolder = await invoiceFileManager.createDateFolder(output_folder)
-        
+
         const results = {
           successful: 0,
           errors: [] as string[],
@@ -52,6 +54,12 @@ export async function POST(request: NextRequest) {
         }
 
         const individualPdfPaths: string[] = []
+
+        // Calculate starting invoice number if override provided
+        let currentInvoiceNumber: string | undefined
+        if (invoice_number_start_override) {
+          currentInvoiceNumber = invoice_number_start_override
+        }
 
         // Process each customer
         for (let i = 0; i < customer_ids.length; i++) {
@@ -77,9 +85,18 @@ export async function POST(request: NextRequest) {
             }
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(progressUpdate)}\n\n`))
 
-            // Prepare invoice data
-            const invoiceData = await prepareInvoiceData(customerId, period_start, period_end)
-            
+            // Prepare invoice data with overrides
+            const invoiceData = await prepareInvoiceData(customerId, period_start, period_end, {
+              invoiceDateOverride: invoice_date_override,
+              invoiceNumberOverride: currentInvoiceNumber
+            })
+
+            // If using invoice number override, increment for next customer
+            if (currentInvoiceNumber && invoice_number_start_override) {
+              const numValue = parseInt(currentInvoiceNumber, 10)
+              currentInvoiceNumber = (numValue + 1).toString().padStart(11, '0')
+            }
+
             // Generate PDF file name
             const sanitizedCustomerName = invoiceFileManager.sanitizeFilename(
               invoiceData.customer.billing_name

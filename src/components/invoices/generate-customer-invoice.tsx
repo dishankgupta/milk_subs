@@ -42,7 +42,9 @@ export function GenerateCustomerInvoice({
     period_start: new Date(getCurrentISTDate().getFullYear(), getCurrentISTDate().getMonth(), 1),
     period_end: getCurrentISTDate(),
     include_subscriptions: true,
-    include_credit_sales: true
+    include_credit_sales: true,
+    invoice_date_override: undefined as Date | undefined,
+    invoice_number_override: undefined as string | undefined
   })
 
   const loadPreview = async () => {
@@ -72,12 +74,27 @@ export function GenerateCustomerInvoice({
   const handleGenerate = async () => {
     setIsLoading(true)
     try {
+      // Build query params with overrides
+      const params = new URLSearchParams({
+        customer_id: customerId,
+        period_start: formatDateForAPI(formData.period_start),
+        period_end: formatDateForAPI(formData.period_end)
+      })
+
+      // Add optional overrides if provided
+      if (formData.invoice_date_override) {
+        params.append('invoice_date_override', formatDateForAPI(formData.invoice_date_override))
+      }
+      if (formData.invoice_number_override) {
+        params.append('invoice_number_override', formData.invoice_number_override)
+      }
+
       // Generate the preview URL for this customer
-      const previewUrl = `/api/print/customer-invoice?customer_id=${customerId}&period_start=${formatDateForAPI(formData.period_start)}&period_end=${formatDateForAPI(formData.period_end)}`
-      
+      const previewUrl = `/api/print/customer-invoice?${params.toString()}`
+
       // Open in new window
       window.open(previewUrl, '_blank')
-      
+
       toast.success("Invoice opened in new tab")
       setIsOpen(false)
     } catch (error) {
@@ -192,6 +209,60 @@ export function GenerateCustomerInvoice({
                 <Label htmlFor="include_credit_sales">Credit Sales</Label>
               </div>
             </div>
+          </div>
+
+          {/* Invoice Date Override */}
+          <div className="space-y-2">
+            <Label>Invoice Date (Optional)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !formData.invoice_date_override && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.invoice_date_override ? (
+                    format(formData.invoice_date_override, "PPP")
+                  ) : (
+                    "Use current date (default)"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={formData.invoice_date_override}
+                  onSelect={(date) => {
+                    setFormData(prev => ({ ...prev, invoice_date_override: date || undefined }))
+                    setPreviewData(null)
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to use current IST date
+            </p>
+          </div>
+
+          {/* Invoice Number Override */}
+          <div className="space-y-2">
+            <Label>Invoice Number (Optional)</Label>
+            <Input
+              value={formData.invoice_number_override || ""}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, invoice_number_override: e.target.value || undefined }))
+                setPreviewData(null)
+              }}
+              placeholder="e.g., 20242500001 (leave empty for auto)"
+              maxLength={11}
+            />
+            <p className="text-xs text-muted-foreground">
+              Format: 11 digits. Leave empty to auto-generate
+            </p>
           </div>
 
           {/* Load Preview */}

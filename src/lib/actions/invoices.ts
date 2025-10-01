@@ -85,7 +85,11 @@ export interface GenerationProgress {
 export async function prepareInvoiceData(
   customerId: string,
   periodStart: string,
-  periodEnd: string
+  periodEnd: string,
+  options?: {
+    invoiceDateOverride?: string
+    invoiceNumberOverride?: string
+  }
 ): Promise<InvoiceData> {
   const supabase = await createClient()
 
@@ -136,8 +140,14 @@ export async function prepareInvoiceData(
     throw new Error("Failed to fetch manual sales")
   }
 
-  // Generate invoice number
-  const { invoiceNumber } = await getNextInvoiceNumber()
+  // Generate invoice number (use override if provided, otherwise auto-generate)
+  let invoiceNumber: string
+  if (options?.invoiceNumberOverride) {
+    invoiceNumber = options.invoiceNumberOverride
+  } else {
+    const result = await getNextInvoiceNumber()
+    invoiceNumber = result.invoiceNumber
+  }
 
   // Process all delivery items - separate line items for different prices
   const deliveryItemsMap = new Map<string, InvoiceSubscriptionItem>()
@@ -270,10 +280,15 @@ export async function prepareInvoiceData(
   const totalGstAmount = manualSalesItems.reduce((sum, item) => sum + item.gstAmount, 0)
   const grandTotal = deliveryAmount + manualSalesAmount
 
+  // Determine invoice date (use override if provided, otherwise use current IST date)
+  const invoiceDate = options?.invoiceDateOverride
+    ? options.invoiceDateOverride
+    : formatDateForDatabase(getCurrentISTDate())
+
   return {
     customer,
     invoiceNumber,
-    invoiceDate: formatDateForDatabase(getCurrentISTDate()),
+    invoiceDate,
     periodStart,
     periodEnd,
     deliveryItems,
@@ -602,6 +617,8 @@ export async function generateBulkInvoices(params: {
   period_end: string
   customer_ids: string[]
   output_folder: string
+  invoice_date_override?: string
+  invoice_number_start_override?: string
 }): Promise<{
   successful: number
   errors: string[]
@@ -660,10 +677,16 @@ export async function generateBulkInvoices(params: {
 
   const individualPdfPaths: string[] = []
 
+  // Calculate starting invoice number if override provided
+  let currentInvoiceNumber: string | undefined
+  if (params.invoice_number_start_override) {
+    currentInvoiceNumber = params.invoice_number_start_override
+  }
+
   try {
     for (let i = 0; i < customer_ids.length; i++) {
       const customerId = customer_ids[i]
-      
+
       try {
         // Get customer name for progress
         const { data: customer } = await supabase
@@ -674,8 +697,17 @@ export async function generateBulkInvoices(params: {
 
         progress.currentCustomer = customer?.billing_name || `Customer ${i + 1}`
 
-        // Prepare invoice data
-        const invoiceData = await prepareInvoiceData(customerId, period_start, period_end)
+        // Prepare invoice data with overrides
+        const invoiceData = await prepareInvoiceData(customerId, period_start, period_end, {
+          invoiceDateOverride: params.invoice_date_override,
+          invoiceNumberOverride: currentInvoiceNumber
+        })
+
+        // If using invoice number override, increment for next customer
+        if (currentInvoiceNumber && params.invoice_number_start_override) {
+          const numValue = parseInt(currentInvoiceNumber, 10)
+          currentInvoiceNumber = (numValue + 1).toString().padStart(11, '0')
+        }
         
         // Generate PDF file name
         const sanitizedCustomerName = invoiceFileManager.sanitizeFilename(
@@ -758,6 +790,8 @@ export async function generateSingleInvoice(params: {
   include_subscriptions: boolean
   include_credit_sales: boolean
   output_folder?: string
+  invoice_date_override?: string
+  invoice_number_override?: string
 }): Promise<{
   invoiceNumber: string
   pdfPath: string | null
@@ -766,7 +800,11 @@ export async function generateSingleInvoice(params: {
   const invoiceData = await prepareInvoiceData(
     params.customer_id,
     params.period_start,
-    params.period_end
+    params.period_end,
+    {
+      invoiceDateOverride: params.invoice_date_override,
+      invoiceNumberOverride: params.invoice_number_override
+    }
   )
 
   if (params.output_folder) {

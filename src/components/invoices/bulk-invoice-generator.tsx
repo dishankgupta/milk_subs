@@ -131,7 +131,9 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
       period_end: undefined,
       customer_selection: "with_unbilled_transactions",
       selected_customer_ids: [],
-      output_folder: ""
+      output_folder: "",
+      invoice_date_override: undefined,
+      invoice_number_override: undefined
     }
   })
 
@@ -224,16 +226,21 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
 
     try {
       // Use EventSource for real-time progress updates
+      const formData = form.getValues()
       const response = await fetch('/api/invoices/bulk-generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          period_start: formatDateForAPI(form.getValues("period_start")),
-          period_end: formatDateForAPI(form.getValues("period_end")),
+          period_start: formatDateForAPI(formData.period_start),
+          period_end: formatDateForAPI(formData.period_end),
           customer_ids: Array.from(selectedCustomers),
-          output_folder: outputFolder
+          output_folder: outputFolder,
+          invoice_date_override: formData.invoice_date_override
+            ? formatDateForAPI(formData.invoice_date_override)
+            : undefined,
+          invoice_number_start_override: formData.invoice_number_override || undefined
         }),
         signal: abortControllerRef.current.signal
       })
@@ -496,7 +503,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
               onChange={(e) => setOutputFolder(e.target.value)}
               placeholder="Enter full folder path (e.g., C:\PureDairy\Invoices)"
             />
-            
+
             {/* Quick Select Buttons */}
             <div className="space-y-2">
               <div className="text-sm font-medium text-gray-700">Quick Select:</div>
@@ -515,7 +522,7 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                 ))}
               </div>
             </div>
-            
+
             <div className="bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
               <div className="text-sm font-medium text-blue-800">📁 Folder Path Format:</div>
               <div className="text-xs text-blue-700 space-y-1">
@@ -524,6 +531,54 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
                 <div>• PDFs will be saved in: <code className="bg-white px-1 rounded">{outputFolder || "[folder]"}/YYYYMMDD_generated_invoices/</code></div>
               </div>
             </div>
+          </div>
+
+          {/* Invoice Date Override */}
+          <div className="space-y-2">
+            <Label>Invoice Date (Optional Override)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !form.watch("invoice_date_override") && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {form.watch("invoice_date_override") ? (
+                    format(form.watch("invoice_date_override") as Date, "PPP")
+                  ) : (
+                    "Use current date (default)"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={form.watch("invoice_date_override") as Date | undefined}
+                  onSelect={(date) => form.setValue("invoice_date_override", date || undefined)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to use current IST date. Override to set a specific invoice date.
+            </p>
+          </div>
+
+          {/* Invoice Number Override */}
+          <div className="space-y-2">
+            <Label>Starting Invoice Number (Optional Override)</Label>
+            <Input
+              value={form.watch("invoice_number_override") || ""}
+              onChange={(e) => form.setValue("invoice_number_override", e.target.value || undefined)}
+              placeholder="e.g., 20242500001 (leave empty for auto-generate)"
+              maxLength={11}
+            />
+            <p className="text-xs text-muted-foreground">
+              Format: 11 digits (YYYYYYYYNNNNN). Leave empty to auto-generate. Will increment for each invoice.
+            </p>
           </div>
 
           <Button onClick={loadPreview} disabled={isLoading} className="w-full">
