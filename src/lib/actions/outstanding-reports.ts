@@ -218,14 +218,30 @@ async function getSubscriptionBreakdownBatch(
   endDate: string
 ): Promise<Map<string, MonthlySubscriptionBreakdown[]>> {
   const supabase = await createClient()
-  
-  const { data: subscriptionData, error } = await supabase
-    .from("customer_subscription_breakdown")
-    .select("*")
+
+  // Query deliveries table directly for confirmed deliveries in the date range
+  const { data: deliveriesData, error } = await supabase
+    .from("deliveries")
+    .select(`
+      customer_id,
+      order_date,
+      actual_quantity,
+      total_amount,
+      unit_price,
+      product:products (
+        id,
+        name,
+        code,
+        unit_of_measure,
+        unit
+      )
+    `)
     .in("customer_id", customerIds)
-    .gte("month_key", startDate.substring(0, 7)) // Extract YYYY-MM from YYYY-MM-DD
-    .lte("month_key", endDate.substring(0, 7))   // Extract YYYY-MM from YYYY-MM-DD
-    .order("customer_id, month_key, product_name")
+    .gte("order_date", startDate)
+    .lte("order_date", endDate)
+    .not("actual_quantity", "is", null)
+    .eq("delivery_status", "delivered")
+    .order("customer_id, order_date")
 
   if (error) {
     console.error("Subscription breakdown error:", error)
@@ -234,45 +250,78 @@ async function getSubscriptionBreakdownBatch(
 
   // Group by customer and month
   const customerMap = new Map<string, MonthlySubscriptionBreakdown[]>()
-  
-  // Handle case where no subscription data exists
-  if (!subscriptionData || subscriptionData.length === 0) {
+
+  // Handle case where no delivery data exists
+  if (!deliveriesData || deliveriesData.length === 0) {
     return customerMap
   }
-  
-  for (const row of subscriptionData) {
-    if (!customerMap.has(row.customer_id)) {
-      customerMap.set(row.customer_id, [])
+
+  for (const delivery of deliveriesData) {
+    if (!customerMap.has(delivery.customer_id)) {
+      customerMap.set(delivery.customer_id, [])
     }
-    
-    const customerBreakdowns = customerMap.get(row.customer_id)!
-    let monthBreakdown = customerBreakdowns.find(mb => mb.month === row.month_key)
-    
+
+    // Extract month key (YYYY-MM) from order_date
+    const monthKey = delivery.order_date.substring(0, 7)
+    const monthDate = new Date(delivery.order_date + 'T00:00:00')
+    const monthDisplay = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+    const customerBreakdowns = customerMap.get(delivery.customer_id)!
+    let monthBreakdown = customerBreakdowns.find(mb => mb.month === monthKey)
+
     if (!monthBreakdown) {
       monthBreakdown = {
-        month: row.month_key,
-        month_display: row.month_display.trim(), // Remove extra spaces from month display
+        month: monthKey,
+        month_display: monthDisplay,
         total_amount: 0,
         product_details: []
       }
       customerBreakdowns.push(monthBreakdown)
     }
-    
-    const productDetail: SubscriptionProductDetail = {
-      product_name: row.product_name,
-      product_code: row.product_code,
-      quantity: Number(row.total_quantity),
-      unit_price: Number(row.unit_price),
-      total_amount: Number(row.total_amount),
-      unit_of_measure: row.unit_of_measure,
-      delivery_days: Number(row.delivery_days),
-      daily_quantity: Number(row.daily_quantity)
+
+    // Find or create product detail within this month
+    const product = Array.isArray(delivery.product) ? delivery.product[0] : delivery.product
+    const productName = product?.name || 'Unknown Product'
+    const productCode = product?.code || 'N/A'
+    const unitOfMeasure = product?.unit_of_measure || product?.unit || 'unit'
+
+    let productDetail = monthBreakdown.product_details.find(
+      pd => pd.product_name === productName && pd.product_code === productCode
+    )
+
+    if (!productDetail) {
+      productDetail = {
+        product_name: productName,
+        product_code: productCode,
+        quantity: 0,
+        unit_price: Number(delivery.unit_price),
+        total_amount: 0,
+        unit_of_measure: unitOfMeasure,
+        delivery_days: 0,
+        daily_quantity: 0
+      }
+      monthBreakdown.product_details.push(productDetail)
     }
-    
-    monthBreakdown.product_details.push(productDetail)
-    monthBreakdown.total_amount += Number(row.total_amount)
+
+    // Aggregate quantities and amounts
+    productDetail.quantity += Number(delivery.actual_quantity)
+    productDetail.total_amount += Number(delivery.total_amount)
+    productDetail.delivery_days += 1
+
+    monthBreakdown.total_amount += Number(delivery.total_amount)
   }
-  
+
+  // Calculate daily_quantity as average for each product
+  for (const customerBreakdowns of customerMap.values()) {
+    for (const monthBreakdown of customerBreakdowns) {
+      for (const productDetail of monthBreakdown.product_details) {
+        if (productDetail.delivery_days > 0) {
+          productDetail.daily_quantity = productDetail.quantity / productDetail.delivery_days
+        }
+      }
+    }
+  }
+
   return customerMap
 }
 
@@ -282,18 +331,36 @@ async function getManualSalesBreakdownBatch(
   endDate: string
 ): Promise<Map<string, ManualSalesBreakdown[]>> {
   const supabase = await createClient()
-  
+
   console.log("Manual sales query - startDate:", startDate, "endDate:", endDate)
   console.log("Customer IDs:", customerIds)
-  
+
+  // Query sales table directly for credit sales in the date range
   const { data: salesData, error } = await supabase
-    .from("customer_sales_breakdown")
-    .select("*")
+    .from("sales")
+    .select(`
+      id,
+      customer_id,
+      product_id,
+      quantity,
+      unit_price,
+      total_amount,
+      gst_amount,
+      sale_date,
+      sale_type,
+      notes,
+      product:products (
+        name,
+        code,
+        unit_of_measure
+      )
+    `)
     .in("customer_id", customerIds)
     .gte("sale_date", startDate)
     .lte("sale_date", endDate)
+    .eq("sale_type", "Credit")
     .order("customer_id, sale_date")
-    
+
   console.log("Manual sales data found:", salesData?.length || 0, "records")
   if (salesData?.length) {
     console.log("Sample sales data:", salesData[0])
@@ -306,20 +373,20 @@ async function getManualSalesBreakdownBatch(
 
   // Group by customer
   const customerMap = new Map<string, ManualSalesBreakdown[]>()
-  
+
   // Handle case where no sales data exists
   if (!salesData || salesData.length === 0) {
     return customerMap
   }
-  
-  for (const row of salesData) {
-    if (!customerMap.has(row.customer_id)) {
-      customerMap.set(row.customer_id, [])
+
+  for (const sale of salesData) {
+    if (!customerMap.has(sale.customer_id)) {
+      customerMap.set(sale.customer_id, [])
     }
-    
-    const customerBreakdowns = customerMap.get(row.customer_id)!
+
+    const customerBreakdowns = customerMap.get(sale.customer_id)!
     let breakdown = customerBreakdowns[0]
-    
+
     if (!breakdown) {
       breakdown = {
         total_amount: 0,
@@ -327,24 +394,25 @@ async function getManualSalesBreakdownBatch(
       }
       customerBreakdowns.push(breakdown)
     }
-    
+
+    const product = Array.isArray(sale.product) ? sale.product[0] : sale.product
     const saleDetail: ManualSaleDetail = {
-      sale_id: row.sale_id,
-      product_name: row.product_name,
-      product_code: row.product_code,
-      quantity: Number(row.quantity),
-      unit_price: Number(row.unit_price),
-      total_amount: Number(row.total_amount),
-      gst_amount: Number(row.gst_amount),
-      unit_of_measure: row.unit_of_measure,
-      sale_date: row.sale_date,
-      notes: row.notes
+      sale_id: sale.id,
+      product_name: product?.name || 'Unknown Product',
+      product_code: product?.code || 'N/A',
+      quantity: Number(sale.quantity),
+      unit_price: Number(sale.unit_price),
+      total_amount: Number(sale.total_amount),
+      gst_amount: Number(sale.gst_amount || 0),
+      unit_of_measure: product?.unit_of_measure || 'unit',
+      sale_date: sale.sale_date,
+      notes: sale.notes || null
     }
-    
+
     breakdown.sale_details.push(saleDetail)
-    breakdown.total_amount += Number(row.total_amount)
+    breakdown.total_amount += Number(sale.total_amount)
   }
-  
+
   return customerMap
 }
 
