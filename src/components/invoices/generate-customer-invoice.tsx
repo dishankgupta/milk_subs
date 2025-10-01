@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { toast } from "sonner"
@@ -253,7 +254,7 @@ export function GenerateCustomerInvoice({
             <Label>Invoice Number (Optional)</Label>
             <Input
               value={formData.invoice_number_override || ""}
-              onChange={(e) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setFormData(prev => ({ ...prev, invoice_number_override: e.target.value || undefined }))
                 setPreviewData(null)
               }}
