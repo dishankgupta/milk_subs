@@ -18,6 +18,173 @@ import type {
   UnappliedPaymentDetail
 } from "@/lib/types/outstanding-reports"
 
+/**
+ * Calculate customer's outstanding balance as of a specific date
+ * Formula: Opening Balance + Deliveries + Credit Sales - All Payments
+ */
+async function calculateCustomerOutstandingAsOfDate(
+  customerId: string,
+  asOfDate: string
+): Promise<number> {
+  const supabase = await createClient()
+
+  // Get customer's historical opening balance
+  const { data: customer, error: customerError } = await supabase
+    .from('customers')
+    .select('opening_balance')
+    .eq('id', customerId)
+    .single()
+
+  if (customerError || !customer) {
+    console.error('Error fetching customer:', customerError)
+    return 0
+  }
+
+  const openingBalance = Number(customer.opening_balance || 0)
+
+  // Get all deliveries before the date (confirmed only)
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from('deliveries')
+    .select('total_amount')
+    .eq('customer_id', customerId)
+    .lt('order_date', asOfDate)
+    .not('actual_quantity', 'is', null)
+    .eq('delivery_status', 'delivered')
+
+  if (deliveriesError) {
+    console.error('Error fetching deliveries:', deliveriesError)
+  }
+
+  const totalDeliveries = (deliveries || []).reduce(
+    (sum, d) => sum + Number(d.total_amount || 0),
+    0
+  )
+
+  // Get all credit sales before the date
+  const { data: sales, error: salesError } = await supabase
+    .from('sales')
+    .select('total_amount')
+    .eq('customer_id', customerId)
+    .lt('sale_date', asOfDate)
+    .eq('sale_type', 'Credit')
+
+  if (salesError) {
+    console.error('Error fetching sales:', salesError)
+  }
+
+  const totalSales = (sales || []).reduce(
+    (sum, s) => sum + Number(s.total_amount || 0),
+    0
+  )
+
+  // Get ALL payments before the date (including opening balance payments)
+  const { data: payments, error: paymentsError } = await supabase
+    .from('payments')
+    .select('amount')
+    .eq('customer_id', customerId)
+    .lt('payment_date', asOfDate)
+
+  if (paymentsError) {
+    console.error('Error fetching payments:', paymentsError)
+  }
+
+  const totalPayments = (payments || []).reduce(
+    (sum, p) => sum + Number(p.amount || 0),
+    0
+  )
+
+  // Calculate outstanding as of date
+  const outstanding = openingBalance + totalDeliveries + totalSales - totalPayments
+
+  return outstanding
+}
+
+/**
+ * Batch calculate opening balances for multiple customers
+ * More efficient than calling calculateCustomerOutstandingAsOfDate for each customer
+ */
+async function calculateOpeningBalancesBatch(
+  customerIds: string[],
+  asOfDate: string
+): Promise<Map<string, number>> {
+  const supabase = await createClient()
+  const openingBalances = new Map<string, number>()
+
+  if (customerIds.length === 0) return openingBalances
+
+  // Get all customers' opening balances
+  const { data: customers, error: customersError } = await supabase
+    .from('customers')
+    .select('id, opening_balance')
+    .in('id', customerIds)
+
+  if (customersError) {
+    console.error('Error fetching customers:', customersError)
+    return openingBalances
+  }
+
+  // Initialize map with opening balances
+  for (const customer of customers || []) {
+    openingBalances.set(customer.id, Number(customer.opening_balance || 0))
+  }
+
+  // Get all deliveries before date for these customers
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from('deliveries')
+    .select('customer_id, total_amount')
+    .in('customer_id', customerIds)
+    .lt('order_date', asOfDate)
+    .not('actual_quantity', 'is', null)
+    .eq('delivery_status', 'delivered')
+
+  if (!deliveriesError && deliveries) {
+    for (const delivery of deliveries) {
+      const current = openingBalances.get(delivery.customer_id) || 0
+      openingBalances.set(
+        delivery.customer_id,
+        current + Number(delivery.total_amount || 0)
+      )
+    }
+  }
+
+  // Get all credit sales before date for these customers
+  const { data: sales, error: salesError } = await supabase
+    .from('sales')
+    .select('customer_id, total_amount')
+    .in('customer_id', customerIds)
+    .lt('sale_date', asOfDate)
+    .eq('sale_type', 'Credit')
+
+  if (!salesError && sales) {
+    for (const sale of sales) {
+      const current = openingBalances.get(sale.customer_id) || 0
+      openingBalances.set(
+        sale.customer_id,
+        current + Number(sale.total_amount || 0)
+      )
+    }
+  }
+
+  // Get ALL payments before date for these customers
+  const { data: payments, error: paymentsError } = await supabase
+    .from('payments')
+    .select('customer_id, amount')
+    .in('customer_id', customerIds)
+    .lt('payment_date', asOfDate)
+
+  if (!paymentsError && payments) {
+    for (const payment of payments) {
+      const current = openingBalances.get(payment.customer_id) || 0
+      openingBalances.set(
+        payment.customer_id,
+        current - Number(payment.amount || 0)
+      )
+    }
+  }
+
+  return openingBalances
+}
+
 export async function generateOutstandingReport(
   config: OutstandingReportConfiguration
 ): Promise<{
@@ -33,26 +200,13 @@ export async function generateOutstandingReport(
   let customersQuery
   
   // Handle special cases that need different data sources
-  if (config.customer_selection === 'all' || config.customer_selection === 'with_credit') {
-    // Query all customers directly from base tables for "All customers" and "Net credit" selections
+  if (config.customer_selection === 'all' || config.customer_selection === 'with_credit' || config.customer_selection === 'with_any_balance') {
+    // Query all customers directly from base tables for "All customers", "Net credit", and "Any balance" selections
     // because the view excludes customers with zero outstanding amounts
+    // We'll apply filters after calculating the actual outstanding balances
     customersQuery = supabase
       .rpc('get_all_customers_outstanding_data')
       .order("billing_name")
-    
-    // Apply filter after getting all customer data
-    if (config.customer_selection === 'with_credit') {
-      const { data: customersWithNetCredit } = await supabase
-        .rpc('get_customers_with_net_credit')
-      
-      if (customersWithNetCredit && customersWithNetCredit.length > 0) {
-        const customerIdsWithNetCredit = customersWithNetCredit.map((c: { customer_id: string }) => c.customer_id)
-        customersQuery = customersQuery.in("customer_id", customerIdsWithNetCredit)
-      } else {
-        // If no customers have net credit, return empty result
-        customersQuery = customersQuery.eq("customer_id", "00000000-0000-0000-0000-000000000000") // Non-existent UUID
-      }
-    }
   } else {
     // Use the optimized filtered view for other selections
     customersQuery = supabase
@@ -94,13 +248,20 @@ export async function generateOutstandingReport(
   // Get all customer IDs for batch processing
   const customerIds = customerSummaries.map((c: { customer_id: string }) => c.customer_id)
 
-  // Batch fetch all detailed data in parallel
+  // Calculate opening balances as of the day before start_date
+  const dayBeforeStart = new Date(startDate)
+  dayBeforeStart.setDate(dayBeforeStart.getDate() - 1)
+  const openingBalanceDate = formatDateForAPI(dayBeforeStart)
+
+  // Batch fetch all detailed data in parallel (including opening balances)
   const [
+    openingBalancesData,
     subscriptionData,
     salesData,
     paymentData,
     unappliedPaymentsData
   ] = await Promise.all([
+    calculateOpeningBalancesBatch(customerIds, startDate), // Opening balance as of start_date - 1
     getSubscriptionBreakdownBatch(customerIds, startDate, endDate),
     getManualSalesBreakdownBatch(customerIds, startDate, endDate),
     getPaymentBreakdownBatch(customerIds, startDate, endDate),
@@ -152,49 +313,75 @@ export async function generateOutstandingReport(
     const manualSalesBreakdown = salesData.get(customerSummary.customer_id) || []
     const paymentBreakdown = paymentData.get(customerSummary.customer_id) || []
     const unappliedPaymentsBreakdown = unappliedPaymentsData.get(customerSummary.customer_id)
+    const openingBalance = openingBalancesData.get(customerSummary.customer_id) || 0
+
+    // Calculate period amounts
+    const periodSubscriptionAmount = subscriptionBreakdown.reduce(
+      (sum, month) => sum + month.total_amount, 0
+    )
+    const periodSalesAmount = manualSalesBreakdown.reduce(
+      (sum, sales) => sum + sales.total_amount, 0
+    )
+    const periodPaymentsAmount = paymentBreakdown.reduce(
+      (sum, payments) => sum + payments.total_amount, 0
+    )
+
+    // Calculate total outstanding: Opening + Subscriptions + Sales - Payments
+    const calculatedTotalOutstanding = openingBalance + periodSubscriptionAmount + periodSalesAmount - periodPaymentsAmount
 
     const customerData: OutstandingCustomerData = {
       customer,
-      opening_balance: customerSummary.effective_opening_balance,
+      opening_balance: openingBalance,
       subscription_breakdown: subscriptionBreakdown,
       manual_sales_breakdown: manualSalesBreakdown,
       payment_breakdown: paymentBreakdown,
       unapplied_payments_breakdown: unappliedPaymentsBreakdown,
       current_outstanding: customerSummary.invoice_outstanding,
-      total_outstanding: customerSummary.total_outstanding
+      total_outstanding: calculatedTotalOutstanding
     }
 
     customersData.push(customerData)
 
-    // Update summary
+    // Update summary (reuse already calculated values)
     if (customerData.total_outstanding > 0) {
       summary.customers_with_outstanding++
     }
-    
-    summary.total_opening_balance += customerData.opening_balance
-    summary.total_subscription_amount += subscriptionBreakdown.reduce(
-      (sum, month) => sum + month.total_amount, 0
-    )
-    summary.total_manual_sales_amount += manualSalesBreakdown.reduce(
-      (sum, sales) => sum + sales.total_amount, 0
-    )
-    summary.total_payments_amount += paymentBreakdown.reduce(
-      (sum, payments) => sum + payments.total_amount, 0
-    )
+
+    summary.total_opening_balance += openingBalance
+    summary.total_subscription_amount += periodSubscriptionAmount
+    summary.total_manual_sales_amount += periodSalesAmount
+    summary.total_payments_amount += periodPaymentsAmount
     const customerUnappliedTotal = unappliedPaymentsBreakdown ? unappliedPaymentsBreakdown.total_amount : 0
     summary.total_unapplied_payments_amount += customerUnappliedTotal
-    summary.total_outstanding_amount += customerData.total_outstanding
+    summary.total_outstanding_amount += calculatedTotalOutstanding
   }
 
-  // Apply special filtering for customers with subscription dues AND outstanding amounts
+  // Apply special filtering for customers based on selection
   let filteredCustomersData = customersData
+
   if (config.customer_selection === 'with_subscription_and_outstanding') {
     filteredCustomersData = customersData.filter(customerData => {
       const hasSubscriptionDues = customerData.subscription_breakdown.some(month => month.total_amount > 0)
       const hasOutstanding = customerData.total_outstanding > 0
       return hasSubscriptionDues && hasOutstanding
     })
-    
+
+    // Recalculate summary for filtered customers
+    summary = recalculateSummary(filteredCustomersData)
+  } else if (config.customer_selection === 'with_credit') {
+    // Filter customers with credit balance (total_outstanding < 0)
+    filteredCustomersData = customersData.filter(customerData => {
+      return customerData.total_outstanding < 0
+    })
+
+    // Recalculate summary for filtered customers
+    summary = recalculateSummary(filteredCustomersData)
+  } else if (config.customer_selection === 'with_any_balance') {
+    // Filter customers with any balance (total_outstanding != 0)
+    filteredCustomersData = customersData.filter(customerData => {
+      return customerData.total_outstanding !== 0
+    })
+
     // Recalculate summary for filtered customers
     summary = recalculateSummary(filteredCustomersData)
   }

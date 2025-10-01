@@ -216,7 +216,7 @@ export function OutstandingReport() {
             {/* Date Range */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Start Date (Opening Balance Date)</Label>
+                <Label>Start Date (Report Period Start)</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -244,7 +244,7 @@ export function OutstandingReport() {
                   </PopoverContent>
                 </Popover>
                 <p className="text-xs text-gray-500">
-                  Opening balance will be calculated as of this date
+                  Opening balance calculated as of day before this date
                 </p>
               </div>
 
@@ -285,8 +285,8 @@ export function OutstandingReport() {
               <Label>Customer Selection</Label>
               <RadioGroup
                 value={form.watch("customer_selection")}
-                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding' | 'with_credit')}
-                className="grid grid-cols-3 gap-4"
+                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding' | 'with_credit' | 'with_any_balance')}
+                className="grid grid-cols-2 gap-4"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="all" id="all" />
@@ -297,8 +297,12 @@ export function OutstandingReport() {
                   <Label htmlFor="with_outstanding">Customers with Outstanding &gt; 0</Label>
                 </div>
                 <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="with_any_balance" id="with_any_balance" />
+                  <Label htmlFor="with_any_balance">Customers with Any Balance (≠ 0)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="with_credit" id="with_credit" />
-                  <Label htmlFor="with_credit">Customers with Net Credit Balance</Label>
+                  <Label htmlFor="with_credit">Customers with Credit Balance (&lt; 0)</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -476,15 +480,14 @@ export function OutstandingReport() {
                     >
                       Payments
                     </SortableTableHead>
-                    <SortableTableHead 
-                      sortKey="total_outstanding" 
-                      sortConfig={sortConfig} 
+                    <SortableTableHead
+                      sortKey="total_outstanding"
+                      sortConfig={sortConfig}
                       onSort={handleSort}
                       className="text-right"
                     >
-                      Gross Outstanding
+                      Total Outstanding
                     </SortableTableHead>
-                    <TableHead className="text-right">Net Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -545,24 +548,12 @@ export function OutstandingReport() {
                             {formatCurrency(customerData.total_outstanding)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {(() => {
-                            const netBalance = customerData.total_outstanding - (customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0);
-                            if (netBalance > 0) {
-                              return <span className="text-red-600">{formatCurrency(netBalance)}</span>;
-                            } else if (netBalance < 0) {
-                              return <span className="text-green-600">Cr. {formatCurrency(Math.abs(netBalance))}</span>;
-                            } else {
-                              return <span className="text-gray-600">₹0.00</span>;
-                            }
-                          })()}
-                        </TableCell>
                       </TableRow>
 
                       {/* Level 2: Expanded Customer Details */}
                       {expandedCustomers.has(customerData.customer.id) && (
                         <TableRow key={`${customerData.customer.id}-expanded`}>
-                          <TableCell colSpan={10} className="p-0">
+                          <TableCell colSpan={9} className="p-0">
                             <div className="bg-gray-50 p-4 space-y-4">
                               {/* Opening Balance */}
                               <div className="bg-white p-3 rounded border">
@@ -756,10 +747,10 @@ export function OutstandingReport() {
                                 </div>
                               )}
 
-                              {/* Current Outstanding Total */}
+                              {/* Total Outstanding */}
                               <div className="bg-white p-3 rounded border border-l-4 border-l-red-500">
                                 <div className="flex justify-between items-center">
-                                  <span className="font-bold text-gray-700">Current Outstanding:</span>
+                                  <span className="font-bold text-gray-700">Total Outstanding:</span>
                                   <span className="font-bold text-xl text-red-600">
                                     {formatCurrency(customerData.total_outstanding)}
                                   </span>
