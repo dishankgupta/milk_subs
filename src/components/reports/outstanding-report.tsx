@@ -177,7 +177,7 @@ export function OutstandingReport() {
     }
   }
 
-  const printReport = (printType: 'summary' | 'statements' | 'complete') => {
+  const printReport = (printType: 'statements' | 'complete') => {
     if (!reportData) return
 
     const params = new URLSearchParams({
@@ -349,10 +349,6 @@ export function OutstandingReport() {
                 Report Summary
               </CardTitle>
               <div className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => printReport('summary')}>
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Summary
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => printReport('statements')}>
                   <Download className="h-4 w-4 mr-2" />
                   Print Customer Statements

@@ -64,7 +64,7 @@ function sortCustomers(
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const printType = searchParams.get('type') || 'summary' // 'summary', 'statements', 'complete'
+    const printType = searchParams.get('type') || 'complete' // 'statements', 'complete'
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     const customerSelection = searchParams.get('customer_selection') || 'with_outstanding'
@@ -88,9 +88,6 @@ export async function GET(request: NextRequest) {
 
     let html: string
     switch (printType) {
-      case 'summary':
-        html = generateSummaryHTML(reportData, startDate, endDate)
-        break
       case 'statements':
         html = generateCustomerStatementsHTML(reportData, startDate, endDate, selectedCustomerIds)
         break
@@ -111,147 +108,6 @@ export async function GET(request: NextRequest) {
     console.error('Outstanding report print error:', error)
     return new Response('Failed to generate print layout', { status: 500 })
   }
-}
-
-function generateSummaryHTML(
-  reportData: { customers: OutstandingCustomerData[], summary: OutstandingReportSummary },
-  startDate: string,
-  endDate: string
-): string {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Outstanding Amounts Summary - ${format(parseLocalDate(startDate), 'dd/MM/yyyy')} to ${format(parseLocalDate(endDate), 'dd/MM/yyyy')}</title>
-  <style>
-    ${getCommonPrintStyles()}
-    
-    .summary-stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-      margin: 30px 0;
-    }
-    
-    .stat-card {
-      background: #f8f9fa;
-      border: 1px solid #e9ecef;
-      border-radius: 6px;
-      padding: 12px;
-      text-align: center;
-    }
-    
-    .stat-value {
-      font-size: 16px;
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 5px;
-    }
-
-    .stat-label {
-      font-size: 10px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    .summary-table {
-      margin-top: 30px;
-    }
-    
-    .outstanding-amount {
-      font-weight: bold;
-      color: #dc2626;
-    }
-    
-    .no-outstanding {
-      color: #16a34a;
-    }
-  </style>
-</head>
-<body>
-  ${getPrintHeader('Outstanding Amounts Summary Report', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
-
-  ${reportData.customers.length > 0 ? `
-  <div class="report-period">
-    <strong>Customers:</strong> ${reportData.customers.length} •
-    <strong>With Outstanding:</strong> ${reportData.summary.customers_with_outstanding}
-  </div>
-  ` : ''}
-
-  <!-- Summary Statistics -->
-  <div class="summary-stats">
-    <div class="stat-card">
-      <div class="stat-value">${reportData.summary.total_customers}</div>
-      <div class="stat-label">Total Customers</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${reportData.summary.customers_with_outstanding}</div>
-      <div class="stat-label">With Outstanding</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${formatCurrency(reportData.summary.total_opening_balance)}</div>
-      <div class="stat-label">Total Opening Balance</div>
-    </div>
-    <div class="stat-card" style="background: #fef3c7; border-color: #fcd34d;">
-      <div class="stat-value" style="color: #92400e;">${formatCurrency(reportData.summary.total_outstanding_amount)}</div>
-      <div class="stat-label">Total Outstanding</div>
-    </div>
-  </div>
-
-  <!-- Customer Summary Table -->
-  <div class="summary-table">
-    <h3>Customer Outstanding Summary</h3>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Customer Name</th>
-          <th>Route</th>
-          <th style="text-align: right;">Opening Balance</th>
-          <th style="text-align: right;">Subscription</th>
-          <th style="text-align: right;">Manual Sales</th>
-          <th style="text-align: right;">Payments</th>
-          <th style="text-align: right;">Total Outstanding</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${reportData.customers
-          .map(customer => `
-            <tr>
-              <td>
-                <strong>${customer.customer.billing_name}</strong><br>
-                <small>${customer.customer.contact_person}</small>
-              </td>
-              <td>${customer.customer.route?.name || 'N/A'}</td>
-              <td style="text-align: right;">${formatCurrency(customer.opening_balance)}</td>
-              <td style="text-align: right;">${formatCurrency(
-                customer.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
-              )}</td>
-              <td style="text-align: right;">${formatCurrency(
-                customer.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
-              )}</td>
-              <td class="payment-amount" style="text-align: right;">-${formatCurrency(
-                customer.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
-              )}</td>
-              <td class="${customer.total_outstanding > 0 ? 'outstanding-amount' : 'no-outstanding'}" style="font-weight: bold; text-align: right;">
-                ${formatCurrency(customer.total_outstanding)}
-              </td>
-            </tr>
-          `).join('')}
-      </tbody>
-    </table>
-  </div>
-
-  ${getPrintFooter()}
-  
-  <script>
-    setTimeout(function() { window.print(); }, 1000);
-  </script>
-</body>
-</html>
-`
 }
 
 function generateCustomerStatementsHTML(
@@ -535,23 +391,140 @@ function generateCompleteReportHTML(
   startDate: string,
   endDate: string
 ): string {
-  // Combination of summary + detailed customer breakdowns
-  const summaryHtml = generateSummaryHTML(reportData, startDate, endDate)
-  const detailedHtml = generateCustomerStatementsHTML(reportData, startDate, endDate)
-  
-  // Combine both with page breaks
-  const statementsContent = detailedHtml.match(/<div class="customer-statement"[\s\S]*?<\/div>/g)?.join('') || ''
-  
-  return summaryHtml.replace(
-    '<script>setTimeout(function() { window.print(); }, 1000);</script>',
-    `
-    <div style="page-break-before: always;">
-      <h2 style="color: #333; text-align: center; margin: 30px 0; border-bottom: 2px solid #22c55e; padding-bottom: 10px;">Detailed Customer Statements</h2>
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Outstanding Report - ${format(parseLocalDate(startDate), 'dd/MM/yyyy')} to ${format(parseLocalDate(endDate), 'dd/MM/yyyy')}</title>
+  <style>
+    ${getCommonPrintStyles()}
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin: 30px 0;
+    }
+
+    .stat-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-table {
+      margin-top: 30px;
+    }
+
+    .outstanding-amount {
+      font-weight: bold;
+      color: #dc2626;
+    }
+
+    .no-outstanding {
+      color: #16a34a;
+    }
+  </style>
+</head>
+<body>
+  ${getPrintHeader('Complete Outstanding Report', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
+
+  ${reportData.customers.length > 0 ? `
+  <div class="report-period">
+    <strong>Customers:</strong> ${reportData.customers.length} •
+    <strong>With Outstanding:</strong> ${reportData.summary.customers_with_outstanding}
+  </div>
+  ` : ''}
+
+  <!-- Summary Statistics -->
+  <div class="summary-stats">
+    <div class="stat-card">
+      <div class="stat-value">${reportData.summary.total_customers}</div>
+      <div class="stat-label">Total Customers</div>
     </div>
-    ${statementsContent}
-    <script>setTimeout(function() { window.print(); }, 1000);</script>
-    `
-  )
+    <div class="stat-card">
+      <div class="stat-value">${reportData.summary.customers_with_outstanding}</div>
+      <div class="stat-label">With Outstanding</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${formatCurrency(reportData.summary.total_opening_balance)}</div>
+      <div class="stat-label">Total Opening Balance</div>
+    </div>
+    <div class="stat-card" style="background: #fef3c7; border-color: #fcd34d;">
+      <div class="stat-value" style="color: #92400e;">${formatCurrency(reportData.summary.total_outstanding_amount)}</div>
+      <div class="stat-label">Total Outstanding</div>
+    </div>
+  </div>
+
+  <!-- Customer Summary Table -->
+  <div class="summary-table">
+    <h3>Customer Outstanding Summary</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 20%;">Customer Name</th>
+          <th style="width: 13.33%;">Route</th>
+          <th style="width: 13.33%; text-align: right;">Opening Balance</th>
+          <th style="width: 13.33%; text-align: right;">Subscription</th>
+          <th style="width: 13.33%; text-align: right;">Manual Sales</th>
+          <th style="width: 13.33%; text-align: right;">Payments</th>
+          <th style="width: 13.34%; text-align: right;">Total Outstanding</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${reportData.customers
+          .map(customer => `
+            <tr>
+              <td>
+                <strong>${customer.customer.billing_name}</strong><br>
+                <small>${customer.customer.contact_person}</small>
+              </td>
+              <td>${customer.customer.route?.name || 'N/A'}</td>
+              <td style="text-align: right;">${formatCurrency(customer.opening_balance)}</td>
+              <td style="text-align: right;">${formatCurrency(
+                customer.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+              )}</td>
+              <td style="text-align: right;">${formatCurrency(
+                customer.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+              )}</td>
+              <td class="payment-amount" style="text-align: right;">-${formatCurrency(
+                customer.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+              )}</td>
+              <td class="${customer.total_outstanding > 0 ? 'outstanding-amount' : 'no-outstanding'}" style="font-weight: bold; text-align: right;">
+                ${formatCurrency(customer.total_outstanding)}
+              </td>
+            </tr>
+          `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPrintFooter()}
+
+  <script>
+    setTimeout(function() { window.print(); }, 1000);
+  </script>
+</body>
+</html>
+`
 }
 
 // Common print styles
@@ -628,6 +601,7 @@ function getCommonPrintStyles(): string {
       border-collapse: collapse;
       margin: 20px 0;
       border: 1px solid #e9ecef;
+      table-layout: fixed;
     }
 
     .data-table th,
@@ -636,6 +610,8 @@ function getCommonPrintStyles(): string {
       text-align: left;
       border-bottom: 1px solid #e9ecef;
       border-right: 1px solid #e9ecef;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .data-table th {
