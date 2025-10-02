@@ -45,8 +45,10 @@ src/app/
 │   ├── deliveries/         # Delivery tracking & confirmation
 │   ├── modifications/      # Temporary subscription changes
 │   ├── payments/           # Payment processing & allocation
+│   │   └── bulk/           # Bulk payment entry with allocation dialog
 │   ├── invoices/           # Invoice generation & management
 │   ├── sales/              # Manual sales (Cash/QR/Credit)
+│   │   └── bulk/           # Bulk sales entry
 │   ├── outstanding/        # Outstanding amount tracking
 │   └── reports/            # Business analytics & printing
 └── api/                    # API routes
@@ -70,7 +72,8 @@ src/lib/
 │   ├── sales.ts            # Manual sales CRUD
 │   ├── outstanding.ts      # Outstanding calculations & payment allocation
 │   ├── reports.ts          # Report generation
-│   └── bulk-sales.ts       # Bulk sales operations
+│   ├── bulk-sales.ts       # Bulk sales operations
+│   └── bulk-payments.ts    # Bulk Payments operations
 ├── supabase/               # Database client configuration
 │   ├── client.ts           # Client-side Supabase
 │   └── server.ts           # Server-side Supabase with SSR
@@ -146,7 +149,7 @@ Complete database recreation available through migration files in `supabase/migr
 3. **Subscription Management** - Pattern-based subscriptions with cycle preview
 4. **Order Generation** - Automated daily orders with modification support
 5. **Delivery Management** - Individual & bulk confirmation with additional items
-6. **Payment Management** - Invoice allocation with unapplied payment tracking
+6. **Payment Management** - Invoice allocation with unapplied payment tracking, bulk entry with per-row allocation dialog
 7. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
 8. **Invoice Management** - Professional PDF generation with automatic status flow
 9. **Outstanding Management** - Three-tier display (Gross→Credit→Net) with Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
@@ -238,10 +241,11 @@ const pdfBuffer = await generatePDF(htmlContent, {
 6. Process payments with automatic allocation
 
 ### Payment Processing
-1. Record payments (Cash/QR/Credit/UPI)
-2. Allocate to specific invoices or leave unapplied
-3. Automatic invoice status updates (Pending→Paid→Completed)
-4. Outstanding calculation with opening balance consideration
+1. Record payments (Cash/QR/Credit/UPI) - single or bulk entry
+2. Allocate to invoices, opening balance, or credit sales via allocation dialog
+3. Bulk payment: per-row allocation with auto-add on save, real-time status badges
+4. Automatic invoice status updates (Pending→Paid→Completed)
+5. Outstanding calculation with opening balance consideration
 
 ### Invoice Generation
 - Bulk invoice generation with delivery consolidation

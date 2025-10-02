@@ -574,3 +574,40 @@ export const singleInvoiceSchema = z.object({
 })
 
 export type SingleInvoiceFormData = z.infer<typeof singleInvoiceSchema>
+
+// Bulk Payment Validation Schemas
+
+export const paymentAllocationItemSchema = z.object({
+  type: z.enum(['invoice', 'opening_balance', 'sales'], { message: "Invalid allocation type" }),
+  id: z.string().min(1, "Allocation item ID is required"),
+  amount: z.number().positive("Allocation amount must be positive")
+})
+
+export type PaymentAllocationItem = z.infer<typeof paymentAllocationItemSchema>
+
+export const bulkPaymentRowSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  amount: z.number().positive("Payment amount must be positive"),
+  payment_date: z.date({ message: "Payment date is required" }),
+  payment_method: z.string().max(50, "Payment method must be less than 50 characters").optional(),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional(),
+  allocations: z.array(paymentAllocationItemSchema).optional()
+}).refine((data) => {
+  // Validate that total allocations don't exceed payment amount
+  if (data.allocations && data.allocations.length > 0) {
+    const totalAllocated = data.allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+    return totalAllocated <= data.amount
+  }
+  return true
+}, {
+  message: "Total allocations cannot exceed payment amount",
+  path: ["allocations"]
+})
+
+export type BulkPaymentRow = z.infer<typeof bulkPaymentRowSchema>
+
+export const bulkPaymentSchema = z.object({
+  payments: z.array(bulkPaymentRowSchema).min(1, "At least one payment is required")
+})
+
+export type BulkPaymentFormData = z.infer<typeof bulkPaymentSchema>
