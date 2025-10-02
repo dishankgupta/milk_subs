@@ -149,7 +149,7 @@ Complete database recreation available through migration files in `supabase/migr
 6. **Payment Management** - Invoice allocation with unapplied payment tracking
 7. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
 8. **Invoice Management** - Professional PDF generation with automatic status flow
-9. **Outstanding Management** - Three-tier display (Gross→Credit→Net)
+9. **Outstanding Management** - Three-tier display (Gross→Credit→Net) with Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
 
 ### Professional Features
 - **IST Date Compliance** - System-wide Indian Standard Time utilities
@@ -426,3 +426,4 @@ The system successfully manages subscriptions, deliveries, sales, payments, and 
 
 ### Recent Features
 - **Sales Payment Bypass (Sep 2025)**: Direct payment allocation to credit sales without invoice generation. Enables mixed allocations (invoices + opening balance + sales) from payment screen. Outstanding calculations remain unaffected.
+- **Outstanding Invoices Report (Oct 2025)**: Financial year-based report showing unpaid/partially paid invoices with detailed payment allocation tracking. Accessible from outstanding reports page, displays invoices with status sent/pending/partially_paid/overdue in compact table format.

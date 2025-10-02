@@ -196,6 +196,23 @@ export function OutstandingReport() {
     window.open(`/api/print/outstanding-report?${params.toString()}`, '_blank')
   }
 
+  const printOutstandingInvoices = () => {
+    if (!reportData) return
+
+    if (selectedCustomers.size === 0) {
+      toast.error("Please select at least one customer")
+      return
+    }
+
+    const params = new URLSearchParams({
+      start_date: formatDateForAPI(form.getValues("start_date")),
+      end_date: formatDateForAPI(form.getValues("end_date")),
+      selected_customer_ids: Array.from(selectedCustomers).join(','),
+    })
+
+    window.open(`/api/print/outstanding-invoices?${params.toString()}`, '_blank')
+  }
+
   // Don't render form until mounted to prevent hydration issues
   if (!mounted) {
     return <div className="space-y-6">Loading...</div>
@@ -353,9 +370,13 @@ export function OutstandingReport() {
                   <Download className="h-4 w-4 mr-2" />
                   Print Customer Statements
                 </Button>
-                <Button size="sm" onClick={() => printReport('complete')}>
+                <Button variant="outline" size="sm" onClick={() => printReport('complete')}>
                   <FileText className="h-4 w-4 mr-2" />
                   Print Complete Report
+                </Button>
+                <Button size="sm" onClick={printOutstandingInvoices} disabled={selectedCustomers.size === 0}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Outstanding Invoices Report
                 </Button>
               </div>
             </div>

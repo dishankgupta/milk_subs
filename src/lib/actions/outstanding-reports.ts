@@ -703,7 +703,7 @@ async function getInvoiceBreakdownBatch(
 
   // Query invoice payments to get payment dates
   const invoiceIds = (invoiceData || []).map(inv => inv.id)
-  let invoicePaymentsMap = new Map<string, string[]>()
+  const invoicePaymentsMap = new Map<string, string[]>()
 
   if (invoiceIds.length > 0) {
     const { data: paymentsData, error: paymentsError } = await supabase
