@@ -416,14 +416,10 @@ function generateCustomerStatementsHTML(
     }
   </style>
 </head>
-<body>
+<body onload="window.print()">
   ${getPrintHeader('Customer Outstanding Statements', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
-  
+
   ${statements}
-  
-  <script>
-    setTimeout(function() { window.print(); }, 1000);
-  </script>
 </body>
 </html>
 `
@@ -487,7 +483,7 @@ function generateCompleteReportHTML(
     }
   </style>
 </head>
-<body>
+<body onload="window.print()">
   ${getPrintHeader('Complete Outstanding Report', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
 
   ${reportData.customers.length > 0 ? `
@@ -561,10 +557,6 @@ function generateCompleteReportHTML(
   </div>
 
   ${getPrintFooter()}
-
-  <script>
-    setTimeout(function() { window.print(); }, 1000);
-  </script>
 </body>
 </html>
 `

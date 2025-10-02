@@ -202,13 +202,18 @@ export async function generateOutstandingReport(
   let customersQuery
   
   // Handle special cases that need different data sources
-  if (config.customer_selection === 'all' || config.customer_selection === 'with_credit' || config.customer_selection === 'with_any_balance') {
-    // Query all customers directly from base tables for "All customers", "Net credit", and "Any balance" selections
+  if (config.customer_selection === 'all' || config.customer_selection === 'with_credit' || config.customer_selection === 'with_any_balance' || config.customer_selection === 'selected') {
+    // Query all customers directly from base tables for these selections
     // because the view excludes customers with zero outstanding amounts
     // We'll apply filters after calculating the actual outstanding balances
     customersQuery = supabase
       .rpc('get_all_customers_outstanding_data')
       .order("billing_name")
+
+    // For 'selected', filter by customer IDs
+    if (config.customer_selection === 'selected' && config.selected_customer_ids) {
+      customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
+    }
   } else {
     // Use the optimized filtered view for other selections
     customersQuery = supabase
@@ -217,9 +222,7 @@ export async function generateOutstandingReport(
       .order("billing_name")
 
     // Apply customer selection filters
-    if (config.customer_selection === 'selected' && config.selected_customer_ids) {
-      customersQuery = customersQuery.in("customer_id", config.selected_customer_ids)
-    } else if (config.customer_selection === 'with_outstanding') {
+    if (config.customer_selection === 'with_outstanding') {
       customersQuery = customersQuery.gt("total_outstanding", 0)
     }
   }

@@ -1,102 +1,99 @@
 'use client'
 
-import { useState, useEffect, memo, useMemo } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getCustomerOutstanding, type CustomerOutstanding } from '@/lib/actions/outstanding'
-import { getCustomerPayments } from '@/lib/actions/payments'
-import type { Payment } from '@/lib/types'
+import type { OutstandingCustomerData } from '@/lib/types/outstanding-reports'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, CreditCard, FileText, Phone, MapPin, DollarSign, Calendar, Receipt, Printer } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
-import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  ArrowLeft,
+  CreditCard,
+  FileText,
+  Phone,
+  MapPin,
+  DollarSign,
+  Calendar as CalendarIcon,
+  Receipt,
+  Printer,
+  ChevronDown,
+  ChevronRight,
+  Package,
+  ShoppingCart,
+  Wallet
+} from 'lucide-react'
+import { formatCurrency, cn, formatDateForAPI } from '@/lib/utils'
+import { formatDateIST } from '@/lib/date-utils'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 interface CustomerOutstandingDetailProps {
   customerId: string
-  initialData?: CustomerOutstanding
-  initialPayments?: Payment[]
+  customerData: OutstandingCustomerData
+  startDate: Date
+  endDate: Date
 }
 
-function CustomerOutstandingDetailComponent({ 
-  customerId, 
-  initialData, 
-  initialPayments 
+export function CustomerOutstandingDetail({
+  customerId,
+  customerData,
+  startDate: initialStartDate,
+  endDate: initialEndDate
 }: CustomerOutstandingDetailProps) {
-  const [data, setData] = useState<CustomerOutstanding | null>(initialData || null)
-  const [payments, setPayments] = useState<Payment[]>(initialPayments || [])
-  const [loading, setLoading] = useState(!initialData)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const [startDate, setStartDate] = useState<Date>(initialStartDate)
+  const [endDate, setEndDate] = useState<Date>(initialEndDate)
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    // Only fetch data if not provided as props
-    if (!initialData || !initialPayments) {
-      async function loadData() {
-        try {
-          setLoading(true)
-          const [outstandingResult, paymentsResult] = await Promise.all([
-            getCustomerOutstanding(customerId),
-            getCustomerPayments(customerId)
-          ])
-          setData(outstandingResult)
-          setPayments(paymentsResult)
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to load customer outstanding data')
-        } finally {
-          setLoading(false)
-        }
+  const {
+    customer,
+    opening_balance,
+    subscription_breakdown,
+    manual_sales_breakdown,
+    payment_breakdown,
+    invoice_breakdown,
+    total_outstanding
+  } = customerData
+
+  // Calculate totals
+  const subscriptionTotal = subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+  const salesTotal = manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+  const paymentsTotal = payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(section)) {
+        newSet.delete(section)
+      } else {
+        newSet.add(section)
       }
+      return newSet
+    })
+  }
 
-      loadData()
-    }
-  }, [customerId, initialData, initialPayments])
-
-  // Memoize expensive calculations (must be called before early returns)
-  const overdueInvoicesCount = useMemo(() => {
-    if (!data?.unpaidInvoices) return 0
-    const currentDate = getCurrentISTDate()
-    return data.unpaidInvoices.filter(invoice => new Date(invoice.due_date) < currentDate).length
-  }, [data?.unpaidInvoices])
-
-  const recentPayments = useMemo(() => {
-    return payments.slice(0, 5)
-  }, [payments])
+  const handlePeriodChange = () => {
+    const params = new URLSearchParams()
+    params.set('start_date', formatDateForAPI(startDate))
+    params.set('end_date', formatDateForAPI(endDate))
+    router.push(`/dashboard/outstanding/${customerId}?${params.toString()}`)
+  }
 
   const handlePrintStatement = () => {
-    const printUrl = `/api/print/customer-statement/${customerId}`
+    // Pass the selected period to the print statement
+    const params = new URLSearchParams()
+    params.set('start_date', formatDateForAPI(startDate))
+    params.set('end_date', formatDateForAPI(endDate))
+    const printUrl = `/api/print/outstanding-report?type=statements&customer_selection=selected&selected_customer_ids=${customerId}&${params.toString()}`
     window.open(printUrl, '_blank')
   }
-
-  if (loading) {
-    return <div className="text-center py-8">Loading customer outstanding details...</div>
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-red-600">Error: {error}</p>
-        <Button 
-          onClick={() => window.location.reload()} 
-          className="mt-4"
-        >
-          Retry
-        </Button>
-      </div>
-    )
-  }
-
-  if (!data) {
-    return <div className="text-center py-8">No data available</div>
-  }
-
-  const { customer, unpaidInvoices, openingBalance, effectiveOpeningBalance, invoiceOutstanding, totalOutstanding } = data
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center space-x-4">
           <Button
             variant="outline"
@@ -108,10 +105,10 @@ function CustomerOutstandingDetailComponent({
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Outstanding Details</h1>
-            <p className="text-gray-600">Customer outstanding amount breakdown</p>
+            <p className="text-gray-600">Transaction-based outstanding breakdown</p>
           </div>
         </div>
-        <div className="space-x-2">
+        <div className="flex items-center space-x-2">
           <Button variant="outline" onClick={handlePrintStatement}>
             <Printer className="h-4 w-4 mr-2" />
             Print Statement
@@ -124,6 +121,73 @@ function CustomerOutstandingDetailComponent({
           </Link>
         </div>
       </div>
+
+      {/* Period Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5" />
+            Report Period
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Start Date:</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? formatDateIST(startDate) : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={(date) => date && setStartDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">End Date:</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? formatDateIST(endDate) : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={(date) => date && setEndDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button onClick={handlePeriodChange}>Apply</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Customer Information */}
       <Card>
@@ -150,7 +214,7 @@ function CustomerOutstandingDetailComponent({
             <div className="flex items-center space-x-2">
               <MapPin className="h-4 w-4 text-gray-400" />
               <div>
-                <p className="font-medium text-gray-900">{customer.routes?.name || 'N/A'}</p>
+                <p className="font-medium text-gray-900">{customer.route?.name || 'N/A'}</p>
                 <p className="text-sm text-gray-500">Route</p>
               </div>
             </div>
@@ -159,215 +223,359 @@ function CustomerOutstandingDetailComponent({
       </Card>
 
       {/* Outstanding Summary */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Opening Balance</CardTitle>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(opening_balance)}</div>
+            <p className="text-xs text-muted-foreground">
+              As of {formatDateIST(startDate)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{formatCurrency(subscriptionTotal)}</div>
+            <p className="text-xs text-muted-foreground">
+              {subscription_breakdown.length} month(s)
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Manual Sales</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{formatCurrency(salesTotal)}</div>
+            <p className="text-xs text-muted-foreground">
+              Credit sales in period
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total amount owed
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Opening Balance</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div>
-                <div className="text-sm text-muted-foreground">Original Balance</div>
-                <div className="text-lg font-semibold">{formatCurrency(openingBalance)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Current Outstanding</div>
-                <div className={`text-2xl font-bold ${effectiveOpeningBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                  {formatCurrency(effectiveOpeningBalance)}
-                </div>
-              </div>
+            <div className={`text-2xl font-bold ${total_outstanding > 0 ? 'text-red-600' : total_outstanding < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+              {formatCurrency(total_outstanding)}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {effectiveOpeningBalance < openingBalance ? 
-                `₹${(openingBalance - effectiveOpeningBalance).toFixed(2)} paid against opening balance` :
-                'Historical outstanding amount'
-              }
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Invoice Outstanding</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(invoiceOutstanding)}</div>
             <p className="text-xs text-muted-foreground">
-              From {unpaidInvoices.length} unpaid invoices
+              As of {formatDateIST(endDate)}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Unpaid Invoices */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Unpaid Invoices</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {unpaidInvoices.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No unpaid invoices found
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Invoice
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Due Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Paid Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Outstanding
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {unpaidInvoices.map((invoice) => {
-                    const isOverdue = new Date(invoice.due_date) < getCurrentISTDate()
-                    
-                    return (
-                      <tr key={invoice.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {invoice.invoice_number}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDateIST(new Date(invoice.invoice_date))}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                            {formatDateIST(new Date(invoice.due_date))}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(invoice.total_amount)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(invoice.amount_paid)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                          {formatCurrency(invoice.amount_outstanding)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge 
-                            variant={
-                              invoice.invoice_status === 'overdue' 
-                                ? 'destructive' 
-                                : invoice.invoice_status === 'partially_paid'
-                                ? 'secondary'
-                                : 'outline'
-                            }
-                          >
-                            {invoice.invoice_status.replace('_', ' ')}
-                          </Badge>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Subscription Deliveries */}
+      {subscription_breakdown.length > 0 && (
+        <Card>
+          <Collapsible
+            open={expandedSections.has('subscriptions')}
+            onOpenChange={() => toggleSection('subscriptions')}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer">
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Subscription Deliveries ({subscription_breakdown.length} months)
+                  </CardTitle>
+                  {expandedSections.has('subscriptions') ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-6">
+                  {subscription_breakdown.map((month, idx) => (
+                    <div key={idx} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-lg">{month.month_display}</h4>
+                        <span className="font-bold text-blue-600">{formatCurrency(month.total_amount)}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {month.product_details.map((product, pidx) => (
+                              <tr key={pidx}>
+                                <td className="px-4 py-2 text-sm text-gray-900">{product.product_name}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                  {product.quantity} {product.unit_of_measure}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                  {formatCurrency(product.unit_price)}
+                                </td>
+                                <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                                  {formatCurrency(product.total_amount)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
 
-      {/* Payment History Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Payment Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {payments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Receipt className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p>No payment history found</p>
-              <p className="text-sm">Payments will appear here once recorded</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentPayments.map((payment) => (
-                <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="h-5 w-5 text-green-600" />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <p className="text-sm font-medium text-gray-900">
-                          Payment of {formatCurrency(payment.amount)}
-                        </p>
-                        {payment.payment_method && (
-                          <Badge variant="secondary" className="text-xs">
-                            {payment.payment_method}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        {formatDateIST(new Date(payment.payment_date))}
-                      </p>
-                      {payment.notes && (
-                        <p className="text-xs text-gray-400 mt-1 max-w-md truncate" title={payment.notes}>
-                          {payment.notes}
-                        </p>
+      {/* Manual Sales */}
+      {manual_sales_breakdown.length > 0 && (
+        <Card>
+          <Collapsible
+            open={expandedSections.has('sales')}
+            onOpenChange={() => toggleSection('sales')}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer">
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    Manual Credit Sales
+                  </CardTitle>
+                  {expandedSections.has('sales') ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {manual_sales_breakdown.map(salesGroup =>
+                        salesGroup.sale_details.map((sale, idx) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {formatDateIST(new Date(sale.sale_date))}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-900">{sale.product_name}</td>
+                            <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                              {sale.quantity} {sale.unit_of_measure}
+                            </td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(sale.total_amount)}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">{sale.notes || '-'}</td>
+                          </tr>
+                        ))
                       )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Link href={`/dashboard/payments/${payment.id}`}>
-                      <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                    </Link>
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-              
-              {payments.length > 5 && (
-                <div className="text-center pt-4 border-t">
-                  <Link href={`/dashboard/payments?search=${encodeURIComponent(customer.billing_name)}`}>
-                    <Button variant="outline" size="sm">
-                      View All {payments.length} Payments
-                    </Button>
-                  </Link>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* Payment History */}
+      {payment_breakdown.length > 0 && (
+        <Card>
+          <Collapsible
+            open={expandedSections.has('payments')}
+            onOpenChange={() => toggleSection('payments')}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer">
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="flex items-center gap-2">
+                    <Wallet className="h-5 w-5" />
+                    Payment History (Total: {formatCurrency(paymentsTotal)})
+                  </CardTitle>
+                  {expandedSections.has('payments') ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
                 </div>
-              )}
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {payment_breakdown.map(paymentGroup =>
+                        paymentGroup.payment_details.map((payment, idx) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {formatDateIST(new Date(payment.payment_date))}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              <Badge variant="secondary">{payment.payment_method}</Badge>
+                            </td>
+                            <td className="px-4 py-2 text-sm font-medium text-green-600 text-right">
+                              -{formatCurrency(payment.amount)}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">{payment.notes || '-'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* Invoices */}
+      {invoice_breakdown.length > 0 && (
+        <Card>
+          <Collapsible
+            open={expandedSections.has('invoices')}
+            onOpenChange={() => toggleSection('invoices')}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer">
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="h-5 w-5" />
+                    Invoices in Period
+                  </CardTitle>
+                  {expandedSections.has('invoices') ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payment Date(s)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {invoice_breakdown.map(invoiceGroup =>
+                        invoiceGroup.invoice_details.map((invoice, idx) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                              {invoice.invoice_number}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {formatDateIST(new Date(invoice.invoice_date))}
+                            </td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(invoice.total_amount)}
+                            </td>
+                            <td className="px-4 py-2 text-sm">
+                              <Badge
+                                variant={
+                                  invoice.invoice_status === 'paid' || invoice.invoice_status === 'completed'
+                                    ? 'default'
+                                    : invoice.invoice_status === 'partially_paid'
+                                    ? 'secondary'
+                                    : invoice.invoice_status === 'overdue'
+                                    ? 'destructive'
+                                    : 'outline'
+                                }
+                              >
+                                {invoice.invoice_status.replace('_', ' ')}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {invoice.payment_dates.length > 0
+                                ? invoice.payment_dates.map(date => formatDateIST(new Date(date))).join(', ')
+                                : '-'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
+
+      {/* Outstanding Summary Card */}
+      <Card className="border-2 border-gray-200">
+        <CardContent className="p-6">
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">Opening Balance:</span>
+              <span className="font-medium">{formatCurrency(opening_balance)}</span>
             </div>
-          )}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">+ Subscription Deliveries:</span>
+              <span className="font-medium text-blue-600">{formatCurrency(subscriptionTotal)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">+ Manual Sales:</span>
+              <span className="font-medium text-purple-600">{formatCurrency(salesTotal)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">- Payments:</span>
+              <span className="font-medium text-green-600">-{formatCurrency(paymentsTotal)}</span>
+            </div>
+            <div className="border-t-2 pt-3 flex justify-between items-center">
+              <span className="font-bold text-lg">Total Outstanding:</span>
+              <span className={`font-bold text-2xl ${total_outstanding > 0 ? 'text-red-600' : total_outstanding < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                {formatCurrency(total_outstanding)}
+              </span>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -400,6 +608,3 @@ function CustomerOutstandingDetailComponent({
     </div>
   )
 }
-
-// Export memoized component for better performance
-export const CustomerOutstandingDetail = memo(CustomerOutstandingDetailComponent)
