@@ -152,7 +152,7 @@ Complete database recreation available through migration files in `supabase/migr
 6. **Payment Management** - Invoice allocation with unapplied payment tracking, bulk entry with per-row allocation dialog
 7. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
 8. **Invoice Management** - Professional PDF generation with automatic status flow
-9. **Outstanding Management** - Three-tier display (Gross→Credit→Net) with Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
+9. **Outstanding Management** - Total Outstandings display with Detailed Outstanding reports, Customer Statements and Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
 
 ### Professional Features
 - **IST Date Compliance** - System-wide Indian Standard Time utilities

@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { DailyOrder, Customer, Product } from '@/lib/types'
 import { getPatternQuantity } from '@/lib/subscription-utils'
-import { parseLocalDateIST } from '@/lib/date-utils'
+import { parseLocalDateIST, formatDateForDatabase } from '@/lib/date-utils'
 
 export interface ProductionSummary {
   date: string
@@ -769,6 +769,292 @@ export async function getDeliveryPerformanceReport(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to generate delivery performance report'
+    }
+  }
+}
+
+export interface PaymentReportData {
+  id: string
+  customer_id: string
+  customer_name: string
+  customer_contact: string
+  amount: number
+  payment_date: string
+  payment_method: string | null
+  allocation_status: string
+  amount_applied: number
+  amount_unapplied: number
+  notes: string | null
+  period_start: string | null
+  period_end: string | null
+  // Allocation breakdown
+  invoice_allocations: Array<{
+    invoice_id: string
+    invoice_number: string
+    amount_allocated: number
+    allocation_date: string
+  }>
+  sales_allocations: Array<{
+    sales_id: string
+    amount_allocated: number
+  }>
+  opening_balance_allocation: number
+}
+
+export interface PaymentReportFilters {
+  search?: string
+  startDate?: string
+  endDate?: string
+  paymentMethod?: string
+  allocationStatus?: string
+  customerId?: string
+}
+
+export async function getPaymentReport(filters?: PaymentReportFilters): Promise<{
+  success: boolean
+  data?: PaymentReportData[]
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+
+    // Build base query
+    let query = supabase
+      .from('payments')
+      .select(`
+        id,
+        customer_id,
+        amount,
+        payment_date,
+        payment_method,
+        allocation_status,
+        amount_applied,
+        amount_unapplied,
+        notes,
+        period_start,
+        period_end,
+        customer:customers(
+          billing_name,
+          contact_person
+        ),
+        invoice_payments:invoice_payments(
+          invoice_id,
+          amount_allocated,
+          allocation_date,
+          invoice:invoice_metadata(invoice_number)
+        ),
+        sales_payments:sales_payments(
+          sales_id,
+          amount_allocated
+        ),
+        opening_balance_payments:opening_balance_payments(
+          amount
+        )
+      `)
+      .order('payment_date', { ascending: false })
+
+    // Apply filters
+    if (filters?.startDate) {
+      query = query.gte('payment_date', formatDateForDatabase(parseLocalDateIST(filters.startDate)))
+    }
+
+    if (filters?.endDate) {
+      query = query.lte('payment_date', formatDateForDatabase(parseLocalDateIST(filters.endDate)))
+    }
+
+    if (filters?.paymentMethod) {
+      query = query.eq('payment_method', filters.paymentMethod)
+    }
+
+    if (filters?.allocationStatus) {
+      query = query.eq('allocation_status', filters.allocationStatus)
+    }
+
+    if (filters?.customerId) {
+      query = query.eq('customer_id', filters.customerId)
+    }
+
+    const { data: payments, error } = await query
+
+    if (error) {
+      throw error
+    }
+
+    if (!payments || payments.length === 0) {
+      return {
+        success: true,
+        data: []
+      }
+    }
+
+    // Transform data
+    let reportData: PaymentReportData[] = payments.map((payment: any) => {
+      // Calculate opening balance allocation total
+      const opening_balance_allocation = payment.opening_balance_payments?.reduce(
+        (sum: number, obp: any) => sum + Number(obp.amount),
+        0
+      ) || 0
+
+      return {
+        id: payment.id,
+        customer_id: payment.customer_id,
+        customer_name: payment.customer?.billing_name || 'Unknown Customer',
+        customer_contact: payment.customer?.contact_person || '',
+        amount: Number(payment.amount),
+        payment_date: payment.payment_date,
+        payment_method: payment.payment_method,
+        allocation_status: payment.allocation_status,
+        amount_applied: Number(payment.amount_applied),
+        amount_unapplied: Number(payment.amount_unapplied),
+        notes: payment.notes,
+        period_start: payment.period_start,
+        period_end: payment.period_end,
+        invoice_allocations: payment.invoice_payments?.map((ip: any) => ({
+          invoice_id: ip.invoice_id,
+          invoice_number: ip.invoice?.invoice_number || 'N/A',
+          amount_allocated: Number(ip.amount_allocated),
+          allocation_date: ip.allocation_date
+        })) || [],
+        sales_allocations: payment.sales_payments?.map((sp: any) => ({
+          sales_id: sp.sales_id,
+          amount_allocated: Number(sp.amount_allocated)
+        })) || [],
+        opening_balance_allocation
+      }
+    })
+
+    // Apply client-side search filter
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase()
+      reportData = reportData.filter(payment =>
+        payment.customer_name.toLowerCase().includes(searchLower) ||
+        payment.customer_contact.toLowerCase().includes(searchLower) ||
+        payment.payment_method?.toLowerCase().includes(searchLower) ||
+        payment.notes?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    return {
+      success: true,
+      data: reportData
+    }
+
+  } catch (error) {
+    console.error('Error generating payment report:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate payment report'
+    }
+  }
+}
+
+export interface MonthlyPaymentSummary {
+  month: string
+  year: number
+  totalPayments: number
+  paymentCount: number
+  averagePayment: number
+  byMethod: {
+    [method: string]: {
+      count: number
+      amount: number
+    }
+  }
+  byStatus: {
+    [status: string]: {
+      count: number
+      amount: number
+    }
+  }
+}
+
+export async function getMonthlyPaymentSummary(year?: number): Promise<{
+  success: boolean
+  data?: MonthlyPaymentSummary[]
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+    const targetYear = year || new Date().getFullYear()
+
+    // Get all payments for the year
+    const { data: payments, error } = await supabase
+      .from('payments')
+      .select('*')
+      .gte('payment_date', `${targetYear}-01-01`)
+      .lte('payment_date', `${targetYear}-12-31`)
+      .order('payment_date')
+
+    if (error) {
+      throw error
+    }
+
+    if (!payments || payments.length === 0) {
+      return {
+        success: true,
+        data: []
+      }
+    }
+
+    // Group by month
+    const monthlyData: { [key: string]: MonthlyPaymentSummary } = {}
+
+    for (const payment of payments) {
+      const date = new Date(payment.payment_date)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' })
+
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          month: monthName,
+          year: date.getFullYear(),
+          totalPayments: 0,
+          paymentCount: 0,
+          averagePayment: 0,
+          byMethod: {},
+          byStatus: {}
+        }
+      }
+
+      const summary = monthlyData[monthKey]
+      const amount = Number(payment.amount)
+
+      summary.totalPayments += amount
+      summary.paymentCount++
+
+      // By payment method
+      const method = payment.payment_method || 'Unknown'
+      if (!summary.byMethod[method]) {
+        summary.byMethod[method] = { count: 0, amount: 0 }
+      }
+      summary.byMethod[method].count++
+      summary.byMethod[method].amount += amount
+
+      // By allocation status
+      const status = payment.allocation_status || 'Unknown'
+      if (!summary.byStatus[status]) {
+        summary.byStatus[status] = { count: 0, amount: 0 }
+      }
+      summary.byStatus[status].count++
+      summary.byStatus[status].amount += amount
+    }
+
+    // Calculate averages and convert to array
+    const summaries = Object.values(monthlyData).map(summary => ({
+      ...summary,
+      averagePayment: summary.paymentCount > 0 ? summary.totalPayments / summary.paymentCount : 0
+    }))
+
+    return {
+      success: true,
+      data: summaries
+    }
+
+  } catch (error) {
+    console.error('Error generating monthly payment summary:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate monthly payment summary'
     }
   }
 }

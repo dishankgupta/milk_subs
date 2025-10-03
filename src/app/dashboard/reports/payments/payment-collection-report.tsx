@@ -1,193 +1,355 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Download } from "lucide-react"
-import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Download, Search, Filter } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
-import { formatDateTimeIST } from "@/lib/date-utils"
-import { PrintHeader } from "@/components/reports/PrintHeader"
+import { formatDateIST } from "@/lib/date-utils"
+import { getPaymentReport, type PaymentReportData, type PaymentReportFilters } from "@/lib/actions/reports"
+import { toast } from "sonner"
 
 export function PaymentCollectionReport() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [payments, setPayments] = useState<PaymentReportData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState<PaymentReportFilters>({})
+  const [search, setSearch] = useState("")
 
-  // TODO: Replace with actual data from database
-  interface PaymentData {
-    period: string;
-    collectionRate: number;
-    paymentsCount: number;
-    totalPayments: number;
-    averagePayment: number;
-    outstandingStart: number;
-    outstandingEnd: number;
+  // Filter state
+  const [paymentMethod, setPaymentMethod] = useState<string>("all")
+  const [allocationStatus, setAllocationStatus] = useState<string>("all")
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
+
+  // Load payment data
+  const loadPayments = async () => {
+    setLoading(true)
+    try {
+      const result = await getPaymentReport({
+        ...filters,
+        search
+      })
+
+      if (result.success && result.data) {
+        setPayments(result.data)
+      } else {
+        toast.error(result.error || "Failed to load payment report")
+      }
+    } catch (error) {
+      console.error("Error loading payments:", error)
+      toast.error("Failed to load payment report")
+    } finally {
+      setLoading(false)
+    }
   }
-  const paymentData: PaymentData[] = []
+
+  // Load on mount and when filters change
+  useEffect(() => {
+    loadPayments()
+  }, [filters])
+
+  const handleApplyFilters = () => {
+    setFilters({
+      paymentMethod: paymentMethod && paymentMethod !== "all" ? paymentMethod : undefined,
+      allocationStatus: allocationStatus && allocationStatus !== "all" ? allocationStatus : undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined
+    })
+  }
+
+  const handleClearFilters = () => {
+    setPaymentMethod("all")
+    setAllocationStatus("all")
+    setStartDate("")
+    setEndDate("")
+    setSearch("")
+    setFilters({})
+  }
+
+  const handleSearch = () => {
+    loadPayments()
+  }
+
+  const getAllocationStatusBadge = (status: string) => {
+    switch (status) {
+      case 'fully_applied':
+        return <Badge variant="default" className="bg-green-600">Fully Applied</Badge>
+      case 'partially_applied':
+        return <Badge variant="secondary" className="bg-yellow-600">Partially Applied</Badge>
+      case 'unapplied':
+        return <Badge variant="destructive">Unapplied</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
 
   const handleExport = () => {
-    // In a real implementation, this would generate and download a report
-    alert("Export functionality would be implemented here")
+    // Generate CSV export
+    const csvHeaders = "Payment Date,Customer,Amount,Payment Method,Allocation Status,Applied,Unapplied,Notes"
+    const csvRows = payments.map(p =>
+      `${p.payment_date},${p.customer_name},${p.amount},${p.payment_method || ''},${p.allocation_status},${p.amount_applied},${p.amount_unapplied},"${p.notes || ''}"`
+    )
+    const csvContent = [csvHeaders, ...csvRows].join("\n")
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `payment-report-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast.success("Payment report exported successfully")
   }
 
-  const handlePrint = () => {
-    // For now, using current month - in future this could be made configurable
-    const startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-    const endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0)
-    const printUrl = `/api/print/payment-collection?start_date=${format(startDate, 'yyyy-MM-dd')}&end_date=${format(endDate, 'yyyy-MM-dd')}`
-    window.open(printUrl, '_blank')
-  }
+  // Calculate summary stats
+  const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0)
+  const totalApplied = payments.reduce((sum, p) => sum + p.amount_applied, 0)
+  const totalUnapplied = payments.reduce((sum, p) => sum + p.amount_unapplied, 0)
+  const paymentCount = payments.length
 
   return (
     <div className="space-y-6">
-      {/* Print Header */}
-      <PrintHeader 
-        title="Payment Collection Report"
-        subtitle="Monthly Payment Collection Summary"
-        date={formatDateTimeIST(new Date())}
-        additionalInfo={paymentData.length > 0 ? [
-          `Report Period: Last ${paymentData.length} months`,
-          `Average Collection Rate: ${Math.round(paymentData.reduce((sum, m) => sum + m.collectionRate, 0) / paymentData.length)}%`,
-          `Total Payments: ${paymentData.reduce((sum, m) => sum + m.paymentsCount, 0)} transactions`
-        ] : [`No payment data available`]}
-      />
-      
-      {/* Date Selection */}
-      <div className="flex items-center justify-between print:hidden">
-        <div className="flex items-center space-x-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+      {/* Summary Stats */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{paymentCount}</div>
+            <p className="text-xs text-muted-foreground">{formatCurrency(totalAmount)} collected</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalAmount)}</div>
+            <p className="text-xs text-muted-foreground">All payment transactions</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Amount Allocated</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{formatCurrency(totalApplied)}</div>
+            <p className="text-xs text-muted-foreground">Applied to invoices/sales</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Unapplied Amount</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalUnapplied)}</div>
+            <p className="text-xs text-muted-foreground">Pending allocation</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Payment Filters</CardTitle>
+              <CardDescription>Filter payments by date, method, and status</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleClearFilters}>
+                Clear Filters
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handlePrint}>
-            <Download className="mr-2 h-4 w-4" />
-            Print Report
-          </Button>
-          <Button onClick={handleExport} variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export Report
-          </Button>
-        </div>
-      </div>
-
-      {/* Monthly Collection Summary */}
-      <div className="grid gap-4 print:space-y-4">
-        {paymentData.length > 0 ? paymentData.map((month, index) => (
-          <Card key={index} className="print:break-inside-avoid print:mb-4">
-            <CardHeader className="print:pb-2">
-              <div className="flex justify-between items-center print:flex-col print:items-start print:gap-1">
-                <CardTitle className="text-lg print:text-base print:font-bold">{month.period}</CardTitle>
-                <div className="flex items-center space-x-4 print:space-x-2">
-                  <div className="text-right print:text-left">
-                    <div className="text-sm text-muted-foreground print:text-xs print:text-black">Collection Rate</div>
-                    <div className={`font-bold print:text-black ${month.collectionRate >= 90 ? 'text-green-600' : month.collectionRate >= 80 ? 'text-yellow-600' : 'text-red-600'}`}>
-                      {month.collectionRate}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2">
-                <div className="print:break-inside-avoid">
-                  <div className="text-sm text-muted-foreground print:text-xs print:text-black">Total Collected</div>
-                  <div className="text-xl font-bold text-green-600 print:text-base print:text-black print:font-bold">{formatCurrency(month.totalPayments)}</div>
-                </div>
-                <div className="print:break-inside-avoid">
-                  <div className="text-sm text-muted-foreground print:text-xs print:text-black">Number of Payments</div>
-                  <div className="text-xl font-bold print:text-base print:font-bold">{month.paymentsCount}</div>
-                </div>
-                <div className="print:break-inside-avoid">
-                  <div className="text-sm text-muted-foreground print:text-xs print:text-black">Average Payment</div>
-                  <div className="text-xl font-bold print:text-base print:font-bold">{formatCurrency(month.averagePayment)}</div>
-                </div>
-                <div className="print:break-inside-avoid">
-                  <div className="text-sm text-muted-foreground print:text-xs print:text-black">Outstanding Change</div>
-                  <div className={`text-xl font-bold print:text-base print:font-bold print:text-black ${month.outstandingEnd < month.outstandingStart ? 'text-green-600' : 'text-red-600'}`}>
-                    {month.outstandingEnd < month.outstandingStart ? '↓' : '↑'} {formatCurrency(Math.abs(month.outstandingEnd - month.outstandingStart))}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t print:mt-2 print:pt-2 print:border-t print:border-gray-400">
-                <div className="flex justify-between items-center text-sm print:text-xs print:justify-between">
-                  <span className="text-muted-foreground print:text-black">Outstanding at month start:</span>
-                  <span className="font-medium print:font-bold">{formatCurrency(month.outstandingStart)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm mt-1 print:text-xs print:mt-1">
-                  <span className="text-muted-foreground print:text-black">Outstanding at month end:</span>
-                  <span className="font-medium print:font-bold">{formatCurrency(month.outstandingEnd)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center text-muted-foreground">
-                <p>No payment data available for the selected period.</p>
-                <p className="text-sm mt-2">Payment reports will appear here once payment data is available.</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Summary Insights */}
-      <Card className="print:break-inside-avoid print:mb-4">
-        <CardHeader className="print:pb-2">
-          <CardTitle className="print:text-lg print:font-bold">Collection Insights</CardTitle>
-          <CardDescription className="print:text-sm print:text-black">Key metrics and trends from payment collection</CardDescription>
+              <Button size="sm" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {paymentData.length > 0 ? (
-            <div className="space-y-2 text-sm print:space-y-1 print:text-xs">
-              <div className="flex justify-between print:justify-between">
-                <span className="text-muted-foreground print:text-black">Average monthly collection:</span>
-                <span className="font-medium print:font-bold">{formatCurrency(paymentData.reduce((sum, m) => sum + m.totalPayments, 0) / paymentData.length)}</span>
-              </div>
-              <div className="flex justify-between print:justify-between">
-                <span className="text-muted-foreground print:text-black">Average collection rate:</span>
-                <span className="font-medium print:font-bold">{Math.round(paymentData.reduce((sum, m) => sum + m.collectionRate, 0) / paymentData.length)}%</span>
-              </div>
-              <div className="flex justify-between print:justify-between">
-                <span className="text-muted-foreground print:text-black">Total payments processed:</span>
-                <span className="font-medium print:font-bold">{paymentData.reduce((sum, m) => sum + m.paymentsCount, 0)} payments</span>
-              </div>
-              <div className="flex justify-between print:justify-between">
-                <span className="text-muted-foreground print:text-black">Outstanding trend:</span>
-                <span className={`font-medium print:font-bold print:text-black ${paymentData[0].outstandingEnd < paymentData[paymentData.length - 1].outstandingStart ? 'text-green-600' : 'text-red-600'}`}>
-                  {paymentData[0].outstandingEnd < paymentData[paymentData.length - 1].outstandingStart ? 'Improving' : 'Needs attention'}
-                </span>
+          <div className="grid gap-4 md:grid-cols-5">
+            {/* Search */}
+            <div className="space-y-2">
+              <Label>Search</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Customer name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+                <Button size="icon" onClick={handleSearch}>
+                  <Search className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          ) : (
-            <div className="text-center text-muted-foreground">
-              <p>No collection insights available without payment data.</p>
+
+            {/* Date Range */}
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
-          )}
+
+            <div className="space-y-2">
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Methods" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Methods</SelectItem>
+                  <SelectItem value="Cash">Cash</SelectItem>
+                  <SelectItem value="UPI">UPI</SelectItem>
+                  <SelectItem value="Credit">Credit</SelectItem>
+                  <SelectItem value="QR">QR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Allocation Status */}
+            <div className="space-y-2">
+              <Label>Allocation Status</Label>
+              <Select value={allocationStatus} onValueChange={setAllocationStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="fully_applied">Fully Applied</SelectItem>
+                  <SelectItem value="partially_applied">Partially Applied</SelectItem>
+                  <SelectItem value="unapplied">Unapplied</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Button onClick={handleApplyFilters} className="w-full sm:w-auto">
+              <Filter className="mr-2 h-4 w-4" />
+              Apply Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment Details</CardTitle>
+          <CardDescription>
+            {loading ? "Loading..." : `Showing ${payments.length} payment(s)`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Applied</TableHead>
+                  <TableHead>Unapplied</TableHead>
+                  <TableHead>Allocations</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      Loading payment data...
+                    </TableCell>
+                  </TableRow>
+                ) : payments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No payments found matching the selected filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  payments.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell>{formatDateIST(new Date(payment.payment_date))}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{payment.customer_name}</div>
+                        {payment.customer_contact && (
+                          <div className="text-sm text-muted-foreground">{payment.customer_contact}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{payment.payment_method || 'N/A'}</Badge>
+                      </TableCell>
+                      <TableCell>{getAllocationStatusBadge(payment.allocation_status)}</TableCell>
+                      <TableCell className="text-green-600">{formatCurrency(payment.amount_applied)}</TableCell>
+                      <TableCell className="text-orange-600">{formatCurrency(payment.amount_unapplied)}</TableCell>
+                      <TableCell>
+                        <div className="text-sm space-y-1">
+                          {payment.invoice_allocations.length > 0 && (
+                            <div>
+                              <span className="font-medium">Invoices:</span> {payment.invoice_allocations.length}
+                            </div>
+                          )}
+                          {payment.sales_allocations.length > 0 && (
+                            <div>
+                              <span className="font-medium">Sales:</span> {payment.sales_allocations.length}
+                            </div>
+                          )}
+                          {payment.opening_balance_allocation > 0 && (
+                            <div>
+                              <span className="font-medium">Opening:</span> {formatCurrency(payment.opening_balance_allocation)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
