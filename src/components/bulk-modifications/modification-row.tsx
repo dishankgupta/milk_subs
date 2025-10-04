@@ -249,15 +249,11 @@ export function ModificationRow({
 
   // Handle row-specific keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.altKey) {
-      if (e.key === 'a' || e.key === 'A') {
-        e.preventDefault()
-        onAddRow?.()
-      } else if (e.key === 'd' || e.key === 'D') {
-        e.preventDefault()
-        if (canRemove) {
-          onRemove(index)
-        }
+    // Alt+A is handled globally in the form component to prevent duplicate row additions
+    if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault()
+      if (canRemove) {
+        onRemove(index)
       }
     }
   }

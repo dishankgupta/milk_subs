@@ -54,11 +54,11 @@ export const ModificationsTable = memo(function ModificationsTable() {
     setLoading(false)
   }, [search, statusFilter, typeFilter, includeExpired])
 
-  // Apply sorting to modifications with default sort by start date descending
+  // Apply sorting to modifications with default sort by end date ascending
   const { sortedData: sortedModifications, sortConfig, handleSort } = useSorting(
     modifications,
-    'start_date',
-    'desc'
+    'end_date',
+    'asc'
   )
 
   useEffect(() => {
