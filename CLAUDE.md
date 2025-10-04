@@ -44,6 +44,7 @@ src/app/
 │   ├── orders/             # Daily order generation
 │   ├── deliveries/         # Delivery tracking & confirmation
 │   ├── modifications/      # Temporary subscription changes
+│   │   └── bulk/           # Bulk modification entry
 │   ├── payments/           # Payment processing & allocation
 │   │   └── bulk/           # Bulk payment entry with allocation dialog
 │   ├── invoices/           # Invoice generation & management
@@ -73,7 +74,8 @@ src/lib/
 │   ├── outstanding.ts      # Outstanding calculations & payment allocation
 │   ├── reports.ts          # Report generation
 │   ├── bulk-sales.ts       # Bulk sales operations
-│   └── bulk-payments.ts    # Bulk Payments operations
+│   ├── bulk-payments.ts    # Bulk Payments operations
+│   └── bulk-modifications.ts # Bulk modification operations
 ├── supabase/               # Database client configuration
 │   ├── client.ts           # Client-side Supabase
 │   └── server.ts           # Server-side Supabase with SSR
@@ -148,11 +150,12 @@ Complete database recreation available through migration files in `supabase/migr
 2. **Product Management** - GST-integrated catalog with real-time calculations
 3. **Subscription Management** - Pattern-based subscriptions with cycle preview
 4. **Order Generation** - Automated daily orders with modification support
-5. **Delivery Management** - Individual & bulk confirmation with additional items
-6. **Payment Management** - Invoice allocation with unapplied payment tracking, bulk entry with per-row allocation dialog
-7. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
-8. **Invoice Management** - Professional PDF generation with automatic status flow
-9. **Outstanding Management** - Total Outstandings display with Detailed Outstanding reports, Customer Statements and Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
+5. **Modification Management** - Temporary subscription changes (skip/increase/decrease/add note) with bulk entry support
+6. **Delivery Management** - Individual & bulk confirmation with additional items
+7. **Payment Management** - Invoice allocation with unapplied payment tracking, bulk entry with per-row allocation dialog
+8. **Sales Management** - Manual sales (Cash/QR/Credit) with bulk operations
+9. **Invoice Management** - Professional PDF generation with automatic status flow
+10. **Outstanding Management** - Total Outstandings display with Detailed Outstanding reports, Customer Statements and Outstanding Invoices Report (FY-based unpaid invoices with payment allocation details)
 
 ### Professional Features
 - **IST Date Compliance** - System-wide Indian Standard Time utilities
@@ -431,3 +434,4 @@ The system successfully manages subscriptions, deliveries, sales, payments, and 
 ### Recent Features
 - **Sales Payment Bypass (Sep 2025)**: Direct payment allocation to credit sales without invoice generation. Enables mixed allocations (invoices + opening balance + sales) from payment screen. Outstanding calculations remain unaffected.
 - **Outstanding Invoices Report (Oct 2025)**: Financial year-based report showing unpaid/partially paid invoices with detailed payment allocation tracking. Accessible from outstanding reports page, displays invoices with status sent/pending/partially_paid/overdue in compact table format.
+- **Bulk Modifications (Oct 2025)**: Multi-row modification entry with customer search, product dropdown (filtered by active subscriptions), real-time subscription display, and validation. Supports Skip/Increase/Decrease/Add Note types with date range selection and keyboard shortcuts (Alt+A to add row, Tab on last field to add new row).

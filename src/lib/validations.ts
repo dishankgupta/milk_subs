@@ -89,6 +89,45 @@ export type SubscriptionFormData = {
 
 export type ModificationFormData = z.infer<typeof modificationSchema>
 
+export const bulkModificationRowSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  product_id: z.string().uuid("Please select a valid product"),
+  modification_type: z.enum(["Skip", "Increase", "Decrease", "Add Note"], { message: "Please select modification type" }),
+  start_date: z.date({ message: "Start date is required" }),
+  end_date: z.date({ message: "End date is required" }),
+  quantity_change: z.number().optional(),
+  reason: z.string().max(500, "Reason must be less than 500 characters").optional(),
+}).refine((data) => {
+  return data.end_date >= data.start_date
+}, {
+  message: "End date must be after or equal to start date",
+  path: ["end_date"]
+}).refine((data) => {
+  if (data.modification_type === "Increase" || data.modification_type === "Decrease") {
+    return data.quantity_change !== undefined && data.quantity_change > 0
+  }
+  return true
+}, {
+  message: "Quantity change is required for increase/decrease modifications",
+  path: ["quantity_change"]
+}).refine((data) => {
+  if (data.modification_type === "Add Note") {
+    return data.reason !== undefined && data.reason.trim().length > 0
+  }
+  return true
+}, {
+  message: "Note is required when adding a note modification",
+  path: ["reason"]
+})
+
+export type BulkModificationRow = z.infer<typeof bulkModificationRowSchema>
+
+export const bulkModificationSchema = z.object({
+  modifications: z.array(bulkModificationRowSchema).min(1, "At least one modification is required")
+})
+
+export type BulkModificationFormData = z.infer<typeof bulkModificationSchema>
+
 export const paymentSchema = z.object({
   customer_id: z.string().uuid("Please select a valid customer"),
   amount: z.number().positive("Payment amount must be positive"),

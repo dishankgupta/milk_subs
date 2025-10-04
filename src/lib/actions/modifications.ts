@@ -104,15 +104,22 @@ export async function getModifications({
       .map(mod => ({
         ...mod,
         isExpired: currentDateString > mod.end_date,
-        displayStatus: (mod.is_active 
+        displayStatus: (mod.is_active
           ? (currentDateString > mod.end_date ? 'Expired' : 'Active')
           : 'Disabled') as 'Active' | 'Expired' | 'Disabled',
         effectivelyActive: mod.is_active && currentDateString <= mod.end_date
       }))
       .filter(mod => {
-        // If not including expired, filter out expired active modifications
-        if (!includeExpired && mod.is_active && mod.isExpired) {
-          return false
+        // If not including expired, only show active modifications where end_date hasn't passed
+        if (!includeExpired) {
+          // Filter out inactive (archived) modifications
+          if (!mod.is_active) {
+            return false
+          }
+          // Filter out expired active modifications
+          if (mod.isExpired) {
+            return false
+          }
         }
         return true
       })
