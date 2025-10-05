@@ -888,18 +888,20 @@ export async function getPaymentReport(filters?: PaymentReportFilters): Promise<
     }
 
     // Transform data
-    let reportData: PaymentReportData[] = payments.map((payment: any) => {
+    let reportData: PaymentReportData[] = payments.map((payment) => {
       // Calculate opening balance allocation total
       const opening_balance_allocation = payment.opening_balance_payments?.reduce(
-        (sum: number, obp: any) => sum + Number(obp.amount),
+        (sum: number, obp) => sum + Number(obp.amount),
         0
       ) || 0
+
+      const customer = payment.customer as unknown as { billing_name: string; contact_person: string } | null
 
       return {
         id: payment.id,
         customer_id: payment.customer_id,
-        customer_name: payment.customer?.billing_name || 'Unknown Customer',
-        customer_contact: payment.customer?.contact_person || '',
+        customer_name: customer?.billing_name || 'Unknown Customer',
+        customer_contact: customer?.contact_person || '',
         amount: Number(payment.amount),
         payment_date: payment.payment_date,
         payment_method: payment.payment_method,
@@ -909,13 +911,16 @@ export async function getPaymentReport(filters?: PaymentReportFilters): Promise<
         notes: payment.notes,
         period_start: payment.period_start,
         period_end: payment.period_end,
-        invoice_allocations: payment.invoice_payments?.map((ip: any) => ({
-          invoice_id: ip.invoice_id,
-          invoice_number: ip.invoice?.invoice_number || 'N/A',
-          amount_allocated: Number(ip.amount_allocated),
-          allocation_date: ip.allocation_date
-        })) || [],
-        sales_allocations: payment.sales_payments?.map((sp: any) => ({
+        invoice_allocations: payment.invoice_payments?.map((ip) => {
+          const invoice = ip.invoice as unknown as { invoice_number: string } | null
+          return {
+            invoice_id: ip.invoice_id,
+            invoice_number: invoice?.invoice_number || 'N/A',
+            amount_allocated: Number(ip.amount_allocated),
+            allocation_date: ip.allocation_date
+          }
+        }) || [],
+        sales_allocations: payment.sales_payments?.map((sp) => ({
           sales_id: sp.sales_id,
           amount_allocated: Number(sp.amount_allocated)
         })) || [],

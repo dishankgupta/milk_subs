@@ -4,8 +4,8 @@ import { expect } from 'vitest'
 // Setup test environment
 // Note: NODE_ENV is read-only in some environments, so only set if possible
 try {
-  (process.env as any).NODE_ENV = 'test'
-} catch (e) {
+  (process.env as Record<string, string | undefined>).NODE_ENV = 'test'
+} catch {
   // Ignore if assignment fails
 }
 

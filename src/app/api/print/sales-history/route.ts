@@ -251,14 +251,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Now fetch sales with all applicable filters at database level
-    const getSalesParams: any = { limit: 10000 }
+    const getSalesParams: {
+      limit: number
+      sale_type?: "Cash" | "Credit" | "QR"
+      payment_status?: "Completed" | "Pending" | "Billed"
+      date_from?: string
+      date_to?: string
+    } = { limit: 10000 }
 
     // Apply sale type and payment status filters at database level
     if (saleTypeFilter) {
-      getSalesParams.sale_type = saleTypeFilter
+      getSalesParams.sale_type = saleTypeFilter as "Cash" | "Credit" | "QR"
     }
     if (paymentStatusFilter) {
-      getSalesParams.payment_status = paymentStatusFilter
+      getSalesParams.payment_status = paymentStatusFilter as "Completed" | "Pending" | "Billed"
     }
 
     // Apply date range filters at database level
