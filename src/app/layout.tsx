@@ -16,10 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PureDairy - Dairy Business Management System",
   description: "Comprehensive dairy business management system for subscriptions, deliveries, payments, and invoicing",
-  icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-icon.png',
-  },
 };
 
 export default function RootLayout({
