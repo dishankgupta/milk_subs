@@ -48,7 +48,8 @@
       "mcp__supabase__list_extensions",
       "mcp__supabase__list_migrations",
       "Bash(tree:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "WebFetch(domain:dev.to)"
     ]
   },
   "enabledMcpjsonServers": [
