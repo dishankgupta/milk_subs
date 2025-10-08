@@ -73,11 +73,11 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
     return matchesSearch && matchesDate && matchesRoute
   })
 
-  // Apply sorting to filtered deliveries with default sort by order date descending
+  // Apply sorting to filtered deliveries with default sort by customer name ascending
   const { sortedData: sortedDeliveries, sortConfig, handleSort } = useSorting(
     filteredDeliveries,
-    'order_date',
-    'desc',
+    'customer.billing_name',
+    'asc',
     (delivery, key) => {
       if (key === 'variance') {
         return (delivery.actual_quantity || 0) - (delivery.planned_quantity || 0)

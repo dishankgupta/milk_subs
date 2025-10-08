@@ -1,3 +1,4 @@
+# PART 3 - From Dev to Dairy - Production Testing, Real Bugs, and Lessons for Fellow Vibe Coders
 ## The Moment of Truth
 
 It's September 15, 2025. I'm sitting in my office at PureDairy in Jalgaon, staring at a laptop screen showing 145 real customers in my database.

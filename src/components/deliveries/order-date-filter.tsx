@@ -1,41 +1,33 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { formatDateForDatabase, parseLocalDateIST } from "@/lib/date-utils"
 
 interface OrderDateFilterProps {
   defaultValue?: string
 }
 
 export function OrderDateFilter({ defaultValue }: OrderDateFilterProps) {
-  const [mounted, setMounted] = useState(false)
+  const router = useRouter()
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    // Render a placeholder during SSR to prevent hydration mismatch
-    return (
-      <form action="/dashboard/deliveries/new" method="GET" className="flex gap-2">
-        <input
-          type="date"
-          name="date"
-          className="px-3 py-1 border rounded"
-          disabled
-        />
-      </form>
-    )
+  const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      const formattedDate = formatDateForDatabase(date)
+      router.push(`/dashboard/deliveries/new?date=${formattedDate}`)
+    }
   }
 
+  const initialDate = defaultValue ? parseLocalDateIST(defaultValue) : undefined
+
   return (
-    <form action="/dashboard/deliveries/new" method="GET" className="flex gap-2">
-      <input
-        type="date"
-        name="date"
-        defaultValue={defaultValue || ""}
-        className="px-3 py-1 border rounded"
-        onChange={(e) => e.target.form?.submit()}
+    <div className="flex gap-2">
+      <UnifiedDatePicker
+        value={initialDate}
+        onChange={handleDateChange}
+        placeholder="DD-MM-YYYY"
+        className="w-[180px]"
       />
-    </form>
+    </div>
   )
 }

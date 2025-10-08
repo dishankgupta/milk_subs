@@ -8,24 +8,26 @@ import { Card, CardContent } from "@/components/ui/card"
 import { getDailyOrders } from "@/lib/actions/orders"
 import { DailyOrder } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { formatDateForDatabase, getCurrentISTDate } from "@/lib/date-utils"
+import { formatDateForDatabase, getCurrentISTDate, parseLocalDateIST } from "@/lib/date-utils"
 import { Search, MapPin, Clock, Package, Truck } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 
 export function OrdersList() {
   const [orders, setOrders] = useState<DailyOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedDate, setSelectedDate] = useState(formatDateForDatabase(getCurrentISTDate()))
+  const [selectedDate, setSelectedDate] = useState<Date>(getCurrentISTDate())
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [routeFilter, setRouteFilter] = useState<string>("all")
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true)
     try {
-      const result = await getDailyOrders(selectedDate)
+      const formattedDate = formatDateForDatabase(selectedDate)
+      const result = await getDailyOrders(formattedDate)
       if (result.success) {
         setOrders(result.data || [])
       } else {
@@ -115,11 +117,11 @@ export function OrdersList() {
         </div>
         
         <div className="flex items-center space-x-2">
-          <Input
-            type="date"
+          <UnifiedDatePicker
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-40"
+            onChange={(date) => date && setSelectedDate(date)}
+            placeholder="DD-MM-YYYY"
+            className="w-[180px]"
           />
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -282,7 +284,7 @@ export function OrdersList() {
       {/* Results count */}
       {filteredOrders.length > 0 && (
         <div className="text-sm text-muted-foreground text-center">
-          Showing {filteredOrders.length} of {orders.length} orders for {selectedDate}
+          Showing {filteredOrders.length} of {orders.length} orders for {formatDateForDatabase(selectedDate)}
         </div>
       )}
     </div>

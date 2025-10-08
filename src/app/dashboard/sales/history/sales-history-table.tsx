@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { formatDateIST, formatWithIST, parseLocalDateIST, formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 import { toast } from 'sonner'
 import { QuickPayModal } from '@/components/sales/QuickPayModal'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,8 +60,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
-  const [dateFromFilter, setDateFromFilter] = useState<string>('')
-  const [dateToFilter, setDateToFilter] = useState<string>('')
+  const [dateFromFilter, setDateFromFilter] = useState<Date | undefined>()
+  const [dateToFilter, setDateToFilter] = useState<Date | undefined>()
   const [dateFiltersModified, setDateFiltersModified] = useState(false) // Track user modifications
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
@@ -86,8 +87,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     if (isClient && !dateFiltersModified) {
       const today = getCurrentISTDate()
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-      setDateFromFilter(formatDateForDatabase(firstDay))
-      setDateToFilter(formatDateForDatabase(today))
+      setDateFromFilter(firstDay)
+      setDateToFilter(today)
     }
   }, [isClient, dateFiltersModified])
 
@@ -107,27 +108,18 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     let matchesDateRange = true
     if (dateFromFilter || dateToFilter) {
       const saleDate = new Date(sale.sale_date)
-      
-      if (dateFromFilter && dateFromFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
-        try {
-          const fromDate = parseLocalDateIST(dateFromFilter)
-          if (saleDate < fromDate) matchesDateRange = false
-        } catch (error) {
-          // Invalid date format, skip filtering
-          console.warn('Invalid from date format:', dateFromFilter)
-        }
+
+      if (dateFromFilter) {
+        const fromDate = new Date(dateFromFilter)
+        fromDate.setHours(0, 0, 0, 0)
+        if (saleDate < fromDate) matchesDateRange = false
       }
-      
-      if (dateToFilter && dateToFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
-        try {
-          const toDate = parseLocalDateIST(dateToFilter)
-          // Set time to end of day for inclusive filtering
-          toDate.setHours(23, 59, 59, 999)
-          if (saleDate > toDate) matchesDateRange = false
-        } catch (error) {
-          // Invalid date format, skip filtering
-          console.warn('Invalid to date format:', dateToFilter)
-        }
+
+      if (dateToFilter) {
+        const toDate = new Date(dateToFilter)
+        // Set time to end of day for inclusive filtering
+        toDate.setHours(23, 59, 59, 999)
+        if (saleDate > toDate) matchesDateRange = false
       }
     }
 
@@ -222,13 +214,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   }
 
   // Date filter handlers with modification tracking
-  const handleDateFromChange = (value: string) => {
-    setDateFromFilter(value)
+  const handleDateFromChange = (date: Date | undefined) => {
+    setDateFromFilter(date)
     setDateFiltersModified(true)
   }
 
-  const handleDateToChange = (value: string) => {
-    setDateToFilter(value)
+  const handleDateToChange = (date: Date | undefined) => {
+    setDateToFilter(date)
     setDateFiltersModified(true)
   }
 
@@ -236,8 +228,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     // Reset to default current month range
     const today = getCurrentISTDate()
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-    setDateFromFilter(formatDateForDatabase(firstDay))
-    setDateToFilter(formatDateForDatabase(today))
+    setDateFromFilter(firstDay)
+    setDateToFilter(today)
     setDateFiltersModified(false) // Back to system defaults
   }
 
@@ -269,8 +261,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
       
       // Only add date parameters if user explicitly modified them
       if (dateFiltersModified) {
-        if (dateFromFilter) params.set('date_from', dateFromFilter)
-        if (dateToFilter) params.set('date_to', dateToFilter)
+        if (dateFromFilter) params.set('date_from', formatDateForDatabase(dateFromFilter))
+        if (dateToFilter) params.set('date_to', formatDateForDatabase(dateToFilter))
       }
       
       // Add sorting parameters
@@ -430,20 +422,18 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
 
           {/* Date Range Filters */}
           <div className="flex gap-2 items-center">
-            <Input
-              type="date"
-              placeholder="From Date"
+            <UnifiedDatePicker
               value={dateFromFilter}
-              onChange={(e) => handleDateFromChange(e.target.value)}
-              className="w-[150px]"
+              onChange={handleDateFromChange}
+              placeholder="From Date (DD-MM-YYYY)"
+              className="w-[180px]"
             />
             <span className="text-muted-foreground text-sm">to</span>
-            <Input
-              type="date"
-              placeholder="To Date"
+            <UnifiedDatePicker
               value={dateToFilter}
-              onChange={(e) => handleDateToChange(e.target.value)}
-              className="w-[150px]"
+              onChange={handleDateToChange}
+              placeholder="To Date (DD-MM-YYYY)"
+              className="w-[180px]"
             />
           </div>
 

@@ -23,9 +23,10 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Download, Search, Filter } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
-import { formatDateIST } from "@/lib/date-utils"
+import { formatDateIST, formatDateForDatabase, parseLocalDateIST } from "@/lib/date-utils"
 import { getPaymentReport, type PaymentReportData, type PaymentReportFilters } from "@/lib/actions/reports"
 import { toast } from "sonner"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 
 export function PaymentCollectionReport() {
   const [payments, setPayments] = useState<PaymentReportData[]>([])
@@ -36,8 +37,8 @@ export function PaymentCollectionReport() {
   // Filter state
   const [paymentMethod, setPaymentMethod] = useState<string>("all")
   const [allocationStatus, setAllocationStatus] = useState<string>("all")
-  const [startDate, setStartDate] = useState<string>("")
-  const [endDate, setEndDate] = useState<string>("")
+  const [startDate, setStartDate] = useState<Date | undefined>()
+  const [endDate, setEndDate] = useState<Date | undefined>()
 
   // Load payment data
   const loadPayments = async () => {
@@ -70,16 +71,16 @@ export function PaymentCollectionReport() {
     setFilters({
       paymentMethod: paymentMethod && paymentMethod !== "all" ? paymentMethod : undefined,
       allocationStatus: allocationStatus && allocationStatus !== "all" ? allocationStatus : undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined
+      startDate: startDate ? formatDateForDatabase(startDate) : undefined,
+      endDate: endDate ? formatDateForDatabase(endDate) : undefined
     })
   }
 
   const handleClearFilters = () => {
     setPaymentMethod("all")
     setAllocationStatus("all")
-    setStartDate("")
-    setEndDate("")
+    setStartDate(undefined)
+    setEndDate(undefined)
     setSearch("")
     setFilters({})
   }
@@ -213,19 +214,19 @@ export function PaymentCollectionReport() {
             {/* Date Range */}
             <div className="space-y-2">
               <Label>Start Date</Label>
-              <Input
-                type="date"
+              <UnifiedDatePicker
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={setStartDate}
+                placeholder="DD-MM-YYYY"
               />
             </div>
 
             <div className="space-y-2">
               <Label>End Date</Label>
-              <Input
-                type="date"
+              <UnifiedDatePicker
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={setEndDate}
+                placeholder="DD-MM-YYYY"
               />
             </div>
 
