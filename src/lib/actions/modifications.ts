@@ -87,10 +87,6 @@ export async function getModifications({
       query = query.eq('modification_type', type)
     }
 
-    if (search) {
-      query = query.or(`customer.billing_name.ilike.%${search}%,customer.contact_person.ilike.%${search}%,product.name.ilike.%${search}%`)
-    }
-
     const { data: modifications, error } = await query
 
     if (error) {
@@ -98,8 +94,8 @@ export async function getModifications({
     }
 
     const currentDateString = formatDateForDatabase(getCurrentISTDate())
-    
-    // Add computed expiration status and filter based on includeExpired
+
+    // Add computed expiration status and filter based on includeExpired and search
     const enhancedModifications = (modifications as Modification[])
       .map(mod => ({
         ...mod,
@@ -110,6 +106,18 @@ export async function getModifications({
         effectivelyActive: mod.is_active && currentDateString <= mod.end_date
       }))
       .filter(mod => {
+        // Apply search filter (client-side for joined tables)
+        if (search) {
+          const searchLower = search.toLowerCase()
+          const matchesCustomerName = mod.customer?.billing_name?.toLowerCase().includes(searchLower)
+          const matchesContactPerson = mod.customer?.contact_person?.toLowerCase().includes(searchLower)
+          const matchesProduct = mod.product?.name?.toLowerCase().includes(searchLower)
+
+          if (!matchesCustomerName && !matchesContactPerson && !matchesProduct) {
+            return false
+          }
+        }
+
         // If not including expired, only show active modifications where end_date hasn't passed
         if (!includeExpired) {
           // Filter out inactive (archived) modifications
