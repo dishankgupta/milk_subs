@@ -183,6 +183,25 @@ const formatted = formatDateIST(date)
 const parsed = parseLocalDateIST(dateString)
 ```
 
+### Date Picker Usage (MANDATORY)
+```typescript
+// ✅ ALWAYS use UnifiedDatePicker for all date/time inputs
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
+
+// Date only (DD-MM-YYYY)
+<UnifiedDatePicker value={date} onChange={setDate} placeholder="DD-MM-YYYY" />
+
+// Date + Time (DD-MM-YYYY HH:mm for delivery timestamps)
+<UnifiedDatePicker value={deliveredAt} onChange={setDeliveredAt} withTime={true} />
+
+// Date Range (use TWO separate pickers)
+<UnifiedDatePicker value={startDate} onChange={setStartDate} placeholder="Start Date" />
+<UnifiedDatePicker value={endDate} onChange={setEndDate} placeholder="End Date" minDate={startDate} />
+
+// ❌ DO NOT use native <input type="date"> or old Calendar+Popover patterns
+// ❌ DO NOT create range picker components (always use two separate pickers)
+```
+
 ### Database Operations
 ```typescript
 // Use server actions for all database operations
@@ -435,4 +454,4 @@ The system successfully manages subscriptions, deliveries, sales, payments, and 
 - **Sales Payment Bypass (Sep 2025)**: Direct payment allocation to credit sales without invoice generation. Enables mixed allocations (invoices + opening balance + sales) from payment screen. Outstanding calculations remain unaffected.
 - **Outstanding Invoices Report (Oct 2025)**: Financial year-based report showing unpaid/partially paid invoices with detailed payment allocation tracking. Accessible from outstanding reports page, displays invoices with status sent/pending/partially_paid/overdue in compact table format.
 - **Bulk Modifications (Oct 2025)**: Multi-row modification entry with customer search, product dropdown (filtered by active subscriptions), real-time subscription display, and validation. Supports Skip/Increase/Decrease/Add Note types with date range selection and keyboard shortcuts (Alt+A to add row, Tab on last field to add new row).
-- **Unified Date Picker (Oct 2025)**: Standardized date input component (`src/components/ui/unified-date-picker.tsx`) with DD-MM-YYYY format, manual typing with auto-formatting, calendar popup with month/year dropdowns, year validation (2000-2099), and optional time picker support. Replaces all native `type="date"` inputs for consistent UX across the application. Phase 2 migration complete: 9 files converted from native inputs to UnifiedDatePicker.
+- **Unified Date Picker (Oct 2025)**: Standardized date input component (`src/components/ui/unified-date-picker.tsx`) with DD-MM-YYYY format, manual typing with auto-formatting, calendar popup with month/year dropdowns, year validation (2000-2099), and optional time picker support. **Migration complete**: All 30+ files migrated across 5 phases. Deprecated components: `date-filter.tsx`, `order-date-filter.tsx` (kept for server-side forms), `enhanced-date-filter.tsx` (replaced with preset dropdown + UnifiedDatePicker pattern).
