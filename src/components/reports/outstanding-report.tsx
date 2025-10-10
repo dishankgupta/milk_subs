@@ -3,18 +3,16 @@
 import React, { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Calendar, 
-  FileText, 
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
   Printer,
   Download,
   Calculator,
   Loader2,
   Search
 } from "lucide-react"
-import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,10 +24,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { formatCurrency, cn, formatDateForAPI } from "@/lib/utils"
-import { formatDateIST, getCurrentISTDate } from "@/lib/date-utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { formatCurrency, formatDateForAPI } from "@/lib/utils"
+import { getCurrentISTDate } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 import { generateOutstandingReport } from "@/lib/actions/outstanding-reports"
 import { outstandingReportSchema, type OutstandingReportFormData } from "@/lib/validations"
@@ -234,32 +231,12 @@ export function OutstandingReport() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start Date (Report Period Start)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.watch("start_date") && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {form.watch("start_date") ? (
-                        format(form.watch("start_date"), "PPP")
-                      ) : (
-                        "Pick start date"
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={form.watch("start_date")}
-                      onSelect={(date) => form.setValue("start_date", date || new Date())}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <UnifiedDatePicker
+                  value={form.watch("start_date")}
+                  onChange={(date) => form.setValue("start_date", date || new Date())}
+                  placeholder="DD-MM-YYYY"
+                  className="w-full"
+                />
                 <p className="text-xs text-gray-500">
                   Opening balance calculated as of day before this date
                 </p>
@@ -267,33 +244,13 @@ export function OutstandingReport() {
 
               <div className="space-y-2">
                 <Label>End Date (Outstanding Calculation Date)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.watch("end_date") && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {form.watch("end_date") ? (
-                        format(form.watch("end_date"), "PPP")
-                      ) : (
-                        "Pick end date"
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={form.watch("end_date")}
-                      onSelect={(date) => form.setValue("end_date", date || new Date())}
-                      disabled={(date) => date < form.watch("start_date")}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <UnifiedDatePicker
+                  value={form.watch("end_date")}
+                  onChange={(date) => form.setValue("end_date", date || new Date())}
+                  placeholder="DD-MM-YYYY"
+                  className="w-full"
+                  minDate={form.watch("start_date")}
+                />
               </div>
             </div>
 

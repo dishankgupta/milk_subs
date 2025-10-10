@@ -11,11 +11,12 @@ import { DeliveriesTable } from "./deliveries-table"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { DeliveryExtended } from "@/lib/types"
-import type { DateFilterState } from "@/components/ui/enhanced-date-filter"
 
 interface FilterState {
   searchQuery: string
-  dateFilter: DateFilterState
+  startDate: Date | undefined
+  endDate: Date | undefined
+  datePreset: string
   routeFilter: string
 }
 
@@ -89,7 +90,9 @@ function DeliveriesContent() {
   const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryExtended[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
-    dateFilter: { preset: "mostRecent", label: "Most Recent" },
+    startDate: undefined,
+    endDate: undefined,
+    datePreset: "mostRecent",
     routeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
@@ -126,12 +129,12 @@ function DeliveriesContent() {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
 
-    // Handle enhanced date filter for print
-    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
-      params.append('date_from', currentFilters.dateFilter.fromDate.toISOString().split('T')[0])
-      params.append('date_to', currentFilters.dateFilter.toDate.toISOString().split('T')[0])
+    // Handle date filter for print
+    if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
+      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
     } else {
-      params.append('datePreset', currentFilters.dateFilter.preset)
+      params.append('datePreset', currentFilters.datePreset)
     }
 
     if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
@@ -148,12 +151,12 @@ function DeliveriesContent() {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
 
-    // Handle enhanced date filter for print
-    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
-      params.append('date_from', currentFilters.dateFilter.fromDate.toISOString().split('T')[0])
-      params.append('date_to', currentFilters.dateFilter.toDate.toISOString().split('T')[0])
+    // Handle date filter for print
+    if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
+      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
     } else {
-      params.append('datePreset', currentFilters.dateFilter.preset)
+      params.append('datePreset', currentFilters.datePreset)
     }
 
     if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)

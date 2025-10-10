@@ -7,8 +7,7 @@ import type { OutstandingCustomerData } from '@/lib/types/outstanding-reports'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 import {
   ArrowLeft,
   CreditCard,
@@ -25,7 +24,7 @@ import {
   ShoppingCart,
   Wallet
 } from 'lucide-react'
-import { formatCurrency, cn, formatDateForAPI } from '@/lib/utils'
+import { formatCurrency, formatDateForAPI } from '@/lib/utils'
 import { formatDateIST } from '@/lib/date-utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
@@ -134,54 +133,23 @@ export function CustomerOutstandingDetail({
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Start Date:</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? formatDateIST(startDate) : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => date && setStartDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={startDate}
+                onChange={(date) => date && setStartDate(date)}
+                placeholder="DD-MM-YYYY"
+                className="w-[180px]"
+              />
             </div>
 
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">End Date:</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? formatDateIST(endDate) : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => date && setEndDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={endDate}
+                onChange={(date) => date && setEndDate(date)}
+                placeholder="DD-MM-YYYY"
+                className="w-[180px]"
+                minDate={startDate}
+              />
             </div>
 
             <Button onClick={handlePeriodChange}>Apply</Button>

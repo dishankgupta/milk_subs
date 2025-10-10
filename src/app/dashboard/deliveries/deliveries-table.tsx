@@ -25,15 +25,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { EnhancedDateFilter, DateFilterState, doesDateMatchFilter } from "@/components/ui/enhanced-date-filter"
-import { parseLocalDateIST, formatDateIST } from "@/lib/date-utils"
-import { startOfDay, endOfDay } from "date-fns"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { parseLocalDateIST, getCurrentISTDate } from "@/lib/date-utils"
+import { startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from "date-fns"
 
 // Using DeliveryExtended which contains all necessary fields directly
 
 interface FilterState {
   searchQuery: string
-  dateFilter: DateFilterState
+  startDate: Date | undefined
+  endDate: Date | undefined
+  datePreset: string
   routeFilter: string
 }
 
@@ -52,10 +54,26 @@ interface DeliveriesTableProps {
 export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChange, onSortChange }: DeliveriesTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [dateFilter, setDateFilter] = useState<DateFilterState>({ preset: "mostRecent", label: "Most Recent" })
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
+  const [datePreset, setDatePreset] = useState<string>("mostRecent")
   const [routeFilter, setRouteFilter] = useState<string>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Helper function to check if a date is within the selected range
+  const isDateInRange = (dateStr: string): boolean => {
+    if (!startDate && !endDate) return true
+
+    const deliveryDate = parseLocalDateIST(dateStr)
+    const start = startDate ? startOfDay(startDate) : null
+    const end = endDate ? endOfDay(endDate) : null
+
+    if (start && deliveryDate < start) return false
+    if (end && deliveryDate > end) return false
+
+    return true
+  }
 
   // Filter deliveries based on search and filters (client-side only)
   const filteredDeliveries = initialDeliveries.filter(delivery => {
@@ -65,7 +83,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       delivery.customer?.billing_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       delivery.customer?.contact_person.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesDate = doesDateMatchFilter(delivery.order_date, dateFilter)
+    const matchesDate = isDateInRange(delivery.order_date)
 
     const matchesRoute = routeFilter === "all" ||
       delivery.route?.name === routeFilter
@@ -109,32 +127,77 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   // Get unique dates for setting default (most recent date)
   const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
 
+  // Handle preset changes
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset)
+    const today = getCurrentISTDate()
+
+    switch (preset) {
+      case "mostRecent":
+        if (uniqueDates.length > 0) {
+          const mostRecentDate = parseLocalDateIST(uniqueDates[0])
+          setStartDate(startOfDay(mostRecentDate))
+          setEndDate(endOfDay(mostRecentDate))
+        }
+        break
+      case "today":
+        setStartDate(startOfDay(today))
+        setEndDate(endOfDay(today))
+        break
+      case "yesterday":
+        const yesterday = subDays(today, 1)
+        setStartDate(startOfDay(yesterday))
+        setEndDate(endOfDay(yesterday))
+        break
+      case "last7days":
+        setStartDate(startOfDay(subDays(today, 6)))
+        setEndDate(endOfDay(today))
+        break
+      case "last30days":
+        setStartDate(startOfDay(subDays(today, 29)))
+        setEndDate(endOfDay(today))
+        break
+      case "thisWeek":
+        setStartDate(startOfWeek(today, { weekStartsOn: 1 }))
+        setEndDate(endOfWeek(today, { weekStartsOn: 1 }))
+        break
+      case "thisMonth":
+        setStartDate(startOfMonth(today))
+        setEndDate(endOfMonth(today))
+        break
+      case "lastMonth":
+        const lastMonth = subMonths(today, 1)
+        setStartDate(startOfMonth(lastMonth))
+        setEndDate(endOfMonth(lastMonth))
+        break
+      case "custom":
+        // User will set dates manually
+        break
+    }
+  }
+
   // Set default date filter to most recent date on first load
   useEffect(() => {
-    if (uniqueDates.length > 0 && dateFilter.preset === "mostRecent" && dateFilter.label === "Most Recent") {
-      const mostRecentDate = uniqueDates[0]
-      const recentDate = parseLocalDateIST(mostRecentDate)
-      setDateFilter({
-        preset: "mostRecent",
-        fromDate: startOfDay(recentDate),
-        toDate: endOfDay(recentDate),
-        label: `Most Recent (${formatDateIST(recentDate)})`,
-        mostRecentDate: mostRecentDate
-      })
+    if (uniqueDates.length > 0 && !startDate && !endDate) {
+      const mostRecentDate = parseLocalDateIST(uniqueDates[0])
+      setStartDate(startOfDay(mostRecentDate))
+      setEndDate(endOfDay(mostRecentDate))
     }
-  }, [uniqueDates, dateFilter.preset, dateFilter.label])
+  }, [uniqueDates, startDate, endDate])
 
   // Notify parent component when filters change
   useEffect(() => {
     if (onFiltersChange) {
       const currentFilters = {
         searchQuery,
-        dateFilter,
+        startDate,
+        endDate,
+        datePreset,
         routeFilter
       }
       onFiltersChange(filteredDeliveries, currentFilters)
     }
-  }, [searchQuery, dateFilter, routeFilter]) // Remove onFiltersChange from deps
+  }, [searchQuery, startDate, endDate, datePreset, routeFilter]) // Remove onFiltersChange from deps
 
   // Notify parent component when sort changes
   useEffect(() => {
@@ -230,14 +293,49 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               className="pl-10"
             />
           </div>
-          <div className="flex gap-2">
-            <EnhancedDateFilter
-              value={dateFilter}
-              onChange={setDateFilter}
-              className="w-[400px]"
-              mostRecentDate={uniqueDates[0]}
+          <div className="flex gap-2 flex-wrap">
+            {/* Date Preset Dropdown */}
+            <Select value={datePreset} onValueChange={handlePresetChange}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Quick select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mostRecent">Most Recent</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="last7days">Last 7 Days</SelectItem>
+                <SelectItem value="last30days">Last 30 Days</SelectItem>
+                <SelectItem value="thisWeek">This Week</SelectItem>
+                <SelectItem value="thisMonth">This Month</SelectItem>
+                <SelectItem value="lastMonth">Last Month</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Start Date Picker */}
+            <UnifiedDatePicker
+              value={startDate}
+              onChange={(date) => {
+                setStartDate(date)
+                if (datePreset !== "custom") setDatePreset("custom")
+              }}
+              placeholder="Start Date"
+              className="w-[140px]"
             />
-            
+
+            {/* End Date Picker */}
+            <UnifiedDatePicker
+              value={endDate}
+              onChange={(date) => {
+                setEndDate(date)
+                if (datePreset !== "custom") setDatePreset("custom")
+              }}
+              placeholder="End Date"
+              className="w-[140px]"
+              minDate={startDate}
+            />
+
+            {/* Route Filter */}
             <Select value={routeFilter} onValueChange={setRouteFilter}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="Route" />

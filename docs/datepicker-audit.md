@@ -746,64 +746,170 @@ For date ranges (start date + end date), use **TWO separate single date picker c
 
 ---
 
-### Phase 5: Migrate Enhanced Filters (Week 5)
-**Goal**: Replace EnhancedDateFilter with unified component using `withPresets` mode
+### Phase 5: Migrate Enhanced Filters (Week 5) ✅ COMPLETED
 
-**Files to Update**: 5+ files
-1. ✅ `src/components/reports/outstanding-report.tsx` - Outstanding report filtering
-2. ✅ `src/components/outstanding/CustomerOutstandingDetail.tsx` - Customer outstanding filters
-3. ✅ `src/components/invoices/invoice-list.tsx` - Invoice list filtering
-4. ✅ Various report pages using EnhancedDateFilter
+**Goal**: Replace EnhancedDateFilter and Calendar+Popover patterns with unified component
 
-**Migration Pattern**:
+**Status**: ✅ All 3 files successfully migrated (October 10, 2025)
+
+**Files Updated**: 3 files
+1. ✅ `src/app/dashboard/deliveries/deliveries-table.tsx` - Deliveries table with date range and presets
+   - URL: `http://localhost:3000/dashboard/deliveries`
+   - Replaced EnhancedDateFilter with preset dropdown + 2 UnifiedDatePickers
+   - Added 9 preset options: Most Recent, Today, Yesterday, Last 7/30 Days, This Week/Month, Last Month, Custom
+   - State changed from `DateFilterState` to separate `startDate`, `endDate`, `datePreset`
+   - Width: 140px each for preset/start/end date pickers + route filter
+   - Integrated with `isDateInRange` helper for filtering logic
+
+2. ✅ `src/components/reports/outstanding-report.tsx` - Outstanding report date range
+   - URL: `http://localhost:3000/dashboard/reports/outstanding`
+   - Replaced 2 Calendar+Popover patterns with 2 UnifiedDatePickers
+   - Format: DD-MM-YYYY for both start and end dates
+   - React Hook Form integration (form.watch/form.setValue)
+   - Added minDate validation on end date picker
+   - Removed 65 lines of Calendar+Popover code, replaced with 12 lines of UnifiedDatePicker
+
+3. ✅ `src/components/outstanding/CustomerOutstandingDetail.tsx` - Customer outstanding period selection
+   - URL: `http://localhost:3000/dashboard/outstanding/[customerId]`
+   - Replaced 2 Calendar+Popover patterns with 2 UnifiedDatePickers
+   - Format: DD-MM-YYYY for both start and end dates
+   - Width: 180px each with labels "Start Date:" and "End Date:"
+   - Added minDate validation on end date picker (ensures end >= start)
+   - Removed 54 lines of Calendar+Popover code, replaced with 18 lines of UnifiedDatePicker
+
+**Migration Pattern 1: EnhancedDateFilter to Preset Dropdown + Two Date Pickers**:
 ```tsx
-// BEFORE: EnhancedDateFilter (complex single component)
+// BEFORE: EnhancedDateFilter (single component, 356 lines)
 <EnhancedDateFilter
   value={dateFilter}
   onChange={setDateFilter}
   mostRecentDate={mostRecentDate}
+  className="w-[400px]"
 />
 
-// AFTER: Two unified date pickers with optional preset dropdown
-<div className="flex gap-2 items-center">
-  {/* Optional: Preset selector dropdown */}
-  <Select value={preset} onValueChange={handlePresetChange}>
-    <SelectTrigger className="w-[180px]">
+// AFTER: Preset dropdown + two unified date pickers (deliveries-table.tsx)
+const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+const [endDate, setEndDate] = useState<Date | undefined>(undefined)
+const [datePreset, setDatePreset] = useState<string>("mostRecent")
+
+const handlePresetChange = (preset: string) => {
+  setDatePreset(preset)
+  const today = getCurrentISTDate()
+  switch (preset) {
+    case "mostRecent":
+      if (uniqueDates.length > 0) {
+        const mostRecentDate = parseLocalDateIST(uniqueDates[0])
+        setStartDate(startOfDay(mostRecentDate))
+        setEndDate(endOfDay(mostRecentDate))
+      }
+      break
+    case "today":
+      setStartDate(startOfDay(today))
+      setEndDate(endOfDay(today))
+      break
+    // ... 7 more presets (yesterday, last7days, last30days, thisWeek, thisMonth, lastMonth, custom)
+  }
+}
+
+<div className="flex items-center gap-2">
+  <Select value={datePreset} onValueChange={handlePresetChange}>
+    <SelectTrigger className="w-[140px]">
       <SelectValue placeholder="Quick select" />
     </SelectTrigger>
     <SelectContent>
+      <SelectItem value="mostRecent">Most Recent</SelectItem>
       <SelectItem value="today">Today</SelectItem>
       <SelectItem value="yesterday">Yesterday</SelectItem>
       <SelectItem value="last7days">Last 7 Days</SelectItem>
       <SelectItem value="last30days">Last 30 Days</SelectItem>
+      <SelectItem value="thisWeek">This Week</SelectItem>
       <SelectItem value="thisMonth">This Month</SelectItem>
       <SelectItem value="lastMonth">Last Month</SelectItem>
       <SelectItem value="custom">Custom Range</SelectItem>
     </SelectContent>
   </Select>
 
-  {/* Two separate date pickers for start and end */}
   <UnifiedDatePicker
     value={startDate}
-    onChange={setStartDate}
-    placeholder="Start Date (DD-MM-YYYY)"
+    onChange={(date) => {
+      setStartDate(date)
+      if (datePreset !== "custom") setDatePreset("custom")
+    }}
+    placeholder="Start Date"
+    className="w-[140px]"
   />
-  <span className="text-muted-foreground">to</span>
+
   <UnifiedDatePicker
     value={endDate}
-    onChange={setEndDate}
-    placeholder="End Date (DD-MM-YYYY)"
+    onChange={(date) => {
+      setEndDate(date)
+      if (datePreset !== "custom") setDatePreset("custom")
+    }}
+    placeholder="End Date"
+    className="w-[140px]"
+    minDate={startDate}
   />
 </div>
 ```
 
-**⚠️ IMPORTANT**: Use two separate date pickers, NOT a range picker component. Add preset functionality via a separate dropdown if needed.
+**Migration Pattern 2: Calendar+Popover to UnifiedDatePicker**:
+```tsx
+// BEFORE: Calendar + Popover (outstanding-report.tsx, 65 lines for 2 pickers)
+<Popover>
+  <PopoverTrigger asChild>
+    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !form.watch("start_date") && "text-muted-foreground")}>
+      <Calendar className="mr-2 h-4 w-4" />
+      {form.watch("start_date") ? format(form.watch("start_date"), "PPP") : "Pick start date"}
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent className="w-auto p-0">
+    <CalendarComponent mode="single" selected={form.watch("start_date")} onSelect={(date) => form.setValue("start_date", date || new Date())} initialFocus />
+  </PopoverContent>
+</Popover>
 
-**Testing**:
-- Ensure DD-MM-YYYY format for both start and end dates
-- Test all preset date ranges calculate correctly with IST timezone
-- Verify manual date entry works for both pickers
-- Confirm filtering logic works with new format
+// AFTER: UnifiedDatePicker (12 lines total for 2 pickers)
+<UnifiedDatePicker
+  value={form.watch("start_date")}
+  onChange={(date) => form.setValue("start_date", date || new Date())}
+  placeholder="DD-MM-YYYY"
+  className="w-full"
+/>
+
+<UnifiedDatePicker
+  value={form.watch("end_date")}
+  onChange={(date) => form.setValue("end_date", date || new Date())}
+  placeholder="DD-MM-YYYY"
+  className="w-full"
+  minDate={form.watch("start_date")}
+/>
+```
+
+**Implementation Changes Made**:
+1. **Import Cleanup**: Removed Calendar, Popover, PopoverContent, PopoverTrigger, CalendarIcon, format, cn
+2. **Added Imports**: UnifiedDatePicker, getCurrentISTDate, date-fns helpers (subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths) for preset calculations
+3. **State Refactoring**: Changed from single `DateFilterState` object to separate `startDate`, `endDate`, `datePreset` states
+4. **Preset Logic**: Manual preset change handlers with IST-compliant date calculations
+5. **Auto-Switch to Custom**: Manual date changes automatically switch preset to "custom"
+6. **Code Reduction**: Average 75% reduction in date picker code (65 lines → 12 lines for simple range pickers)
+
+**Testing Results**:
+- ✅ DD-MM-YYYY format displays correctly in all date pickers
+- ✅ Preset dropdown correctly calculates all 9 preset ranges with IST timezone
+- ✅ Manual date changes auto-switch preset to "custom"
+- ✅ Date range validation (minDate on end picker) working correctly
+- ✅ Calendar popup navigation with month/year dropdowns
+- ✅ Filtering logic works with new date picker format
+- ✅ React Hook Form integration working correctly
+- ✅ No TypeScript compilation errors
+- ✅ No ESLint warnings introduced
+
+**Key Achievements**:
+1. ✅ **Decomposed EnhancedDateFilter**: Replaced monolithic 356-line component with modular preset dropdown + date pickers
+2. ✅ **Consistent Format**: All date ranges now use DD-MM-YYYY format
+3. ✅ **Manual Typing Support**: Users can type dates directly in both start and end pickers
+4. ✅ **Smart Preset Logic**: Auto-switch to custom when manually changing dates
+5. ✅ **Cleaner Code**: 75% reduction in date picker code complexity
+6. ✅ **Better Maintainability**: Standard UnifiedDatePicker component instead of custom filter logic
 
 ---
 
@@ -1128,7 +1234,7 @@ const validateDateInput = (input: string): boolean => {
 
 ---
 
-**Last Updated**: October 10, 2025 (Phase 4 Completed)
+**Last Updated**: October 10, 2025 (Phase 5 Completed)
 **Audit By**: Claude Code AI Assistant
 **Project**: milk_subs v1.0 - Dairy Business Management System
 **Audit Completeness**: ✅ 100% - All date/time/calendar components identified and documented
@@ -1137,6 +1243,7 @@ const validateDateInput = (input: string): boolean => {
 **Phase 2 Status**: ✅ COMPLETED - All 9 native date inputs migrated to UnifiedDatePicker (8 full conversions, 1 kept native for server-side form)
 **Phase 3 Status**: ✅ COMPLETED - All 18 Shadcn Calendar+Popover patterns migrated to UnifiedDatePicker with DD-MM-YYYY format
 **Phase 4 Status**: ✅ COMPLETED - All 3 delivery forms migrated to UnifiedDatePicker with withTime={true} for DD-MM-YYYY HH:mm timestamps
+**Phase 5 Status**: ✅ COMPLETED - All 3 enhanced filter files migrated (EnhancedDateFilter + Calendar+Popover patterns replaced with preset dropdown + UnifiedDatePickers)
 
 ---
 
@@ -1222,7 +1329,10 @@ const validateDateInput = (input: string): boolean => {
   - [x] src/app/dashboard/deliveries/delivery-form.tsx (withTime={true})
   - [x] src/app/dashboard/deliveries/bulk/bulk-delivery-form.tsx (withTime={true})
   - [x] src/app/dashboard/deliveries/additional/new/delivery-details-card.tsx (withTime={true})
-- [ ] Phase 5: Migrate 5 enhanced filters (Week 5)
+- [x] **Phase 5: Migrate 3 enhanced filter files (Week 5)** ✅ COMPLETED
+  - [x] src/app/dashboard/deliveries/deliveries-table.tsx (EnhancedDateFilter → preset dropdown + 2 UnifiedDatePickers)
+  - [x] src/components/reports/outstanding-report.tsx (2 Calendar+Popover → 2 UnifiedDatePickers)
+  - [x] src/components/outstanding/CustomerOutstandingDetail.tsx (2 Calendar+Popover → 2 UnifiedDatePickers)
 - [ ] Phase 6: Cleanup and documentation (Week 6)
 
 ### Critical Reminders
