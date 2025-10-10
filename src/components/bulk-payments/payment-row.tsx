@@ -2,16 +2,13 @@
 
 import { useState } from 'react'
 import { UseFormReturn, useWatch } from 'react-hook-form'
-import { format } from 'date-fns'
-import { CalendarIcon, X, DollarSign } from 'lucide-react'
+import { X, DollarSign } from 'lucide-react'
 import { TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/utils'
 import type { Customer } from '@/lib/types'
 import type { BulkPaymentFormData, PaymentAllocationItem } from '@/lib/validations'
@@ -149,29 +146,12 @@ export function PaymentRow({
 
         {/* Payment Date */}
         <TableCell>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[140px] justify-start text-left font-normal",
-                  !payment?.payment_date && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {payment?.payment_date ? format(payment.payment_date, "PP") : <span>Pick date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={payment?.payment_date}
-                onSelect={(date) => form.setValue(`payments.${index}.payment_date`, date || new Date(), { shouldValidate: true })}
-                disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <UnifiedDatePicker
+            value={payment?.payment_date}
+            onChange={(date) => form.setValue(`payments.${index}.payment_date`, date || new Date(), { shouldValidate: true })}
+            placeholder="DD-MM-YYYY"
+            className="w-[140px]"
+          />
           {form.formState.errors.payments?.[index]?.payment_date && (
             <p className="text-xs text-red-600 mt-1">
               {form.formState.errors.payments[index]?.payment_date?.message}

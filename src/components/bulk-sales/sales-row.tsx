@@ -2,17 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { UseFormReturn } from "react-hook-form"
-import { Trash2, CalendarIcon } from "lucide-react"
-import { format, parse, isValid } from "date-fns"
+import { Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import { Badge } from "@/components/ui/badge"
-import { cn, formatCurrency, calculateGSTFromInclusive } from "@/lib/utils"
-import { getCurrentISTDate, formatDateIST, parseLocalDateIST } from "@/lib/date-utils"
+import { formatCurrency, calculateGSTFromInclusive } from "@/lib/utils"
 
 import type { Product, Customer, SaleFormData } from "@/lib/types"
 
@@ -37,8 +34,6 @@ export function SalesRow({
   onAddRow,
   isLastRow = false
 }: SalesRowProps) {
-  const [showCalendar, setShowCalendar] = useState(false)
-  const [dateInput, setDateInput] = useState("")
   const notesRef = useRef<HTMLInputElement>(null)
 
   const watchedSale = form.watch(`sales.${index}`)
@@ -69,13 +64,6 @@ export function SalesRow({
   const selectedCustomerName = customers.find(c => c.id === watchedSale?.customer_id)?.billing_name || ""
   const selectedProductName = products.find(p => p.id === watchedSale?.product_id)?.name || ""
 
-  // Initialize date input display
-  useEffect(() => {
-    if (watchedSale?.sale_date) {
-      setDateInput(formatDateIST(watchedSale.sale_date))
-    }
-  }, [watchedSale?.sale_date])
-
   // Auto-fill unit price when product changes
   useEffect(() => {
     if (selectedProduct && watchedSale && watchedSale.product_id) {
@@ -103,31 +91,6 @@ export function SalesRow({
     : null
 
   const errors = form.formState.errors.sales?.[index]
-
-  // Handle date input change
-  const handleDateInputChange = (value: string) => {
-    setDateInput(value)
-
-    // Try to parse various date formats
-    const formats = ['dd/MM/yyyy', 'dd-MM-yyyy', 'yyyy-MM-dd', 'dd/MM/yy', 'dd-MM-yy']
-    let parsedDate: Date | null = null
-
-    for (const formatStr of formats) {
-      try {
-        const parsed = parse(value, formatStr, new Date())
-        if (isValid(parsed)) {
-          parsedDate = parsed
-          break
-        }
-      } catch {
-        continue
-      }
-    }
-
-    if (parsedDate) {
-      form.setValue(`sales.${index}.sale_date`, parsedDate)
-    }
-  }
 
   // Handle customer dropdown keyboard navigation
   const handleCustomerKeyDown = (e: React.KeyboardEvent) => {
@@ -486,45 +449,12 @@ export function SalesRow({
 
       {/* Sale Date */}
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
-        <div className="flex items-center space-x-1">
-          <Input
-            type="text"
-            className="h-8 flex-1"
-            placeholder="dd/mm/yyyy"
-            value={dateInput}
-            onChange={(e) => handleDateInputChange(e.target.value)}
-            onFocus={() => {
-              if (!dateInput && watchedSale?.sale_date) {
-                setDateInput(formatDateIST(watchedSale.sale_date))
-              }
-            }}
-          />
-          <Popover open={showCalendar} onOpenChange={setShowCalendar}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0 shrink-0"
-              >
-                <CalendarIcon className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={watchedSale?.sale_date}
-                onSelect={(date) => {
-                  const selectedDate = date || getCurrentISTDate()
-                  form.setValue(`sales.${index}.sale_date`, selectedDate)
-                  setDateInput(formatDateIST(selectedDate))
-                  setShowCalendar(false)
-                }}
-                disabled={(date) => date > new Date()}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <UnifiedDatePicker
+          value={watchedSale?.sale_date}
+          onChange={(date) => form.setValue(`sales.${index}.sale_date`, date)}
+          placeholder="DD-MM-YYYY"
+          className="h-8"
+        />
         {errors?.sale_date && (
           <p className="text-xs text-red-600 mt-1">{errors.sale_date.message}</p>
         )}

@@ -23,6 +23,8 @@ export interface UnifiedDatePickerProps {
   placeholder?: string
   disabled?: boolean
   className?: string
+  minDate?: Date
+  maxDate?: Date
 }
 
 export function UnifiedDatePicker({
@@ -32,6 +34,8 @@ export function UnifiedDatePicker({
   placeholder = "DD-MM-YYYY",
   disabled = false,
   className,
+  minDate,
+  maxDate,
 }: UnifiedDatePickerProps) {
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
@@ -148,6 +152,17 @@ export function UnifiedDatePicker({
     }
   }
 
+  // Validate date against min/max constraints
+  const validateDate = (date: Date): boolean => {
+    if (minDate && date < minDate) {
+      return false
+    }
+    if (maxDate && date > maxDate) {
+      return false
+    }
+    return true
+  }
+
   // Handle input blur (final validation and formatting)
   const handleInputBlur = () => {
     if (!inputValue.trim()) {
@@ -158,6 +173,24 @@ export function UnifiedDatePicker({
 
     const parsed = parseDateInput(inputValue)
     if (parsed) {
+      // Validate against min/max dates
+      if (!validateDate(parsed)) {
+        let errorMsg = "Date is outside allowed range"
+        if (minDate && parsed < minDate) {
+          errorMsg = `Date must be on or after ${formatDateDisplay(minDate, false)}`
+        } else if (maxDate && parsed > maxDate) {
+          errorMsg = `Date must be on or before ${formatDateDisplay(maxDate, false)}`
+        }
+        toast.error(errorMsg)
+        // Restore previous value
+        if (selectedDate) {
+          setInputValue(formatDateDisplay(selectedDate, withTime))
+        } else {
+          setInputValue("")
+        }
+        return
+      }
+
       // Format nicely on blur
       const formatted = formatDateDisplay(parsed, withTime)
       setInputValue(formatted)
@@ -261,7 +294,12 @@ export function UnifiedDatePicker({
             onSelect={handleCalendarSelect}
             month={month}
             onMonthChange={setMonth}
-            disabled={disabled}
+            disabled={(date) => {
+              if (disabled) return true
+              if (minDate && date < minDate) return true
+              if (maxDate && date > maxDate) return true
+              return false
+            }}
           />
           {withTime && selectedDate && (
             <div className="p-3 border-t">

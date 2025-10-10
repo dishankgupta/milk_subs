@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CalendarIcon, Package, User, MapPin, Clock } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import { cn, formatCurrency } from "@/lib/utils"
 
 interface DeliveryFormProps {
@@ -259,39 +260,16 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
 
             <div className="space-y-2">
               <Label>Order Date <span className="text-red-500">*</span></Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !watch("order_date") && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {watch("order_date") ? (
-                      format(new Date(watch("order_date")), "PPP")
-                    ) : (
-                      <span>Pick order date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={watch("order_date") ? new Date(watch("order_date")) : undefined}
-                    onSelect={(date) => {
-                      if (date) {
-                        setValue("order_date", date)
-                      }
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.order_date && (
-                <p className="text-sm text-red-500">{errors.order_date.message}</p>
-              )}
+              <UnifiedDatePicker
+                value={watch("order_date") ? new Date(watch("order_date")) : undefined}
+                onChange={(date) => {
+                  if (date) {
+                    setValue("order_date", date)
+                  }
+                }}
+                placeholder="Pick order date"
+                error={errors.order_date?.message}
+              />
             </div>
 
             <div className="space-y-2">

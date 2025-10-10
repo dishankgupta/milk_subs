@@ -3,16 +3,14 @@
 import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarIcon, Download, AlertTriangle, X, Search, Printer } from "lucide-react"
-import { format } from "date-fns"
+import { Download, AlertTriangle, X, Search, Printer } from "lucide-react"
 import { getCurrentISTDate } from "@/lib/date-utils"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +18,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SortableTableHead } from "@/components/ui/sortable-table-head"
-import { cn } from "@/lib/utils"
 import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { bulkInvoiceSchema, type BulkInvoiceFormData } from "@/lib/validations"
 import { getBulkInvoicePreview, type GenerationProgress } from "@/lib/actions/invoices"
@@ -399,69 +396,29 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !form.watch("period_start") && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch("period_start") ? (
-                      format(form.watch("period_start"), "PPP")
-                    ) : (
-                      "Pick start date"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={form.watch("period_start")}
-                    onSelect={(date) => {
-                      form.setValue("period_start", date || getCurrentISTDate())
-                      setPreviewData([])
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={form.watch("period_start")}
+                onChange={(date) => {
+                  form.setValue("period_start", date || getCurrentISTDate())
+                  setPreviewData([])
+                }}
+                placeholder="DD-MM-YYYY"
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">
               <Label>End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !form.watch("period_end") && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch("period_end") ? (
-                      format(form.watch("period_end"), "PPP")
-                    ) : (
-                      "Pick end date"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={form.watch("period_end")}
-                    onSelect={(date) => {
-                      form.setValue("period_end", date || getCurrentISTDate())
-                      setPreviewData([])
-                    }}
-                    disabled={(date) => date < form.watch("period_start")}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={form.watch("period_end")}
+                onChange={(date) => {
+                  form.setValue("period_end", date || getCurrentISTDate())
+                  setPreviewData([])
+                }}
+                placeholder="DD-MM-YYYY"
+                className="w-full"
+                minDate={form.watch("period_start")}
+              />
             </div>
           </div>
 
@@ -536,32 +493,12 @@ export function BulkInvoiceGenerator({ onStatsRefresh }: BulkInvoiceGeneratorPro
           {/* Invoice Date Override */}
           <div className="space-y-2">
             <Label>Invoice Date (Optional Override)</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !form.watch("invoice_date_override") && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {form.watch("invoice_date_override") ? (
-                    format(form.watch("invoice_date_override") as Date, "PPP")
-                  ) : (
-                    "Use current date (default)"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={form.watch("invoice_date_override") as Date | undefined}
-                  onSelect={(date) => form.setValue("invoice_date_override", date || undefined)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <UnifiedDatePicker
+              value={form.watch("invoice_date_override") as Date | undefined}
+              onChange={(date) => form.setValue("invoice_date_override", date || undefined)}
+              placeholder="DD-MM-YYYY"
+              className="w-full"
+            />
             <p className="text-xs text-muted-foreground">
               Leave empty to use current IST date. Override to set a specific invoice date.
             </p>

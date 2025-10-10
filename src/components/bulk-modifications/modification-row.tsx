@@ -2,17 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { UseFormReturn } from "react-hook-form"
-import { Trash2, CalendarIcon } from "lucide-react"
-import { format, parse, isValid } from "date-fns"
+import { Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { getCurrentISTDate, formatDateIST } from "@/lib/date-utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 
 import type { Product, Customer, Subscription } from "@/lib/types"
 import type { BulkModificationRow } from "@/lib/validations"
@@ -38,10 +34,6 @@ export function ModificationRow({
   onAddRow,
   isLastRow = false
 }: ModificationRowProps) {
-  const [showStartCalendar, setShowStartCalendar] = useState(false)
-  const [showEndCalendar, setShowEndCalendar] = useState(false)
-  const [startDateInput, setStartDateInput] = useState("")
-  const [endDateInput, setEndDateInput] = useState("")
   const reasonRef = useRef<HTMLTextAreaElement>(null)
 
   const watchedModification = form.watch(`modifications.${index}`)
@@ -113,19 +105,6 @@ export function ModificationRow({
     fetchCustomerProducts()
   }, [watchedModification?.customer_id])
 
-  // Initialize date inputs display
-  useEffect(() => {
-    if (watchedModification?.start_date) {
-      setStartDateInput(formatDateIST(watchedModification.start_date))
-    }
-  }, [watchedModification?.start_date])
-
-  useEffect(() => {
-    if (watchedModification?.end_date) {
-      setEndDateInput(formatDateIST(watchedModification.end_date))
-    }
-  }, [watchedModification?.end_date])
-
   // Fetch subscription details when both customer and product are selected
   useEffect(() => {
     async function fetchSubscription() {
@@ -166,35 +145,6 @@ export function ModificationRow({
   }, [watchedModification?.customer_id, watchedModification?.product_id])
 
   const errors = form.formState.errors.modifications?.[index]
-
-  // Handle date input change
-  const handleDateInputChange = (value: string, field: 'start_date' | 'end_date') => {
-    if (field === 'start_date') {
-      setStartDateInput(value)
-    } else {
-      setEndDateInput(value)
-    }
-
-    // Try to parse various date formats
-    const formats = ['dd/MM/yyyy', 'dd-MM-yyyy', 'yyyy-MM-dd', 'dd/MM/yy', 'dd-MM-yy']
-    let parsedDate: Date | null = null
-
-    for (const formatStr of formats) {
-      try {
-        const parsed = parse(value, formatStr, new Date())
-        if (isValid(parsed)) {
-          parsedDate = parsed
-          break
-        }
-      } catch {
-        continue
-      }
-    }
-
-    if (parsedDate) {
-      form.setValue(`modifications.${index}.${field}`, parsedDate)
-    }
-  }
 
   // Handle customer dropdown keyboard navigation
   const handleCustomerKeyDown = (e: React.KeyboardEvent) => {
@@ -443,40 +393,12 @@ export function ModificationRow({
 
       {/* Start Date */}
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
-        <div className="flex items-center space-x-1">
-          <Input
-            type="text"
-            className="h-8 flex-1"
-            placeholder="dd/mm/yyyy"
-            value={startDateInput}
-            onChange={(e) => handleDateInputChange(e.target.value, 'start_date')}
-            onFocus={() => {
-              if (!startDateInput && watchedModification?.start_date) {
-                setStartDateInput(formatDateIST(watchedModification.start_date))
-              }
-            }}
-          />
-          <Popover open={showStartCalendar} onOpenChange={setShowStartCalendar}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0">
-                <CalendarIcon className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={watchedModification?.start_date}
-                onSelect={(date) => {
-                  const selectedDate = date || getCurrentISTDate()
-                  form.setValue(`modifications.${index}.start_date`, selectedDate)
-                  setStartDateInput(formatDateIST(selectedDate))
-                  setShowStartCalendar(false)
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <UnifiedDatePicker
+          value={watchedModification?.start_date}
+          onChange={(date) => form.setValue(`modifications.${index}.start_date`, date)}
+          placeholder="DD-MM-YYYY"
+          className="h-8"
+        />
         {errors?.start_date && (
           <p className="text-xs text-red-600 mt-1">{errors.start_date.message}</p>
         )}
@@ -484,40 +406,12 @@ export function ModificationRow({
 
       {/* End Date */}
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
-        <div className="flex items-center space-x-1">
-          <Input
-            type="text"
-            className="h-8 flex-1"
-            placeholder="dd/mm/yyyy"
-            value={endDateInput}
-            onChange={(e) => handleDateInputChange(e.target.value, 'end_date')}
-            onFocus={() => {
-              if (!endDateInput && watchedModification?.end_date) {
-                setEndDateInput(formatDateIST(watchedModification.end_date))
-              }
-            }}
-          />
-          <Popover open={showEndCalendar} onOpenChange={setShowEndCalendar}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0">
-                <CalendarIcon className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={watchedModification?.end_date}
-                onSelect={(date) => {
-                  const selectedDate = date || getCurrentISTDate()
-                  form.setValue(`modifications.${index}.end_date`, selectedDate)
-                  setEndDateInput(formatDateIST(selectedDate))
-                  setShowEndCalendar(false)
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <UnifiedDatePicker
+          value={watchedModification?.end_date}
+          onChange={(date) => form.setValue(`modifications.${index}.end_date`, date)}
+          placeholder="DD-MM-YYYY"
+          className="h-8"
+        />
         {errors?.end_date && (
           <p className="text-xs text-red-600 mt-1">{errors.end_date.message}</p>
         )}

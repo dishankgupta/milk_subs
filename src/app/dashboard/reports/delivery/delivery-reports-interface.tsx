@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format } from 'date-fns'
-import { CalendarIcon, Download, RefreshCw, MapPin, Clock, AlertCircle, TrendingUp, TrendingDown, Minus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Download, RefreshCw, MapPin, Clock, AlertCircle, TrendingUp, TrendingDown, Minus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useSorting } from '@/hooks/useSorting'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -135,28 +134,11 @@ export function DeliveryReportsInterface() {
           <div className="grid gap-4 md:grid-cols-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={handleDateSelect}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={selectedDate}
+                onChange={(date) => date && handleDateSelect(date)}
+                placeholder="DD-MM-YYYY"
+              />
             </div>
 
             <div>
