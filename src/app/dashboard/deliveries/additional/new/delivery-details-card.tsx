@@ -4,14 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
-import { CalendarIcon, MapPin, Clock, User } from "lucide-react"
-import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { MapPin, Clock, User } from "lucide-react"
 import type { Route, Customer } from "@/lib/types"
 import type { UseFormRegister, UseFormSetValue, UseFormWatch, FieldErrors } from "react-hook-form"
 import type { DeliveryWithAdditionalItemsFormData } from "@/lib/validations"
@@ -65,9 +60,11 @@ export function DeliveryDetailsCard({
                     setValue("order_date", date)
                   }
                 }}
-                placeholder="Pick order date"
-                error={errors.order_date?.message}
+                placeholder="DD-MM-YYYY"
               />
+              {errors.order_date && (
+                <p className="text-sm text-red-500">{errors.order_date.message}</p>
+              )}
             </div>
           </div>
 
@@ -165,58 +162,19 @@ export function DeliveryDetailsCard({
 
             {/* Delivery Date & Time */}
             <div className="space-y-2">
-            <Label>Delivery Date & Time</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !deliveredAt && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {deliveredAt ? (
-                    format(deliveredAt, "PPP 'at' p")
-                  ) : (
-                    <span>Pick delivery date & time</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={deliveredAt}
-                  onSelect={(date) => {
-                    if (date) {
-                      // Preserve time if setting new date
-                      const currentTime = deliveredAt || new Date()
-                      date.setHours(currentTime.getHours(), currentTime.getMinutes())
-                      setDeliveredAt(date)
-                      setValue("delivered_at", date)
-                    }
-                  }}
-                  initialFocus
-                />
-                <div className="p-3 border-t">
-                  <input
-                    type="time"
-                    className="w-full px-3 py-1 border rounded"
-                    value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
-                    onChange={(e) => {
-                      if (deliveredAt && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':').map(Number)
-                        const newDate = new Date(deliveredAt)
-                        newDate.setHours(hours, minutes)
-                        setDeliveredAt(newDate)
-                        setValue("delivered_at", newDate)
-                      }
-                    }}
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+              <Label>Delivery Date & Time</Label>
+              <UnifiedDatePicker
+                value={deliveredAt}
+                onChange={(date) => {
+                  if (date) {
+                    setDeliveredAt(date)
+                    setValue("delivered_at", date)
+                  }
+                }}
+                withTime={true}
+                placeholder="DD-MM-YYYY HH:mm"
+              />
+            </div>
         </div>
 
         {/* Delivery Notes */}

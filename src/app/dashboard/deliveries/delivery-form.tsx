@@ -4,7 +4,6 @@ import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { format } from "date-fns"
 import { formatDateToIST } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -19,11 +18,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CalendarIcon, Package, User, MapPin, Clock } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import { Package, User, MapPin, Clock } from "lucide-react"
 import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
-import { cn, formatCurrency } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 
 interface DeliveryFormProps {
   delivery?: DeliveryExtended
@@ -267,63 +264,26 @@ export function DeliveryForm({ delivery, initialData }: DeliveryFormProps) {
                     setValue("order_date", date)
                   }
                 }}
-                placeholder="Pick order date"
-                error={errors.order_date?.message}
+                placeholder="DD-MM-YYYY"
               />
+              {errors.order_date && (
+                <p className="text-sm text-red-500">{errors.order_date.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label>Delivery Time</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !deliveredAt && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {deliveredAt ? (
-                      format(deliveredAt, "PPP 'at' p")
-                    ) : (
-                      <span>Pick delivery time</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={deliveredAt}
-                    onSelect={(date) => {
-                      if (date) {
-                        // Preserve time if editing, otherwise use current time
-                        const currentTime = deliveredAt || new Date()
-                        date.setHours(currentTime.getHours(), currentTime.getMinutes())
-                        setDeliveredAt(date)
-                        setValue("delivered_at", date)
-                      }
-                    }}
-                    initialFocus
-                  />
-                  <div className="p-3 border-t">
-                    <input
-                      type="time"
-                      className="w-full px-3 py-1 border rounded"
-                      value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
-                      onChange={(e) => {
-                        if (deliveredAt && e.target.value) {
-                          const [hours, minutes] = e.target.value.split(':').map(Number)
-                          const newDate = new Date(deliveredAt)
-                          newDate.setHours(hours, minutes)
-                          setDeliveredAt(newDate)
-                          setValue("delivered_at", newDate)
-                        }
-                      }}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Label>Delivery Date & Time</Label>
+              <UnifiedDatePicker
+                value={deliveredAt}
+                onChange={(date) => {
+                  if (date) {
+                    setDeliveredAt(date)
+                    setValue("delivered_at", date)
+                  }
+                }}
+                withTime={true}
+                placeholder="DD-MM-YYYY HH:mm"
+              />
             </div>
 
             <div className="space-y-2 md:col-span-2">

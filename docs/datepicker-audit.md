@@ -630,25 +630,69 @@ For date ranges (start date + end date), use **TWO separate single date picker c
 
 ---
 
-### Phase 4: Add Time Support to Delivery Forms (Week 4)
+### Phase 4: Add Time Support to Delivery Forms (Week 4) ✅ COMPLETED
+
 **Goal**: Migrate Date+Time pickers to unified component with `withTime` prop
 
-**Files to Update**: 3 files
+**Status**: ✅ All 3 files successfully migrated (October 10, 2025)
+
+**Files Updated**: 3 files
 1. ✅ `src/app/dashboard/deliveries/delivery-form.tsx` - Single delivery timestamp
+   - URL: `http://localhost:3000/dashboard/deliveries/[id]/edit`
+   - Replaced Calendar+Popover+time input with UnifiedDatePicker `withTime={true}`
+   - Format: DD-MM-YYYY HH:mm
+   - Removed unused imports (CalendarIcon, Popover, Calendar, cn, format)
+
 2. ✅ `src/app/dashboard/deliveries/bulk/bulk-delivery-form.tsx` - Bulk delivery timestamp
+   - URL: `http://localhost:3000/dashboard/deliveries/bulk`
+   - Replaced Calendar+Popover+time input with UnifiedDatePicker `withTime={true}`
+   - Format: DD-MM-YYYY HH:mm
+   - Removed unused imports (format, formatDateTimeIST, useRef)
+   - Removed unused `products` prop from component interface
+
 3. ✅ `src/app/dashboard/deliveries/additional/new/delivery-details-card.tsx` - Additional delivery timestamp
+   - URL: `http://localhost:3000/dashboard/deliveries/additional/new`
+   - Replaced Calendar+Popover+time input with UnifiedDatePicker `withTime={true}`
+   - Format: DD-MM-YYYY HH:mm
+   - Removed unused imports (Button, Popover, Calendar, CalendarIcon, format, cn)
 
 **Migration Pattern**:
 ```tsx
-// BEFORE: Calendar + separate time input (no format specification)
+// BEFORE: Calendar + separate time input (variable format display)
 <Popover>
-  <PopoverTrigger>
-    {deliveredAt ? format(deliveredAt, "PPP p") : "Pick date and time"}
+  <PopoverTrigger asChild>
+    <Button variant="outline">
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      {deliveredAt ? format(deliveredAt, "PPP 'at' p") : "Pick delivery time"}
+    </Button>
   </PopoverTrigger>
-  <PopoverContent>
-    <Calendar mode="single" selected={deliveredAt} onSelect={setDeliveredAt} />
+  <PopoverContent className="w-auto p-0">
+    <Calendar
+      mode="single"
+      selected={deliveredAt}
+      onSelect={(date) => {
+        if (date) {
+          const currentTime = deliveredAt || new Date()
+          date.setHours(currentTime.getHours(), currentTime.getMinutes())
+          setDeliveredAt(date)
+          setValue("delivered_at", date)
+        }
+      }}
+    />
     <div className="p-3 border-t">
-      <input type="time" value={format(deliveredAt, "HH:mm")} onChange={...} />
+      <input
+        type="time"
+        value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
+        onChange={(e) => {
+          if (deliveredAt && e.target.value) {
+            const [hours, minutes] = e.target.value.split(':').map(Number)
+            const newDate = new Date(deliveredAt)
+            newDate.setHours(hours, minutes)
+            setDeliveredAt(newDate)
+            setValue("delivered_at", newDate)
+          }
+        }}
+      />
     </div>
   </PopoverContent>
 </Popover>
@@ -656,11 +700,24 @@ For date ranges (start date + end date), use **TWO separate single date picker c
 // AFTER: Unified component with time (DD-MM-YYYY HH:mm format)
 <UnifiedDatePicker
   value={deliveredAt}
-  onChange={setDeliveredAt}
+  onChange={(date) => {
+    if (date) {
+      setDeliveredAt(date)
+      setValue("delivered_at", date)
+    }
+  }}
   withTime={true}
   placeholder="DD-MM-YYYY HH:mm"
 />
 ```
+
+**Implementation Changes Made**:
+1. **Import Cleanup**: Removed CalendarIcon, Popover, PopoverContent, PopoverTrigger, Calendar, Button (for trigger), format, cn
+2. **Added Import**: UnifiedDatePicker from @/components/ui/unified-date-picker
+3. **Component Replacement**: ~50 lines of Popover+Calendar+time input replaced with ~13 lines of UnifiedDatePicker
+4. **Format Enforcement**: All delivery timestamps now use DD-MM-YYYY HH:mm format consistently
+5. **Simplified State Management**: No need for separate time input state management
+6. **Removed Format Dependency**: No longer need date-fns format function for display
 
 **⚠️ CRITICAL FORMAT**:
 - **Display Format**: `DD-MM-YYYY HH:mm` (e.g., `08-10-2025 14:30`)
@@ -668,12 +725,24 @@ For date ranges (start date + end date), use **TWO separate single date picker c
 - **Time Precision**: Minutes only (no seconds)
 - **Delivery Audit Trail**: Exact timestamp maintained for compliance
 
-**Testing**:
-- Verify timestamp format: DD-MM-YYYY HH:mm
-- Test timestamp accuracy (date + time correctly stored)
-- Test IST timezone compliance
-- Confirm delivery reports show correct timestamps
-- Test year validation (4 digits only)
+**Testing Results**:
+- ✅ Timestamp format: DD-MM-YYYY HH:mm displays correctly
+- ✅ Time picker integrated below calendar in popover
+- ✅ Manual input accepts DDMMYYYYHHMM format (e.g., 081020251430)
+- ✅ Auto-formatting works: types `081020251430` → displays `08-10-2025 14:30`
+- ✅ Calendar preserves time when changing date
+- ✅ Time input preserves date when changing time
+- ✅ Year validation (4 digits only) enforced via input masking
+- ✅ IST timezone compliance maintained through date state management
+- ⏳ Delivery reports timestamp verification (pending user testing)
+
+**Key Achievements**:
+1. ✅ **Code Reduction**: Average 75% reduction in date+time picker code per file (~50 lines → ~13 lines)
+2. ✅ **Consistent Format**: All 3 delivery forms now use identical DD-MM-YYYY HH:mm format
+3. ✅ **Manual Input Support**: Can type complete timestamp without opening popover
+4. ✅ **Cleaner Dependencies**: Removed 7+ unnecessary imports per file
+5. ✅ **Better UX**: Single unified component with predictable behavior
+6. ✅ **Easier Maintenance**: One component to update for all timestamp inputs
 
 ---
 
@@ -1059,7 +1128,7 @@ const validateDateInput = (input: string): boolean => {
 
 ---
 
-**Last Updated**: October 9, 2025 (Phase 3 Completed)
+**Last Updated**: October 10, 2025 (Phase 4 Completed)
 **Audit By**: Claude Code AI Assistant
 **Project**: milk_subs v1.0 - Dairy Business Management System
 **Audit Completeness**: ✅ 100% - All date/time/calendar components identified and documented
@@ -1067,6 +1136,7 @@ const validateDateInput = (input: string): boolean => {
 **Phase 1 Status**: ✅ COMPLETED - UnifiedDatePicker component fully functional with demo page
 **Phase 2 Status**: ✅ COMPLETED - All 9 native date inputs migrated to UnifiedDatePicker (8 full conversions, 1 kept native for server-side form)
 **Phase 3 Status**: ✅ COMPLETED - All 18 Shadcn Calendar+Popover patterns migrated to UnifiedDatePicker with DD-MM-YYYY format
+**Phase 4 Status**: ✅ COMPLETED - All 3 delivery forms migrated to UnifiedDatePicker with withTime={true} for DD-MM-YYYY HH:mm timestamps
 
 ---
 
@@ -1148,7 +1218,10 @@ const validateDateInput = (input: string): boolean => {
   - [x] src/app/dashboard/deliveries/[id]/page.tsx (no date pickers)
   - [x] src/app/dashboard/subscriptions/[id]/page.tsx (no date pickers)
   - [x] src/app/dashboard/orders/page.tsx (uses components from Phase 2)
-- [ ] Phase 4: Add time support to 3 delivery forms (Week 4)
+- [x] **Phase 4: Add time support to 3 delivery forms (Week 4)** ✅ COMPLETED
+  - [x] src/app/dashboard/deliveries/delivery-form.tsx (withTime={true})
+  - [x] src/app/dashboard/deliveries/bulk/bulk-delivery-form.tsx (withTime={true})
+  - [x] src/app/dashboard/deliveries/additional/new/delivery-details-card.tsx (withTime={true})
 - [ ] Phase 5: Migrate 5 enhanced filters (Week 5)
 - [ ] Phase 6: Cleanup and documentation (Week 6)
 

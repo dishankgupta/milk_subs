@@ -128,7 +128,7 @@ export function UnifiedDatePicker({
 
   // Handle manual input change with auto-formatting
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let newValue = e.target.value
+    const newValue = e.target.value
 
     // Allow user to type freely but auto-format with hyphens
     const formatted = formatInputWhileTyping(newValue)
