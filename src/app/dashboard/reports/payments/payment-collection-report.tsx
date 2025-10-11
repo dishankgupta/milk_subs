@@ -21,20 +21,23 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, Search, Filter } from "lucide-react"
+import { Download, Search, Filter, Printer } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
-import { formatDateIST, formatDateForDatabase, parseLocalDateIST } from "@/lib/date-utils"
+import { formatDateIST, formatDateForDatabase, getCurrentISTDate, parseLocalDateIST } from "@/lib/date-utils"
 import { getPaymentReport, type PaymentReportData, type PaymentReportFilters } from "@/lib/actions/reports"
 import { toast } from "sonner"
 import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from "date-fns"
 
 export function PaymentCollectionReport() {
   const [payments, setPayments] = useState<PaymentReportData[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<PaymentReportFilters>({})
   const [search, setSearch] = useState("")
+  const [mostRecentDate, setMostRecentDate] = useState<string | null>(null)
 
   // Filter state
+  const [datePreset, setDatePreset] = useState<string>("mostRecent")
   const [paymentMethod, setPaymentMethod] = useState<string>("all")
   const [allocationStatus, setAllocationStatus] = useState<string>("all")
   const [startDate, setStartDate] = useState<Date | undefined>()
@@ -51,6 +54,14 @@ export function PaymentCollectionReport() {
 
       if (result.success && result.data) {
         setPayments(result.data)
+
+        // Track the most recent payment date for the "Most Recent" preset
+        if (result.data.length > 0 && !mostRecentDate) {
+          const dates = result.data.map(p => p.payment_date).sort().reverse()
+          if (dates.length > 0) {
+            setMostRecentDate(dates[0])
+          }
+        }
       } else {
         toast.error(result.error || "Failed to load payment report")
       }
@@ -62,10 +73,50 @@ export function PaymentCollectionReport() {
     }
   }
 
-  // Load on mount and when filters change
+  // Initial load: fetch all payments to determine most recent date
   useEffect(() => {
-    loadPayments()
-  }, [filters])
+    const initializeData = async () => {
+      setLoading(true)
+      try {
+        // Load all payments without date filter to find most recent
+        const result = await getPaymentReport({ search: "" })
+
+        if (result.success && result.data && result.data.length > 0) {
+          setPayments(result.data)
+
+          // Find most recent payment date
+          const dates = result.data.map(p => p.payment_date).sort().reverse()
+          const recentDate = dates[0]
+          setMostRecentDate(recentDate)
+
+          // Set filter to most recent date
+          const mostRecentDateObj = parseLocalDateIST(recentDate)
+          setStartDate(startOfDay(mostRecentDateObj))
+          setEndDate(endOfDay(mostRecentDateObj))
+
+          // Apply the filter
+          setFilters({
+            startDate: recentDate,
+            endDate: recentDate
+          })
+        }
+      } catch (error) {
+        console.error("Error initializing payments:", error)
+        toast.error("Failed to load payment data")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeData()
+  }, [])
+
+  // Load on when filters change (after initial load)
+  useEffect(() => {
+    if (mostRecentDate) {
+      loadPayments()
+    }
+  }, [filters, mostRecentDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleApplyFilters = () => {
     setFilters({
@@ -82,7 +133,60 @@ export function PaymentCollectionReport() {
     setStartDate(undefined)
     setEndDate(undefined)
     setSearch("")
+    setDatePreset("mostRecent")
     setFilters({})
+  }
+
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset)
+    const today = getCurrentISTDate()
+
+    switch (preset) {
+      case "mostRecent":
+        if (mostRecentDate) {
+          const mostRecentDateObj = parseLocalDateIST(mostRecentDate)
+          setStartDate(startOfDay(mostRecentDateObj))
+          setEndDate(endOfDay(mostRecentDateObj))
+        }
+        break
+      case "today":
+        setStartDate(startOfDay(today))
+        setEndDate(endOfDay(today))
+        break
+      case "yesterday":
+        const yesterday = subDays(today, 1)
+        setStartDate(startOfDay(yesterday))
+        setEndDate(endOfDay(yesterday))
+        break
+      case "last7days":
+        setStartDate(startOfDay(subDays(today, 6)))
+        setEndDate(endOfDay(today))
+        break
+      case "last30days":
+        setStartDate(startOfDay(subDays(today, 29)))
+        setEndDate(endOfDay(today))
+        break
+      case "thisWeek":
+        setStartDate(startOfWeek(today, { weekStartsOn: 1 }))
+        setEndDate(endOfWeek(today, { weekStartsOn: 1 }))
+        break
+      case "thisMonth":
+        setStartDate(startOfMonth(today))
+        setEndDate(endOfMonth(today))
+        break
+      case "lastMonth":
+        const lastMonth = subMonths(today, 1)
+        setStartDate(startOfMonth(lastMonth))
+        setEndDate(endOfMonth(lastMonth))
+        break
+      case "all":
+        setStartDate(undefined)
+        setEndDate(undefined)
+        break
+      case "custom":
+        // User will set dates manually
+        break
+    }
   }
 
   const handleSearch = () => {
@@ -100,6 +204,25 @@ export function PaymentCollectionReport() {
       default:
         return <Badge variant="outline">{status}</Badge>
     }
+  }
+
+  const handlePrintReport = () => {
+    const params = new URLSearchParams()
+    if (search) params.append('search', search)
+
+    // Handle date filter for print
+    if (datePreset === 'custom' && startDate && endDate) {
+      params.append('date_from', startDate.toISOString().split('T')[0])
+      params.append('date_to', endDate.toISOString().split('T')[0])
+    } else {
+      params.append('datePreset', datePreset)
+    }
+
+    if (paymentMethod !== 'all') params.append('paymentMethod', paymentMethod)
+    if (allocationStatus !== 'all') params.append('allocationStatus', allocationStatus)
+
+    const printUrl = `/api/print/payment-collection?${params.toString()}`
+    window.open(printUrl, '_blank')
   }
 
   const handleExport = () => {
@@ -186,6 +309,10 @@ export function PaymentCollectionReport() {
               <Button variant="outline" size="sm" onClick={handleClearFilters}>
                 Clear Filters
               </Button>
+              <Button variant="outline" size="sm" onClick={handlePrintReport}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print Report
+              </Button>
               <Button size="sm" onClick={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
@@ -194,73 +321,108 @@ export function PaymentCollectionReport() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
-            {/* Search */}
-            <div className="space-y-2">
-              <Label>Search</Label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Customer name..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
-                <Button size="icon" onClick={handleSearch}>
-                  <Search className="h-4 w-4" />
-                </Button>
+          <div className="space-y-4">
+            {/* First Row: Search and Date Preset */}
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Search */}
+              <div className="space-y-2 md:col-span-2">
+                <Label>Search</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Customer name..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                  <Button size="icon" onClick={handleSearch}>
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Date Preset Dropdown */}
+              <div className="space-y-2">
+                <Label>Date Preset</Label>
+                <Select value={datePreset} onValueChange={handlePresetChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Quick select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mostRecent">Most Recent</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="yesterday">Yesterday</SelectItem>
+                    <SelectItem value="last7days">Last 7 Days</SelectItem>
+                    <SelectItem value="last30days">Last 30 Days</SelectItem>
+                    <SelectItem value="thisWeek">This Week</SelectItem>
+                    <SelectItem value="thisMonth">This Month</SelectItem>
+                    <SelectItem value="lastMonth">Last Month</SelectItem>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            {/* Date Range */}
-            <div className="space-y-2">
-              <Label>Start Date</Label>
-              <UnifiedDatePicker
-                value={startDate}
-                onChange={setStartDate}
-                placeholder="DD-MM-YYYY"
-              />
-            </div>
+            {/* Second Row: Date Range and Filter Dropdowns */}
+            <div className="grid gap-4 md:grid-cols-4">
+              {/* Date Range */}
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <UnifiedDatePicker
+                  value={startDate}
+                  onChange={(date) => {
+                    setStartDate(date)
+                    if (datePreset !== "custom") setDatePreset("custom")
+                  }}
+                  placeholder="DD-MM-YYYY"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label>End Date</Label>
-              <UnifiedDatePicker
-                value={endDate}
-                onChange={setEndDate}
-                placeholder="DD-MM-YYYY"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <UnifiedDatePicker
+                  value={endDate}
+                  onChange={(date) => {
+                    setEndDate(date)
+                    if (datePreset !== "custom") setDatePreset("custom")
+                  }}
+                  placeholder="DD-MM-YYYY"
+                  minDate={startDate}
+                />
+              </div>
 
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <Label>Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Methods" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="Cash">Cash</SelectItem>
-                  <SelectItem value="UPI">UPI</SelectItem>
-                  <SelectItem value="Credit">Credit</SelectItem>
-                  <SelectItem value="QR">QR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Payment Method */}
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Methods" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Methods</SelectItem>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="UPI">UPI</SelectItem>
+                    <SelectItem value="Credit">Credit</SelectItem>
+                    <SelectItem value="QR">QR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Allocation Status */}
-            <div className="space-y-2">
-              <Label>Allocation Status</Label>
-              <Select value={allocationStatus} onValueChange={setAllocationStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="fully_applied">Fully Applied</SelectItem>
-                  <SelectItem value="partially_applied">Partially Applied</SelectItem>
-                  <SelectItem value="unapplied">Unapplied</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Allocation Status */}
+              <div className="space-y-2">
+                <Label>Allocation Status</Label>
+                <Select value={allocationStatus} onValueChange={setAllocationStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="fully_applied">Fully Applied</SelectItem>
+                    <SelectItem value="partially_applied">Partially Applied</SelectItem>
+                    <SelectItem value="unapplied">Unapplied</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
