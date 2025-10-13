@@ -51,7 +51,8 @@
       "WebFetch(domain:dev.to)",
       "Bash(npm run lint:*)",
       "Bash(npm run lint)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "mcp__supabase__get_advisors"
     ]
   },
   "enabledMcpjsonServers": [
