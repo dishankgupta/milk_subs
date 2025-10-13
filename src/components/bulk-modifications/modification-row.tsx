@@ -395,7 +395,7 @@ export function ModificationRow({
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
         <UnifiedDatePicker
           value={watchedModification?.start_date}
-          onChange={(date) => form.setValue(`modifications.${index}.start_date`, date)}
+          onChange={(date) => date && form.setValue(`modifications.${index}.start_date`, date)}
           placeholder="DD-MM-YYYY"
           className="h-8"
         />
@@ -408,7 +408,7 @@ export function ModificationRow({
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
         <UnifiedDatePicker
           value={watchedModification?.end_date}
-          onChange={(date) => form.setValue(`modifications.${index}.end_date`, date)}
+          onChange={(date) => date && form.setValue(`modifications.${index}.end_date`, date)}
           placeholder="DD-MM-YYYY"
           className="h-8"
         />

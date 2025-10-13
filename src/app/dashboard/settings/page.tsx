@@ -36,8 +36,11 @@ export default function SettingsPage() {
         return
       }
 
-      // Combine TOTP and Phone factors
-      const allFactors = [...(data.totp || []), ...(data.phone || [])]
+      // Combine TOTP and Phone factors and map to MFAFactor type
+      const allFactors = [...(data.totp || []), ...(data.phone || [])].map(factor => ({
+        ...factor,
+        friendly_name: factor.friendly_name || 'Google Authenticator'
+      }))
       setMfaFactors(allFactors)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'

@@ -1,7 +1,6 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { getUndeliveredOrders } from "@/lib/actions/deliveries"
-import { getProducts } from "@/lib/actions/products"
 import { BulkDeliveryForm } from "./bulk-delivery-form"
 import { Card, CardContent } from "@/components/ui/card"
 import { Package } from "lucide-react"
@@ -25,11 +24,8 @@ async function BulkDeliveryContent({ searchParams }: BulkDeliveryPageProps) {
     notFound()
   }
   
-  // Get all undelivered orders and filter to the selected ones, plus fetch products for additional items
-  const [allOrders, products] = await Promise.all([
-    getUndeliveredOrders(),
-    getProducts()
-  ])
+  // Get all undelivered orders and filter to the selected ones
+  const allOrders = await getUndeliveredOrders()
   const selectedOrders = allOrders.filter(order => orderIds.includes(order.id))
   
   if (selectedOrders.length === 0) {
@@ -53,7 +49,7 @@ async function BulkDeliveryContent({ searchParams }: BulkDeliveryPageProps) {
     console.warn(`Expected ${orderIds.length} orders, found ${selectedOrders.length}`)
   }
   
-  return <BulkDeliveryForm orders={selectedOrders} products={products} />
+  return <BulkDeliveryForm orders={selectedOrders} />
 }
 
 export default function BulkDeliveryPage(props: BulkDeliveryPageProps) {

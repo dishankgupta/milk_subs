@@ -451,7 +451,7 @@ export function SalesRow({
       <td className="p-2 min-w-[140px]" onKeyDown={handleKeyDown}>
         <UnifiedDatePicker
           value={watchedSale?.sale_date}
-          onChange={(date) => form.setValue(`sales.${index}.sale_date`, date)}
+          onChange={(date) => date && form.setValue(`sales.${index}.sale_date`, date)}
           placeholder="DD-MM-YYYY"
           className="h-8"
         />
