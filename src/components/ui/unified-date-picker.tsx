@@ -4,6 +4,7 @@ import * as React from "react"
 import { useState, useEffect, useRef } from "react"
 import { CalendarIcon, Clock } from "lucide-react"
 import { format, parse, isValid } from "date-fns"
+import { IMaskInput } from "react-imask"
 
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
@@ -102,40 +103,12 @@ export function UnifiedDatePicker({
     }
   }
 
-  // Smart input formatting while typing
-  const formatInputWhileTyping = (input: string): string => {
-    // Remove all non-digit characters for processing
-    const digitsOnly = input.replace(/\D/g, "")
-
-    // Limit to max length based on mode
-    const maxLength = withTime ? 12 : 8 // DDMMYYYY (8) or DDMMYYYYHHMM (12)
-    const limited = digitsOnly.slice(0, maxLength)
-
-    if (withTime) {
-      // Format: DDMMYYYYHHMM -> DD-MM-YYYY HH:mm
-      if (limited.length <= 2) return limited
-      if (limited.length <= 4) return `${limited.slice(0, 2)}-${limited.slice(2)}`
-      if (limited.length <= 8) return `${limited.slice(0, 2)}-${limited.slice(2, 4)}-${limited.slice(4)}`
-      if (limited.length <= 10) return `${limited.slice(0, 2)}-${limited.slice(2, 4)}-${limited.slice(4, 8)} ${limited.slice(8)}`
-      return `${limited.slice(0, 2)}-${limited.slice(2, 4)}-${limited.slice(4, 8)} ${limited.slice(8, 10)}:${limited.slice(10)}`
-    } else {
-      // Format: DDMMYYYY -> DD-MM-YYYY
-      if (limited.length <= 2) return limited
-      if (limited.length <= 4) return `${limited.slice(0, 2)}-${limited.slice(2)}`
-      return `${limited.slice(0, 2)}-${limited.slice(2, 4)}-${limited.slice(4)}`
-    }
-  }
-
-  // Handle manual input change with auto-formatting
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value
-
-    // Allow user to type freely but auto-format with hyphens
-    const formatted = formatInputWhileTyping(newValue)
-    setInputValue(formatted)
+  // Handle masked input change (called by IMask on every change)
+  const handleMaskedInputAccept = (value: string) => {
+    setInputValue(value)
 
     // Extract digits to check if we have a complete date
-    const digitsOnly = formatted.replace(/\D/g, "")
+    const digitsOnly = value.replace(/\D/g, "")
 
     // Only parse and update when we have complete dates
     // Date only: 8 digits (DDMMYYYY)
@@ -143,7 +116,7 @@ export function UnifiedDatePicker({
     const isComplete = withTime ? digitsOnly.length === 12 : digitsOnly.length === 8
 
     if (isComplete) {
-      const parsed = parseDateInput(formatted)
+      const parsed = parseDateInput(value)
       if (parsed) {
         setSelectedDate(parsed)
         setMonth(parsed) // Navigate calendar to the typed date's month
@@ -252,9 +225,22 @@ export function UnifiedDatePicker({
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedDate) return
 
-    const [hours, minutes] = e.target.value.split(':')
+    const timeValue = e.target.value
+    if (!timeValue || !timeValue.includes(':')) return
+
+    const [hours, minutes] = timeValue.split(':')
+    const hoursNum = parseInt(hours, 10)
+    const minutesNum = parseInt(minutes, 10)
+
+    // Validate the parsed values
+    if (isNaN(hoursNum) || isNaN(minutesNum)) return
+    if (hoursNum < 0 || hoursNum > 23 || minutesNum < 0 || minutesNum > 59) return
+
     const newDate = new Date(selectedDate)
-    newDate.setHours(parseInt(hours), parseInt(minutes))
+    newDate.setHours(hoursNum, minutesNum)
+
+    // Ensure the new date is valid
+    if (!isValid(newDate)) return
 
     setSelectedDate(newDate)
     onChange?.(newDate)
@@ -263,16 +249,17 @@ export function UnifiedDatePicker({
 
   return (
     <div className={cn("relative", className)}>
-      <Input
-        ref={inputRef}
-        type="text"
+      <IMaskInput
+        inputRef={inputRef}
+        mask={withTime ? "00-00-0000 00:00" : "00-00-0000"}
         placeholder={withTime ? "DD-MM-YYYY HH:mm" : placeholder}
         value={inputValue}
-        onChange={handleInputChange}
+        onAccept={handleMaskedInputAccept}
         onBlur={handleInputBlur}
         onFocus={handleInputFocus}
         disabled={disabled}
         className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
           "pr-10",
           !selectedDate && "text-muted-foreground"
         )}
@@ -292,7 +279,7 @@ export function UnifiedDatePicker({
             mode="single"
             selected={selectedDate}
             onSelect={handleCalendarSelect}
-            month={month}
+            month={month && isValid(month) ? month : getCurrentISTDate()}
             onMonthChange={setMonth}
             disabled={(date) => {
               if (disabled) return true
@@ -307,7 +294,7 @@ export function UnifiedDatePicker({
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <Input
                   type="time"
-                  value={format(selectedDate, "HH:mm")}
+                  value={selectedDate && isValid(selectedDate) ? format(selectedDate, "HH:mm") : "00:00"}
                   onChange={handleTimeChange}
                   className="w-full"
                 />
