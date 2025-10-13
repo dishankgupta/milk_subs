@@ -33,6 +33,16 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Set dummy Supabase env vars for build time (real values provided at runtime)
+# These are needed for Next.js to complete the build, but won't be used in production
+ARG NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-key-for-build-only
+ARG SUPABASE_SERVICE_ROLE_KEY=placeholder-service-key-for-build-only
+
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
+
 # Build Next.js application
 RUN pnpm build
 
