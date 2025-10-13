@@ -165,6 +165,7 @@ Complete database recreation available through migration files in `supabase/migr
 - **Comprehensive Error Handling** - Graceful error boundaries & validation
 - **Performance Optimization** - Bulk operations with real-time progress tracking
 - **Product-wise Summary Report** - Customer-product quantity matrix report in deliveries
+- **Multi-Factor Authentication** - Google Authenticator TOTP integration with zero database changes
 
 ## Critical Development Guidelines
 
@@ -455,3 +456,4 @@ The system successfully manages subscriptions, deliveries, sales, payments, and 
 - **Outstanding Invoices Report (Oct 2025)**: Financial year-based report showing unpaid/partially paid invoices with detailed payment allocation tracking. Accessible from outstanding reports page, displays invoices with status sent/pending/partially_paid/overdue in compact table format.
 - **Bulk Modifications (Oct 2025)**: Multi-row modification entry with customer search, product dropdown (filtered by active subscriptions), real-time subscription display, and validation. Supports Skip/Increase/Decrease/Add Note types with date range selection and keyboard shortcuts (Alt+A to add row, Tab on last field to add new row).
 - **Unified Date Picker (Oct 2025)**: Standardized date input component (`src/components/ui/unified-date-picker.tsx`) with DD-MM-YYYY format, manual typing with auto-formatting, calendar popup with month/year dropdowns, year validation (2000-2099), and optional time picker support. **Migration complete**: All 30+ files migrated across 5 phases. Deprecated components: `date-filter.tsx`, `order-date-filter.tsx` (kept for server-side forms), `enhanced-date-filter.tsx` (replaced with preset dropdown + UnifiedDatePicker pattern).
+- **Multi-Factor Authentication (Oct 2025)**: Google Authenticator TOTP integration with QR code enrollment (`src/components/auth/enroll-mfa-dialog.tsx`), login verification screen (`src/components/auth/mfa-challenge-screen.tsx`), and complete MFA management in Settings page. Features: enable/disable MFA, backup authenticator support, AAL (Authenticator Assurance Level) checking, graceful error handling, mobile-responsive design.
