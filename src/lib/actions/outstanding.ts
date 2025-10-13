@@ -392,13 +392,6 @@ export async function calculateCustomerOutstandingAmount(customerId: string): Pr
     const MAX_REASONABLE_OUTSTANDING = 1000000 // ₹10 lakh
     if (calculatedAmount > MAX_REASONABLE_OUTSTANDING) {
       console.warn(`Unusually large outstanding amount for customer ${customerId}: ₹${calculatedAmount}. Manual review required.`)
-
-      // Get detailed breakdown for validation
-      const breakdown = await getOutstandingBreakdown(customerId)
-      if (!breakdown.breakdown_valid) {
-        console.warn('Outstanding calculation breakdown validation failed, using fallback')
-        return await calculateOutstandingFallback(customerId)
-      }
     }
 
     return calculatedAmount
@@ -453,51 +446,6 @@ async function calculateOutstandingFallback(customerId: string): Promise<number>
   }
 }
 
-// GAP-008: Detailed breakdown for validation
-async function getOutstandingBreakdown(customerId: string): Promise<{
-  total_outstanding: number
-  opening_balance: number
-  unpaid_invoices: number
-  credit_adjustments: number
-  breakdown_valid: boolean
-}> {
-  const supabase = await createClient()
-
-  try {
-    const { data, error } = await supabase.rpc('calculate_outstanding_with_breakdown', {
-      customer_uuid: customerId
-    })
-
-    if (error || !data) {
-      return {
-        total_outstanding: 0,
-        opening_balance: 0,
-        unpaid_invoices: 0,
-        credit_adjustments: 0,
-        breakdown_valid: false
-      }
-    }
-
-    // Validate breakdown math
-    const expectedTotal = data.opening_balance + data.unpaid_invoices + data.credit_adjustments
-    const breakdown_valid = Math.abs(expectedTotal - data.total_outstanding) < 0.01 // Allow for rounding
-
-    return {
-      ...data,
-      breakdown_valid
-    }
-
-  } catch (error) {
-    console.error('Error getting outstanding breakdown:', error)
-    return {
-      total_outstanding: 0,
-      opening_balance: 0,
-      unpaid_invoices: 0,
-      credit_adjustments: 0,
-      breakdown_valid: false
-    }
-  }
-}
 
 // GAP-008: Validation function for outstanding amount anomaly detection
 export async function validateOutstandingCalculation(customerId: string): Promise<{
@@ -520,13 +468,6 @@ export async function validateOutstandingCalculation(customerId: string): Promis
   const MAX_REASONABLE = 1000000
   if (amount > MAX_REASONABLE) {
     warnings.push(`Outstanding amount (₹${amount.toLocaleString()}) exceeds reasonable limit (₹${MAX_REASONABLE.toLocaleString()})`)
-    requiresReview = true
-  }
-
-  // Get breakdown for additional validation
-  const breakdown = await getOutstandingBreakdown(customerId)
-  if (!breakdown.breakdown_valid) {
-    warnings.push('Outstanding calculation breakdown validation failed')
     requiresReview = true
   }
 
