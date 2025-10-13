@@ -6,7 +6,7 @@ import type { Customer } from "../types"
 export interface OutstandingReportConfiguration {
   start_date: Date
   end_date: Date
-  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'with_any_balance' | 'selected'
   selected_customer_ids?: string[]
 }
 
@@ -16,6 +16,7 @@ export interface OutstandingCustomerData {
   subscription_breakdown: MonthlySubscriptionBreakdown[]
   manual_sales_breakdown: ManualSalesBreakdown[]
   payment_breakdown: PaymentBreakdown[]
+  invoice_breakdown: InvoiceBreakdown[]
   unapplied_payments_breakdown?: UnappliedPaymentsBreakdown
   current_outstanding: number
   total_outstanding: number
@@ -86,6 +87,19 @@ export interface UnappliedPaymentDetail {
   notes?: string
 }
 
+export interface InvoiceBreakdown {
+  invoice_details: InvoiceDetail[]
+}
+
+export interface InvoiceDetail {
+  invoice_id: string
+  invoice_number: string
+  invoice_date: string
+  total_amount: number
+  invoice_status: string
+  payment_dates: string[]
+}
+
 export interface OutstandingReportSummary {
   total_customers: number
   customers_with_outstanding: number
@@ -102,7 +116,7 @@ export interface OutstandingReportSummary {
 export interface OutstandingReportFormData {
   start_date: Date
   end_date: Date
-  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'selected'
+  customer_selection: 'all' | 'with_outstanding' | 'with_subscription_and_outstanding' | 'with_credit' | 'with_any_balance' | 'selected'
   selected_customer_ids?: string[]
 }
 

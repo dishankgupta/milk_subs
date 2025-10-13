@@ -10,11 +10,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Loader2 } from "lucide-react"
-import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { Loader2 } from "lucide-react"
 import { paymentSchema, type PaymentFormData } from "@/lib/validations"
 import { createPayment, updatePayment } from "@/lib/actions/payments"
 import { toast } from "sonner"
@@ -31,9 +28,9 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [paymentAllocations, setPaymentAllocations] = useState<{
-    id: string; 
-    type: 'invoice' | 'opening_balance'; 
-    amount: number 
+    id: string;
+    type: 'invoice' | 'opening_balance' | 'sales';
+    amount: number
   }[]>([])
 
   const form = useForm<PaymentFormData>({
@@ -170,37 +167,16 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Payment Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <UnifiedDatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="DD-MM-YYYY"
+                        className="w-full"
+                        maxDate={new Date()}
+                        minDate={new Date("1900-01-01")}
+                      />
+                    </FormControl>
                     <FormDescription>
                       Date when the payment was received
                     </FormDescription>
@@ -237,37 +213,16 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Period Start Date (Optional)</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <UnifiedDatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="DD-MM-YYYY"
+                        className="w-full"
+                        maxDate={new Date()}
+                        minDate={new Date("1900-01-01")}
+                      />
+                    </FormControl>
                     <FormDescription>
                       Start of the billing period this payment covers
                     </FormDescription>
@@ -283,37 +238,16 @@ export default function PaymentForm({ payment, customers, preSelectedCustomerId 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Period End Date (Optional)</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <UnifiedDatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="DD-MM-YYYY"
+                        className="w-full"
+                        maxDate={new Date()}
+                        minDate={new Date("1900-01-01")}
+                      />
+                    </FormControl>
                     <FormDescription>
                       End of the billing period this payment covers
                     </FormDescription>

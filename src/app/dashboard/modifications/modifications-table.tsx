@@ -22,7 +22,8 @@ import type { Modification } from '@/lib/types'
 export const ModificationsTable = memo(function ModificationsTable() {
   const [modifications, setModifications] = useState<Modification[]>([])
   const [loading, setLoading] = useState(true)
-  
+  const [isSearching, setIsSearching] = useState(false)
+
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -31,15 +32,20 @@ export const ModificationsTable = memo(function ModificationsTable() {
   const [expiredCount, setExpiredCount] = useState(0)
   const [archiving, setArchiving] = useState(false)
 
-  const loadModifications = useCallback(async () => {
-    setLoading(true)
+  const loadModifications = useCallback(async (isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true)
+    } else {
+      setIsSearching(true)
+    }
+
     const result = await getModifications({
       search,
       status: statusFilter,
       type: typeFilter,
       includeExpired
     })
-    
+
     if (result.success) {
       setModifications(result.data)
       setResultCount(result.data.length)
@@ -51,20 +57,32 @@ export const ModificationsTable = memo(function ModificationsTable() {
       setModifications([])
       setResultCount(0)
     }
+
     setLoading(false)
+    setIsSearching(false)
   }, [search, statusFilter, typeFilter, includeExpired])
 
-  // Apply sorting to modifications with default sort by start date descending
+  // Apply sorting to modifications with default sort by end date ascending
   const { sortedData: sortedModifications, sortConfig, handleSort } = useSorting(
     modifications,
-    'start_date',
-    'desc'
+    'end_date',
+    'asc'
   )
 
   useEffect(() => {
-    const timeoutId = setTimeout(loadModifications, 300)
+    // Initial load
+    loadModifications(true)
+  }, [])
+
+  useEffect(() => {
+    // Debounced search/filter updates (skip initial render)
+    const timeoutId = setTimeout(() => {
+      if (!loading) {
+        loadModifications(false)
+      }
+    }, 300)
     return () => clearTimeout(timeoutId)
-  }, [loadModifications])
+  }, [search, statusFilter, typeFilter, includeExpired])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this modification?')) {
@@ -74,7 +92,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await deleteModification(id)
     if (result.success) {
       toast.success('Modification deleted successfully')
-      loadModifications()
+      loadModifications(false)
     } else {
       toast.error(result.error)
     }
@@ -84,7 +102,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await toggleModificationStatus(id)
     if (result.success) {
       toast.success('Modification status updated')
-      loadModifications()
+      loadModifications(false)
     } else {
       toast.error(result.error)
     }
@@ -99,7 +117,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await bulkArchiveExpiredModifications()
     if (result.success) {
       toast.success(result.message)
-      loadModifications()
+      loadModifications(false)
     } else {
       toast.error(result.error)
     }
@@ -193,6 +211,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
                   className="pl-10"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  disabled={isSearching}
                 />
               </div>
             </div>

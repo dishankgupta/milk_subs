@@ -16,12 +16,20 @@ export default function ModificationsPage() {
             Manage temporary subscription changes
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/modifications/new">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Modification
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/modifications/bulk">
+              <Plus className="h-4 w-4 mr-2" />
+              Bulk Add
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/dashboard/modifications/new">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Modification
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <ErrorBoundary>

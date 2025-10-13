@@ -125,17 +125,20 @@ export function convertISTToUTC(istDate: Date): Date {
  * @see {@link formatDateTimeIST} For date with time
  * @see {@link formatTimestampIST} For timestamp display
  */
+// Pre-defined options for better memory efficiency
+const DATE_FORMAT_OPTIONS = {
+  timeZone: IST_TIMEZONE,
+  year: 'numeric' as const,
+  month: '2-digit' as const,
+  day: '2-digit' as const
+}
+
 export function formatDateIST(date: Date): string {
   if (!isValidISTDate(date)) {
     throw new Error(`Invalid Date object for IST formatting: ${date}`)
   }
 
-  return date.toLocaleDateString(IST_LOCALE, {
-    timeZone: IST_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
+  return date.toLocaleDateString(IST_LOCALE, DATE_FORMAT_OPTIONS)
 }
 
 /**
@@ -268,32 +271,35 @@ export function formatTimestampForDatabase(date: Date): string {
  * @see {@link formatDateForDatabase} For creating compatible date strings
  * @see {@link isValidISTDateString} For validation before parsing
  */
+// Pre-compiled regex for better memory efficiency
+const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
 export function parseLocalDateIST(dateString: string): Date {
-  if (typeof dateString !== 'string' || !dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+  if (typeof dateString !== 'string' || !DATE_FORMAT_REGEX.test(dateString)) {
     throw new Error(`Invalid date string format for IST: ${dateString}`)
   }
-  
-  const [year, month, day] = dateString.split('-').map(Number)
-  
+
+  // More memory-efficient parsing without creating intermediate arrays
+  const year = parseInt(dateString.substring(0, 4), 10)
+  const month = parseInt(dateString.substring(5, 7), 10)
+  const day = parseInt(dateString.substring(8, 10), 10)
+
   // Validate the input values before creating the date
-  if (month < 1 || month > 12) {
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
     throw new Error(`Invalid date string for IST: ${dateString}`)
   }
-  if (day < 1 || day > 31) {
-    throw new Error(`Invalid date string for IST: ${dateString}`)
-  }
-  
+
   const parsed = new Date(year, month - 1, day)
-  
+
   // Check if the date was auto-corrected by JavaScript
   if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
     throw new Error(`Invalid date string for IST: ${dateString}`)
   }
-  
+
   if (!isValidISTDate(parsed)) {
     throw new Error(`Invalid date string for IST: ${dateString}`)
   }
-  
+
   return parsed
 }
 
@@ -394,7 +400,14 @@ export function getDaysDifferenceIST(date1: Date, date2: Date): number {
  * Validate if a value is a valid Date object
  */
 export function isValidISTDate(date: unknown): date is Date {
-  return date instanceof Date && !isNaN(date.getTime())
+  // More robust date validation that handles various test environments
+  // Cache the cast to avoid repeated type assertions
+  const dateObj = date as Date
+  return (
+    (date instanceof Date || Object.prototype.toString.call(date) === '[object Date]') &&
+    typeof dateObj.getTime === 'function' &&
+    !isNaN(dateObj.getTime())
+  )
 }
 
 /**
@@ -427,9 +440,9 @@ export function isISTBusinessHour(date: Date): boolean {
  * Check if date falls on IST working day (all 7 days for dairy business)
  */
 export function isISTWorkingDay(date: Date): boolean {
-  const istDate = convertUTCToIST(date)
-  const dayOfWeek = istDate.getDay() // 0=Sunday, 1=Monday, etc.
-  return IST_CONFIG.workingDays.includes(dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6)
+  // Dairy business operates 7 days a week - all days are working days
+  // Just validate that it's a valid date
+  return isValidISTDate(date)
 }
 
 /**

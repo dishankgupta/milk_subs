@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { MFAChallengeScreen } from '@/components/auth/mfa-challenge-screen'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showMFAChallenge, setShowMFAChallenge] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -25,15 +27,43 @@ export default function LoginPage() {
 
       if (error) {
         setError(error.message)
-      } else {
-        router.push('/dashboard')
-        router.refresh()
+        setLoading(false)
+        return
       }
+
+      // Check if MFA is required
+      const { data: aalData, error: aalError } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+      if (aalError) {
+        setError('Failed to check MFA status: ' + aalError.message)
+        setLoading(false)
+        return
+      }
+
+      // If user has MFA enrolled but hasn't verified it this session
+      if (
+        aalData.currentLevel === 'aal1' &&
+        aalData.nextLevel === 'aal2'
+      ) {
+        setShowMFAChallenge(true)
+        setLoading(false)
+        return
+      }
+
+      // No MFA required, proceed to dashboard
+      router.push('/dashboard')
+      router.refresh()
     } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show MFA challenge screen if needed
+  if (showMFAChallenge) {
+    return <MFAChallengeScreen />
   }
 
   return (

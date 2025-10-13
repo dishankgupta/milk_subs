@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer, X } from 'lucide-react'
+import { Trash2, Edit, Eye, MoreVertical, Search, Download, Printer, X, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { useRouter } from 'next/navigation'
 import { formatDateIST, formatWithIST, parseLocalDateIST, formatDateForDatabase, getCurrentISTDate } from '@/lib/date-utils'
 import { toast } from 'sonner'
+import { QuickPayModal } from '@/components/sales/QuickPayModal'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,11 +56,12 @@ interface SalesHistoryTableProps {
 }
 
 export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [saleTypeFilter, setSaleTypeFilter] = useState<string>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
-  const [dateFromFilter, setDateFromFilter] = useState<string>('')
-  const [dateToFilter, setDateToFilter] = useState<string>('')
+  const [dateFromFilter, setDateFromFilter] = useState<Date | undefined>()
+  const [dateToFilter, setDateToFilter] = useState<Date | undefined>()
   const [dateFiltersModified, setDateFiltersModified] = useState(false) // Track user modifications
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
@@ -69,6 +73,10 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
+  // Quick Pay state
+  const [quickPayModalOpen, setQuickPayModalOpen] = useState(false)
+  const [selectedSaleForQuickPay, setSelectedSaleForQuickPay] = useState<Sale | null>(null)
+
   // Fix hydration mismatch by ensuring client-side rendering
   useEffect(() => {
     setIsClient(true)
@@ -79,8 +87,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     if (isClient && !dateFiltersModified) {
       const today = getCurrentISTDate()
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-      setDateFromFilter(formatDateForDatabase(firstDay))
-      setDateToFilter(formatDateForDatabase(today))
+      setDateFromFilter(firstDay)
+      setDateToFilter(today)
     }
   }, [isClient, dateFiltersModified])
 
@@ -100,27 +108,18 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     let matchesDateRange = true
     if (dateFromFilter || dateToFilter) {
       const saleDate = new Date(sale.sale_date)
-      
-      if (dateFromFilter && dateFromFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
-        try {
-          const fromDate = parseLocalDateIST(dateFromFilter)
-          if (saleDate < fromDate) matchesDateRange = false
-        } catch (error) {
-          // Invalid date format, skip filtering
-          console.warn('Invalid from date format:', dateFromFilter)
-        }
+
+      if (dateFromFilter) {
+        const fromDate = new Date(dateFromFilter)
+        fromDate.setHours(0, 0, 0, 0)
+        if (saleDate < fromDate) matchesDateRange = false
       }
-      
-      if (dateToFilter && dateToFilter.length >= 8) { // Basic validation: YYYY-MM-DD is at least 8 chars
-        try {
-          const toDate = parseLocalDateIST(dateToFilter)
-          // Set time to end of day for inclusive filtering
-          toDate.setHours(23, 59, 59, 999)
-          if (saleDate > toDate) matchesDateRange = false
-        } catch (error) {
-          // Invalid date format, skip filtering
-          console.warn('Invalid to date format:', dateToFilter)
-        }
+
+      if (dateToFilter) {
+        const toDate = new Date(dateToFilter)
+        // Set time to end of day for inclusive filtering
+        toDate.setHours(23, 59, 59, 999)
+        if (saleDate > toDate) matchesDateRange = false
       }
     }
 
@@ -215,13 +214,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
   }
 
   // Date filter handlers with modification tracking
-  const handleDateFromChange = (value: string) => {
-    setDateFromFilter(value)
+  const handleDateFromChange = (date: Date | undefined) => {
+    setDateFromFilter(date)
     setDateFiltersModified(true)
   }
 
-  const handleDateToChange = (value: string) => {
-    setDateToFilter(value)
+  const handleDateToChange = (date: Date | undefined) => {
+    setDateToFilter(date)
     setDateFiltersModified(true)
   }
 
@@ -229,9 +228,26 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
     // Reset to default current month range
     const today = getCurrentISTDate()
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-    setDateFromFilter(formatDateForDatabase(firstDay))
-    setDateToFilter(formatDateForDatabase(today))
+    setDateFromFilter(firstDay)
+    setDateToFilter(today)
     setDateFiltersModified(false) // Back to system defaults
+  }
+
+  const handleQuickPayClick = (sale: Sale) => {
+    setSelectedSaleForQuickPay(sale)
+    setQuickPayModalOpen(true)
+  }
+
+  const handleQuickPaySuccess = () => {
+    setQuickPayModalOpen(false)
+    setSelectedSaleForQuickPay(null)
+    // Refresh server data while preserving client state (filters, search, etc.)
+    router.refresh()
+  }
+
+  const handleQuickPayClose = () => {
+    setQuickPayModalOpen(false)
+    setSelectedSaleForQuickPay(null)
   }
 
   const handlePrint = () => {
@@ -245,8 +261,8 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
       
       // Only add date parameters if user explicitly modified them
       if (dateFiltersModified) {
-        if (dateFromFilter) params.set('date_from', dateFromFilter)
-        if (dateToFilter) params.set('date_to', dateToFilter)
+        if (dateFromFilter) params.set('date_from', formatDateForDatabase(dateFromFilter))
+        if (dateToFilter) params.set('date_to', formatDateForDatabase(dateToFilter))
       }
       
       // Add sorting parameters
@@ -406,20 +422,18 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
 
           {/* Date Range Filters */}
           <div className="flex gap-2 items-center">
-            <Input
-              type="date"
-              placeholder="From Date"
+            <UnifiedDatePicker
               value={dateFromFilter}
-              onChange={(e) => handleDateFromChange(e.target.value)}
-              className="w-[150px]"
+              onChange={handleDateFromChange}
+              placeholder="From Date (DD-MM-YYYY)"
+              className="w-[180px]"
             />
             <span className="text-muted-foreground text-sm">to</span>
-            <Input
-              type="date"
-              placeholder="To Date"
+            <UnifiedDatePicker
               value={dateToFilter}
-              onChange={(e) => handleDateToChange(e.target.value)}
-              className="w-[150px]"
+              onChange={handleDateToChange}
+              placeholder="To Date (DD-MM-YYYY)"
+              className="w-[180px]"
             />
           </div>
 
@@ -619,7 +633,13 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
                             Edit
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        {sale.sale_type === 'Credit' && sale.payment_status === 'Pending' && (
+                          <DropdownMenuItem onClick={() => handleQuickPayClick(sale)}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Quick Pay
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
                           onClick={() => handleDeleteClick(sale)}
                           className="text-red-600 hover:text-red-700"
                         >
@@ -714,6 +734,24 @@ export function SalesHistoryTable({ sales }: SalesHistoryTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Quick Pay Modal */}
+      {selectedSaleForQuickPay && (
+        <QuickPayModal
+          sale={{
+            id: selectedSaleForQuickPay.id,
+            customer_id: selectedSaleForQuickPay.customer_id || '',
+            customer_name: selectedSaleForQuickPay.customer?.billing_name || 'Unknown Customer',
+            total_amount: selectedSaleForQuickPay.total_amount,
+            sale_date: selectedSaleForQuickPay.sale_date,
+            sale_type: selectedSaleForQuickPay.sale_type,
+            payment_status: selectedSaleForQuickPay.payment_status
+          }}
+          isOpen={quickPayModalOpen}
+          onClose={handleQuickPayClose}
+          onSuccess={handleQuickPaySuccess}
+        />
+      )}
     </div>
   )
 }

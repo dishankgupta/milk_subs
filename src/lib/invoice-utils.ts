@@ -293,6 +293,28 @@ export function getOpenSansFontCSS(): string {
 }
 
 /**
+ * Convert unit of measure to short form
+ * Used in daily summary for compact display
+ */
+function getShortUnit(unitOfMeasure: string): string {
+  const unitMap: Record<string, string> = {
+    'liter': 'L',
+    'liters': 'L',
+    'packet': 'pack',
+    'packets': 'packs',
+    'pack': 'packs',
+    'packs': 'packs',
+    'piece': 'pcs',
+    'pieces': 'pcs',
+    'kg': 'kg',
+    'gram': 'g',
+    'grams': 'g'
+  }
+
+  return unitMap[unitOfMeasure.toLowerCase()] || unitOfMeasure
+}
+
+/**
  * Format daily summary data for 4-column layout
  * Distributes transaction days dynamically across columns
  */
@@ -302,6 +324,7 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
     productName: string
     quantity: number
     unitOfMeasure: string
+    unitPrice: number
   }>
 }>): Array<Array<{
   date: string
@@ -315,9 +338,11 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
       month: 'short', 
       day: 'numeric' 
     }).format(new Date(day.date)),
-    items: day.items.map(item => 
-      `${item.productName} - ${item.quantity} ${item.unitOfMeasure}`
-    )
+    items: day.items.map(item => {
+      const shortUnit = getShortUnit(item.unitOfMeasure)
+      const totalPrice = item.quantity * item.unitPrice
+      return `${item.productName} - ${item.quantity} ${shortUnit} - ₹${totalPrice.toFixed(0)}`
+    })
   }))
 
   // Distribute into 4 columns dynamically
@@ -335,4 +360,73 @@ export function formatDailySummaryForColumns(dailySummary: Array<{
   })
 
   return columns
+}
+
+/**
+ * Validate if an invoice number is unique (not already used in database)
+ * @param invoiceNumber - The invoice number to check
+ * @returns Promise<{isUnique: boolean; error?: string}>
+ */
+export async function validateInvoiceNumberUnique(invoiceNumber: string): Promise<{
+  isUnique: boolean
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+
+    // Check if invoice number already exists
+    const { data, error } = await supabase
+      .from('invoice_metadata')
+      .select('invoice_number')
+      .eq('invoice_number', invoiceNumber)
+      .limit(1)
+
+    if (error) {
+      return {
+        isUnique: false,
+        error: `Database error: ${error.message}`
+      }
+    }
+
+    if (data && data.length > 0) {
+      return {
+        isUnique: false,
+        error: `Invoice number ${invoiceNumber} already exists`
+      }
+    }
+
+    return { isUnique: true }
+  } catch (error) {
+    return {
+      isUnique: false,
+      error: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+}
+
+/**
+ * Format and validate custom invoice number override
+ * @param override - The override value (can be full number or sequence only)
+ * @param financialYearCode - Optional financial year code to prepend (e.g., "202425")
+ * @returns Formatted 11-digit invoice number or null if invalid
+ */
+export function formatInvoiceNumberWithOverride(
+  override: string,
+  financialYearCode?: string
+): string | null {
+  // Remove any whitespace
+  const cleaned = override.trim()
+
+  // If it's already 11 digits, validate and return
+  if (cleaned.length === 11 && /^\d{11}$/.test(cleaned)) {
+    return cleaned
+  }
+
+  // If it's 5 digits (sequence only) and we have financial year code, prepend it
+  if (cleaned.length === 5 && /^\d{5}$/.test(cleaned) && financialYearCode) {
+    return `${financialYearCode}${cleaned}`
+  }
+
+  // Invalid format
+  return null
 }

@@ -1,18 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarIcon, Receipt, ExternalLink } from "lucide-react"
-import { format } from "date-fns"
+import { Receipt, ExternalLink } from "lucide-react"
 import { getCurrentISTDate, formatDateIST } from "@/lib/date-utils"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import { formatCurrency, formatDateForAPI } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -42,7 +40,9 @@ export function GenerateCustomerInvoice({
     period_start: new Date(getCurrentISTDate().getFullYear(), getCurrentISTDate().getMonth(), 1),
     period_end: getCurrentISTDate(),
     include_subscriptions: true,
-    include_credit_sales: true
+    include_credit_sales: true,
+    invoice_date_override: undefined as Date | undefined,
+    invoice_number_override: undefined as string | undefined
   })
 
   const loadPreview = async () => {
@@ -72,12 +72,27 @@ export function GenerateCustomerInvoice({
   const handleGenerate = async () => {
     setIsLoading(true)
     try {
+      // Build query params with overrides
+      const params = new URLSearchParams({
+        customer_id: customerId,
+        period_start: formatDateForAPI(formData.period_start),
+        period_end: formatDateForAPI(formData.period_end)
+      })
+
+      // Add optional overrides if provided
+      if (formData.invoice_date_override) {
+        params.append('invoice_date_override', formatDateForAPI(formData.invoice_date_override))
+      }
+      if (formData.invoice_number_override) {
+        params.append('invoice_number_override', formData.invoice_number_override)
+      }
+
       // Generate the preview URL for this customer
-      const previewUrl = `/api/print/customer-invoice?customer_id=${customerId}&period_start=${formatDateForAPI(formData.period_start)}&period_end=${formatDateForAPI(formData.period_end)}`
-      
+      const previewUrl = `/api/print/customer-invoice?${params.toString()}`
+
       // Open in new window
       window.open(previewUrl, '_blank')
-      
+
       toast.success("Invoice opened in new tab")
       setIsOpen(false)
     } catch (error) {
@@ -107,61 +122,29 @@ export function GenerateCustomerInvoice({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.period_start && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(formData.period_start, "PPP")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.period_start}
-                    onSelect={(date) => {
-                      setFormData(prev => ({ ...prev, period_start: date || new Date() }))
-                      setPreviewData(null)
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={formData.period_start}
+                onChange={(date) => {
+                  setFormData(prev => ({ ...prev, period_start: date || new Date() }))
+                  setPreviewData(null)
+                }}
+                placeholder="DD-MM-YYYY"
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">
               <Label>End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.period_end && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(formData.period_end, "PPP")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.period_end}
-                    onSelect={(date) => {
-                      setFormData(prev => ({ ...prev, period_end: date || new Date() }))
-                      setPreviewData(null)
-                    }}
-                    disabled={(date) => date < formData.period_start}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <UnifiedDatePicker
+                value={formData.period_end}
+                onChange={(date) => {
+                  setFormData(prev => ({ ...prev, period_end: date || new Date() }))
+                  setPreviewData(null)
+                }}
+                placeholder="DD-MM-YYYY"
+                className="w-full"
+                minDate={formData.period_start}
+              />
             </div>
           </div>
 
@@ -192,6 +175,40 @@ export function GenerateCustomerInvoice({
                 <Label htmlFor="include_credit_sales">Credit Sales</Label>
               </div>
             </div>
+          </div>
+
+          {/* Invoice Date Override */}
+          <div className="space-y-2">
+            <Label>Invoice Date (Optional)</Label>
+            <UnifiedDatePicker
+              value={formData.invoice_date_override}
+              onChange={(date) => {
+                setFormData(prev => ({ ...prev, invoice_date_override: date || undefined }))
+                setPreviewData(null)
+              }}
+              placeholder="DD-MM-YYYY"
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to use current IST date
+            </p>
+          </div>
+
+          {/* Invoice Number Override */}
+          <div className="space-y-2">
+            <Label>Invoice Number (Optional)</Label>
+            <Input
+              value={formData.invoice_number_override || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData(prev => ({ ...prev, invoice_number_override: e.target.value || undefined }))
+                setPreviewData(null)
+              }}
+              placeholder="e.g., 20242500001 (leave empty for auto)"
+              maxLength={11}
+            />
+            <p className="text-xs text-muted-foreground">
+              Format: 11 digits. Leave empty to auto-generate
+            </p>
           </div>
 
           {/* Load Preview */}

@@ -36,6 +36,7 @@ import { updateSale } from '@/lib/actions/sales'
 import { formatCurrency } from '@/lib/utils'
 import { calculateGSTFromInclusive } from '@/lib/gst-utils'
 import type { Sale, Product, Customer } from '@/lib/types'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 
 interface EditSaleFormProps {
   sale: Sale
@@ -237,10 +238,10 @@ export function EditSaleForm({ sale, products, customers }: EditSaleFormProps) {
                   <FormItem>
                     <FormLabel>Sale Date *</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
-                        value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
-                        onChange={(e) => field.onChange(new Date(e.target.value))}
+                      <UnifiedDatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="DD-MM-YYYY"
                       />
                     </FormControl>
                     <FormMessage />

@@ -127,7 +127,7 @@ export function AdditionalItemsFormSection({
         <CollapsibleContent>
           <CardContent className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              Add extra products delivered to this customer that aren't part of their subscription order.
+              Add extra products delivered to this customer that aren&apos;t part of their subscription order.
             </div>
 
             {/* Add Item Button */}
@@ -304,7 +304,7 @@ export function AdditionalItemsFormSection({
               <div className="text-center py-8 text-muted-foreground">
                 <Package2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p>No additional items added yet.</p>
-                <p className="text-sm">Click "Add Additional Item" to record extra products delivered.</p>
+                <p className="text-sm">Click &quot;Add Additional Item&quot; to record extra products delivered.</p>
               </div>
             )}
           </CardContent>

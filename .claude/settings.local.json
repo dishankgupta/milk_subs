@@ -4,7 +4,6 @@
       "Bash(pnpm add:*)",
       "Bash(pnpm run:*)",
       "Bash(pnpm dlx:*)",
-      "Bash(pnpm build:*)",
       "Bash(mkdir:*)",
       "mcp__supabase__list_tables",
       "Bash(pnpm lint:*)",
@@ -43,7 +42,18 @@
       "mcp__supabase__search_docs",
       "Bash(dir:*)",
       "Bash(npx tsc:*)",
-      "mcp__filesystem__write_file"
+      "mcp__filesystem__write_file",
+      "Bash(npx vitest:*)",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__list_migrations",
+      "Bash(tree:*)",
+      "Bash(git log:*)",
+      "WebFetch(domain:dev.to)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run lint)",
+      "mcp__ide__getDiagnostics",
+      "mcp__supabase__get_advisors",
+      "WebSearch"
     ]
   },
   "enabledMcpjsonServers": [

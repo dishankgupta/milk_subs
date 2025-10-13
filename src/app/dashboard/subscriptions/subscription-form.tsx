@@ -11,6 +11,7 @@ import { calculatePatternDay } from "@/lib/subscription-utils"
 import { Product, Customer, Subscription } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { formatDateIST, formatWithIST } from "@/lib/date-utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import {
   Form,
   FormControl,
@@ -461,14 +462,10 @@ export function SubscriptionForm({ subscription, customerId }: SubscriptionFormP
                   <FormItem>
                     <FormLabel>Pattern Start Date</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          field.onChange(value ? new Date(value) : null)
-                        }}
+                      <UnifiedDatePicker
+                        value={field.value || undefined}
+                        onChange={(date) => field.onChange(date || null)}
+                        placeholder="DD-MM-YYYY"
                       />
                     </FormControl>
                     <FormDescription>

@@ -16,9 +16,10 @@ import { formatCurrency } from "@/lib/utils"
 import { formatDateForDatabase, getCurrentISTDate, formatDateIST, parseLocalDateIST } from "@/lib/date-utils"
 import { Eye, Zap, Trash2, AlertCircle, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 
 const generateOrdersSchema = z.object({
-  orderDate: z.string().min(1, "Order date is required")
+  orderDate: z.date()
 })
 
 type GenerateOrdersFormData = z.infer<typeof generateOrdersSchema>
@@ -52,7 +53,7 @@ export function OrderGenerationForm() {
   const form = useForm<GenerateOrdersFormData>({
     resolver: zodResolver(generateOrdersSchema),
     defaultValues: {
-      orderDate: formatDateForDatabase(getCurrentISTDate()) // Today's date in IST
+      orderDate: getCurrentISTDate() // Today's date in IST
     }
   })
 
@@ -85,10 +86,11 @@ export function OrderGenerationForm() {
   const handlePreview = async (data: GenerateOrdersFormData) => {
     setIsLoading(true)
     setGenerationResult(null)
-    
+
     try {
-      const result = await previewDailyOrders(data.orderDate)
-      
+      const formattedDate = formatDateForDatabase(data.orderDate)
+      const result = await previewDailyOrders(formattedDate)
+
       if (result.success) {
         setPreview(result.data || [])
         setSummary(result.summary || null)
@@ -115,10 +117,11 @@ export function OrderGenerationForm() {
 
   const handleGenerate = async (data: GenerateOrdersFormData) => {
     setIsLoading(true)
-    
+
     try {
-      const result = await generateDailyOrders(data.orderDate)
-      
+      const formattedDate = formatDateForDatabase(data.orderDate)
+      const result = await generateDailyOrders(formattedDate)
+
       if (result.success) {
         setGenerationResult({ success: true, message: "Orders generated successfully" })
         toast.success("Orders generated successfully")
@@ -146,15 +149,16 @@ export function OrderGenerationForm() {
   }
 
   const handleDelete = async (data: GenerateOrdersFormData) => {
-    if (!confirm(`Are you sure you want to delete all orders for ${data.orderDate}? This action cannot be undone.`)) {
+    const formattedDate = formatDateForDatabase(data.orderDate)
+    if (!confirm(`Are you sure you want to delete all orders for ${formattedDate}? This action cannot be undone.`)) {
       return
     }
 
     setIsLoading(true)
-    
+
     try {
-      const result = await deleteDailyOrders(data.orderDate)
-      
+      const result = await deleteDailyOrders(formattedDate)
+
       if (result.success) {
         toast.success(result.message)
         setGenerationResult(null)
@@ -182,10 +186,10 @@ export function OrderGenerationForm() {
       <form className="space-y-4">
         <div className="grid w-full max-w-sm items-center gap-1.5">
           <Label htmlFor="orderDate">Order Date</Label>
-          <Input
-            id="orderDate"
-            type="date"
-            {...form.register("orderDate")}
+          <UnifiedDatePicker
+            value={form.watch("orderDate")}
+            onChange={(date) => date && form.setValue("orderDate", date)}
+            placeholder="DD-MM-YYYY"
             className="w-full"
           />
           {form.formState.errors.orderDate && (
@@ -263,7 +267,7 @@ export function OrderGenerationForm() {
           <CardHeader>
             <CardTitle>Order Preview Summary</CardTitle>
             <CardDescription>
-              Summary for {form.watch("orderDate")}
+              Summary for {formatDateForDatabase(form.watch("orderDate"))}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

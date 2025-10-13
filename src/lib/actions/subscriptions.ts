@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Subscription, Product } from "@/lib/types"
 import { SubscriptionFormData } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
-import { formatTimestampForDatabase, getCurrentISTDate } from "@/lib/date-utils"
+import { formatTimestampForDatabase, getCurrentISTDate, formatDateForDatabase } from "@/lib/date-utils"
 
 export async function getSubscriptions(): Promise<Subscription[]> {
   const supabase = await createClient()
@@ -101,7 +101,9 @@ export async function createSubscription(subscriptionData: SubscriptionFormData)
     insertData.daily_quantity = null
     insertData.pattern_day1_quantity = subscriptionData.pattern_day1_quantity
     insertData.pattern_day2_quantity = subscriptionData.pattern_day2_quantity
-    insertData.pattern_start_date = subscriptionData.pattern_start_date?.toISOString()
+    insertData.pattern_start_date = subscriptionData.pattern_start_date
+      ? formatDateForDatabase(subscriptionData.pattern_start_date)
+      : null
   }
 
   const { data, error } = await supabase
@@ -159,7 +161,9 @@ export async function updateSubscription(id: string, subscriptionData: Subscript
     updateData.daily_quantity = null
     updateData.pattern_day1_quantity = subscriptionData.pattern_day1_quantity
     updateData.pattern_day2_quantity = subscriptionData.pattern_day2_quantity
-    updateData.pattern_start_date = subscriptionData.pattern_start_date?.toISOString()
+    updateData.pattern_start_date = subscriptionData.pattern_start_date
+      ? formatDateForDatabase(subscriptionData.pattern_start_date)
+      : null
   }
 
   const { data, error } = await supabase

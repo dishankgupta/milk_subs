@@ -1,4 +1,5 @@
 import { format } from 'date-fns'
+import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { getSales } from '@/lib/actions/sales'
@@ -52,12 +53,12 @@ export async function RecentSales() {
         ))}
         
         <div className="text-center">
-          <a 
-            href="/dashboard/sales/history" 
+          <Link
+            href="/dashboard/sales/history"
             className="text-sm text-blue-600 hover:text-blue-800"
           >
             View all sales →
-          </a>
+          </Link>
         </div>
       </div>
     )

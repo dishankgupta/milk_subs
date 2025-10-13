@@ -11,11 +11,12 @@ import { DeliveriesTable } from "./deliveries-table"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { DeliveryExtended } from "@/lib/types"
-import type { DateFilterState } from "@/components/ui/enhanced-date-filter"
 
 interface FilterState {
   searchQuery: string
-  dateFilter: DateFilterState
+  startDate: Date | undefined
+  endDate: Date | undefined
+  datePreset: string
   routeFilter: string
 }
 
@@ -89,7 +90,9 @@ function DeliveriesContent() {
   const [filteredDeliveries, setFilteredDeliveries] = useState<DeliveryExtended[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     searchQuery: "",
-    dateFilter: { preset: "mostRecent", label: "Most Recent" },
+    startDate: undefined,
+    endDate: undefined,
+    datePreset: "mostRecent",
     routeFilter: "all"
   })
   const [currentSort, setCurrentSort] = useState<SortState>({
@@ -126,12 +129,12 @@ function DeliveriesContent() {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
 
-    // Handle enhanced date filter for print
-    if (currentFilters.dateFilter.preset === 'custom' && currentFilters.dateFilter.fromDate && currentFilters.dateFilter.toDate) {
-      params.append('dateFrom', currentFilters.dateFilter.fromDate.toISOString())
-      params.append('dateTo', currentFilters.dateFilter.toDate.toISOString())
+    // Handle date filter for print
+    if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
+      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
     } else {
-      params.append('datePreset', currentFilters.dateFilter.preset)
+      params.append('datePreset', currentFilters.datePreset)
     }
 
     if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
@@ -141,6 +144,24 @@ function DeliveriesContent() {
     params.append('sortDirection', currentSort.direction)
 
     const printUrl = `/api/print/deliveries?${params.toString()}`
+    window.open(printUrl, '_blank')
+  }
+
+  const handlePrintCustomerSummary = () => {
+    const params = new URLSearchParams()
+    if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
+
+    // Handle date filter for print
+    if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
+      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
+      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
+    } else {
+      params.append('datePreset', currentFilters.datePreset)
+    }
+
+    if (currentFilters.routeFilter !== 'all') params.append('route', currentFilters.routeFilter)
+
+    const printUrl = `/api/print/customer-delivered-quantity?${params.toString()}`
     window.open(printUrl, '_blank')
   }
 
@@ -252,6 +273,10 @@ function DeliveriesContent() {
           <Button variant="outline" onClick={handlePrintReport}>
             <Printer className="mr-2 h-4 w-4" />
             Print Report
+          </Button>
+          <Button variant="outline" onClick={handlePrintCustomerSummary}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print Product-wise Summary
           </Button>
           <Link href="/dashboard/deliveries/additional/new">
             <Button variant="secondary" className="bg-orange-600 hover:bg-orange-700 text-white">

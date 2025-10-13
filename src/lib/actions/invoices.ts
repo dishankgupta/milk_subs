@@ -52,6 +52,7 @@ export interface InvoiceDailySummaryItem {
     productName: string
     quantity: number
     unitOfMeasure: string
+    unitPrice: number
   }[]
 }
 
@@ -84,7 +85,11 @@ export interface GenerationProgress {
 export async function prepareInvoiceData(
   customerId: string,
   periodStart: string,
-  periodEnd: string
+  periodEnd: string,
+  options?: {
+    invoiceDateOverride?: string
+    invoiceNumberOverride?: string
+  }
 ): Promise<InvoiceData> {
   const supabase = await createClient()
 
@@ -135,20 +140,27 @@ export async function prepareInvoiceData(
     throw new Error("Failed to fetch manual sales")
   }
 
-  // Generate invoice number
-  const { invoiceNumber } = await getNextInvoiceNumber()
+  // Generate invoice number (use override if provided, otherwise auto-generate)
+  let invoiceNumber: string
+  if (options?.invoiceNumberOverride) {
+    invoiceNumber = options.invoiceNumberOverride
+  } else {
+    const result = await getNextInvoiceNumber()
+    invoiceNumber = result.invoiceNumber
+  }
 
-  // Process all delivery items (both subscription and additional deliveries)
+  // Process all delivery items - separate line items for different prices
   const deliveryItemsMap = new Map<string, InvoiceSubscriptionItem>()
-  
+
   deliveries?.forEach(delivery => {
-    const key = delivery.product.id
+    // Create unique key combining product ID and unit price
+    const key = `${delivery.product.id}_${delivery.unit_price}`
     const existing = deliveryItemsMap.get(key)
-    
+
     // Use actual delivered quantity (self-contained delivery data)
     const actualQuantity = Number(delivery.actual_quantity || 0)
     const actualTotalAmount = actualQuantity * Number(delivery.unit_price)
-    
+
     if (existing) {
       existing.quantity += actualQuantity
       existing.totalAmount += actualTotalAmount
@@ -165,16 +177,24 @@ export async function prepareInvoiceData(
   })
 
   const deliveryItems = Array.from(deliveryItemsMap.values())
+    .sort((a, b) => {
+      // Sort by product name first, then by unit price
+      if (a.productName !== b.productName) {
+        return a.productName.localeCompare(b.productName)
+      }
+      return a.unitPrice - b.unitPrice
+    })
 
-  // Process manual sales items with aggregation by product
+  // Process manual sales items - separate line items for different prices
   const manualSalesItemsMap = new Map<string, InvoiceManualSaleItem>()
-  
+
   manualSales?.forEach(sale => {
-    const key = sale.product.id
+    // Create unique key combining product ID and unit price
+    const key = `${sale.product.id}_${sale.unit_price}`
     const existing = manualSalesItemsMap.get(key)
-    
+
     if (existing) {
-      // Aggregate quantities and amounts
+      // Aggregate quantities and amounts for same product at same price
       existing.quantity += Number(sale.quantity)
       existing.totalAmount += Number(sale.total_amount)
       existing.gstAmount += Number(sale.gst_amount)
@@ -193,6 +213,13 @@ export async function prepareInvoiceData(
   })
 
   const manualSalesItems = Array.from(manualSalesItemsMap.values())
+    .sort((a, b) => {
+      // Sort by product name first, then by unit price
+      if (a.productName !== b.productName) {
+        return a.productName.localeCompare(b.productName)
+      }
+      return a.unitPrice - b.unitPrice
+    })
 
   // Create daily summary (both subscription + manual sales)
   const dailySummaryMap = new Map<string, InvoiceDailySummaryItem>()
@@ -208,7 +235,8 @@ export async function prepareInvoiceData(
     const item = {
       productName: delivery.product.name,
       quantity: actualQuantity,
-      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit
+      unitOfMeasure: delivery.product.unit_of_measure || delivery.product.unit,
+      unitPrice: Number(delivery.unit_price)
     }
     
     if (existing) {
@@ -229,7 +257,8 @@ export async function prepareInvoiceData(
     const item = {
       productName: sale.product.name,
       quantity: Number(sale.quantity),
-      unitOfMeasure: sale.product.unit_of_measure
+      unitOfMeasure: sale.product.unit_of_measure,
+      unitPrice: Number(sale.unit_price)
     }
     
     if (existing) {
@@ -251,10 +280,15 @@ export async function prepareInvoiceData(
   const totalGstAmount = manualSalesItems.reduce((sum, item) => sum + item.gstAmount, 0)
   const grandTotal = deliveryAmount + manualSalesAmount
 
+  // Determine invoice date (use override if provided, otherwise use current IST date)
+  const invoiceDate = options?.invoiceDateOverride
+    ? options.invoiceDateOverride
+    : formatDateForDatabase(getCurrentISTDate())
+
   return {
     customer,
     invoiceNumber,
-    invoiceDate: formatDateForDatabase(getCurrentISTDate()),
+    invoiceDate,
     periodStart,
     periodEnd,
     deliveryItems,
@@ -319,7 +353,7 @@ export async function saveInvoiceMetadata(invoiceData: InvoiceData, filePath: st
   if (invoiceData.manualSalesItems.length > 0) {
     const saleIds = salesLineItems.map(item => item.sale_id).filter(id => id)
     if (saleIds.length > 0) {
-      await markSalesAsBilled(saleIds, invoiceData.invoiceNumber)
+      await markSalesAsBilled(saleIds)
     }
   }
 
@@ -578,175 +612,6 @@ async function getBulkInvoicePreviewFallback(params: {
   return filteredItems.sort((a, b) => a.customerName.localeCompare(b.customerName))
 }
 
-export async function generateBulkInvoices(params: {
-  period_start: string
-  period_end: string
-  customer_ids: string[]
-  output_folder: string
-}): Promise<{
-  successful: number
-  errors: string[]
-  invoiceNumbers: string[]
-  combinedPdfPath: string
-  progress: GenerationProgress
-}> {
-  const { output_folder, customer_ids, period_start, period_end } = params
-
-  // Check for existing invoices before starting generation
-  const supabase = await createClient()
-  const customersWithExistingInvoices: string[] = []
-  
-  for (const customerId of customer_ids) {
-    const { data: existingInvoice } = await supabase
-      .from("invoice_metadata")
-      .select("invoice_number")
-      .eq("customer_id", customerId)
-      .gte("period_start", period_start)
-      .lte("period_end", period_end)
-      .single()
-      
-    if (existingInvoice) {
-      // Get customer name separately to avoid TypeScript issues
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("billing_name")
-        .eq("id", customerId)
-        .single()
-        
-      const customerName = customer?.billing_name || 'Unknown Customer'
-      customersWithExistingInvoices.push(`${customerName} (Invoice: ${existingInvoice.invoice_number})`)
-    }
-  }
-  
-  // If any customers have existing invoices, prevent generation
-  if (customersWithExistingInvoices.length > 0) {
-    const errorMsg = `Cannot generate invoices. The following customers already have invoices for this period: ${customersWithExistingInvoices.join(', ')}. Please delete existing invoices first.`
-    
-    return {
-      successful: 0,
-      errors: [errorMsg],
-      invoiceNumbers: [],
-      combinedPdfPath: "",
-      progress: {
-        completed: 0,
-        total: customer_ids.length,
-        currentCustomer: "",
-        isComplete: true,
-        errors: [errorMsg]
-      }
-    }
-  }
-
-  // Create dated subfolder
-  const dateFolder = await invoiceFileManager.createDateFolder(output_folder)
-  
-  const results = {
-    successful: 0,
-    errors: [] as string[],
-    invoiceNumbers: [] as string[],
-    combinedPdfPath: ""
-  }
-
-  const progress: GenerationProgress = {
-    completed: 0,
-    total: customer_ids.length,
-    currentCustomer: "",
-    isComplete: false,
-    errors: []
-  }
-
-  const individualPdfPaths: string[] = []
-
-  try {
-    for (let i = 0; i < customer_ids.length; i++) {
-      const customerId = customer_ids[i]
-      
-      try {
-        // Get customer name for progress
-        const { data: customer } = await supabase
-          .from("customers")
-          .select("billing_name")
-          .eq("id", customerId)
-          .single()
-
-        progress.currentCustomer = customer?.billing_name || `Customer ${i + 1}`
-
-        // Prepare invoice data
-        const invoiceData = await prepareInvoiceData(customerId, period_start, period_end)
-        
-        // Generate PDF file name
-        const sanitizedCustomerName = invoiceFileManager.sanitizeFilename(
-          invoiceData.customer.billing_name
-        )
-        const pdfFileName = invoiceFileManager.getInvoiceFileName(
-          invoiceData.invoiceNumber, 
-          sanitizedCustomerName
-        )
-        const pdfFilePath = path.join(dateFolder, pdfFileName)
-
-        // Generate HTML content and create PDF with retry logic
-        const html = await generateInvoiceHTML(invoiceData)
-        
-        // Retry PDF generation up to 3 times for transient failures
-        let pdfAttempts = 0
-        const maxPdfAttempts = 3
-        
-        while (pdfAttempts < maxPdfAttempts) {
-          try {
-            await generatePdfFromHtml(html, pdfFilePath)
-            break // Success, exit retry loop
-          } catch (pdfError) {
-            pdfAttempts++
-            console.log(`PDF generation attempt ${pdfAttempts} failed for ${invoiceData.customer.billing_name}:`, pdfError)
-            
-            if (pdfAttempts >= maxPdfAttempts) {
-              throw pdfError // Final attempt failed, throw the error
-            }
-            
-            // Wait before retrying (exponential backoff: 1s, 2s, 4s)
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, pdfAttempts - 1)))
-          }
-        }
-
-        // Save invoice metadata
-        await saveInvoiceMetadata(invoiceData, pdfFilePath)
-
-        // Track success
-        results.successful++
-        results.invoiceNumbers.push(invoiceData.invoiceNumber)
-        individualPdfPaths.push(pdfFilePath)
-
-      } catch (error) {
-        const errorMsg = `Customer ${progress.currentCustomer}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        results.errors.push(errorMsg)
-        progress.errors.push(errorMsg)
-      }
-
-      // Update progress
-      progress.completed = i + 1
-    }
-
-    // Generate combined PDF
-    if (individualPdfPaths.length > 0) {
-      const combinedFileName = invoiceFileManager.getCombinedFileName(
-        results.invoiceNumbers[0],
-        results.invoiceNumbers[results.invoiceNumbers.length - 1]
-      )
-      const combinedPdfPath = path.join(dateFolder, combinedFileName)
-      
-      await combinePdfs(individualPdfPaths, combinedPdfPath)
-      results.combinedPdfPath = combinedPdfPath
-    }
-
-  } finally {
-    progress.isComplete = true
-  }
-
-  return {
-    ...results,
-    progress
-  }
-}
 
 export async function generateSingleInvoice(params: {
   customer_id: string
@@ -755,6 +620,8 @@ export async function generateSingleInvoice(params: {
   include_subscriptions: boolean
   include_credit_sales: boolean
   output_folder?: string
+  invoice_date_override?: string
+  invoice_number_override?: string
 }): Promise<{
   invoiceNumber: string
   pdfPath: string | null
@@ -763,7 +630,11 @@ export async function generateSingleInvoice(params: {
   const invoiceData = await prepareInvoiceData(
     params.customer_id,
     params.period_start,
-    params.period_end
+    params.period_end,
+    {
+      invoiceDateOverride: params.invoice_date_override,
+      invoiceNumberOverride: params.invoice_number_override
+    }
   )
 
   if (params.output_folder) {
@@ -1816,3 +1687,4 @@ export async function generateInvoiceHTML(invoiceData: InvoiceData): Promise<str
 </html>
 `
 }
+

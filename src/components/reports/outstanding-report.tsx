@@ -3,18 +3,16 @@
 import React, { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Calendar, 
-  FileText, 
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
   Printer,
   Download,
   Calculator,
   Loader2,
   Search
 } from "lucide-react"
-import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,10 +24,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { formatCurrency, cn, formatDateForAPI } from "@/lib/utils"
-import { formatDateIST, getCurrentISTDate } from "@/lib/date-utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { formatCurrency, formatDateForAPI } from "@/lib/utils"
+import { getCurrentISTDate, formatDateIST } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 import { generateOutstandingReport } from "@/lib/actions/outstanding-reports"
 import { outstandingReportSchema, type OutstandingReportFormData } from "@/lib/validations"
@@ -177,14 +174,16 @@ export function OutstandingReport() {
     }
   }
 
-  const printReport = (printType: 'summary' | 'statements' | 'complete') => {
+  const printReport = (printType: 'statements' | 'complete') => {
     if (!reportData) return
-    
+
     const params = new URLSearchParams({
       type: printType,
       start_date: formatDateForAPI(form.getValues("start_date")),
       end_date: formatDateForAPI(form.getValues("end_date")),
       customer_selection: form.getValues("customer_selection"),
+      sort_key: sortConfig?.key || 'customer.billing_name',
+      sort_direction: sortConfig?.direction || 'asc',
     })
 
     if (printType === 'statements' && selectedCustomers.size > 0) {
@@ -192,6 +191,23 @@ export function OutstandingReport() {
     }
 
     window.open(`/api/print/outstanding-report?${params.toString()}`, '_blank')
+  }
+
+  const printOutstandingInvoices = () => {
+    if (!reportData) return
+
+    if (selectedCustomers.size === 0) {
+      toast.error("Please select at least one customer")
+      return
+    }
+
+    const params = new URLSearchParams({
+      start_date: formatDateForAPI(form.getValues("start_date")),
+      end_date: formatDateForAPI(form.getValues("end_date")),
+      selected_customer_ids: Array.from(selectedCustomers).join(','),
+    })
+
+    window.open(`/api/print/outstanding-invoices?${params.toString()}`, '_blank')
   }
 
   // Don't render form until mounted to prevent hydration issues
@@ -214,67 +230,27 @@ export function OutstandingReport() {
             {/* Date Range */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Start Date (Opening Balance Date)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.watch("start_date") && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {form.watch("start_date") ? (
-                        format(form.watch("start_date"), "PPP")
-                      ) : (
-                        "Pick start date"
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={form.watch("start_date")}
-                      onSelect={(date) => form.setValue("start_date", date || new Date())}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Label>Start Date (Report Period Start)</Label>
+                <UnifiedDatePicker
+                  value={form.watch("start_date")}
+                  onChange={(date) => form.setValue("start_date", date || new Date())}
+                  placeholder="DD-MM-YYYY"
+                  className="w-full"
+                />
                 <p className="text-xs text-gray-500">
-                  Opening balance will be calculated as of this date
+                  Opening balance calculated as of day before this date
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label>End Date (Outstanding Calculation Date)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.watch("end_date") && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {form.watch("end_date") ? (
-                        format(form.watch("end_date"), "PPP")
-                      ) : (
-                        "Pick end date"
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={form.watch("end_date")}
-                      onSelect={(date) => form.setValue("end_date", date || new Date())}
-                      disabled={(date) => date < form.watch("start_date")}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <UnifiedDatePicker
+                  value={form.watch("end_date")}
+                  onChange={(date) => form.setValue("end_date", date || new Date())}
+                  placeholder="DD-MM-YYYY"
+                  className="w-full"
+                  minDate={form.watch("start_date")}
+                />
               </div>
             </div>
 
@@ -283,8 +259,8 @@ export function OutstandingReport() {
               <Label>Customer Selection</Label>
               <RadioGroup
                 value={form.watch("customer_selection")}
-                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding' | 'with_credit')}
-                className="grid grid-cols-3 gap-4"
+                onValueChange={(value) => form.setValue("customer_selection", value as 'all' | 'with_outstanding' | 'with_credit' | 'with_any_balance')}
+                className="grid grid-cols-2 gap-4"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="all" id="all" />
@@ -295,8 +271,12 @@ export function OutstandingReport() {
                   <Label htmlFor="with_outstanding">Customers with Outstanding &gt; 0</Label>
                 </div>
                 <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="with_any_balance" id="with_any_balance" />
+                  <Label htmlFor="with_any_balance">Customers with Any Balance (≠ 0)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="with_credit" id="with_credit" />
-                  <Label htmlFor="with_credit">Customers with Net Credit Balance</Label>
+                  <Label htmlFor="with_credit">Customers with Credit Balance (&lt; 0)</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -343,17 +323,17 @@ export function OutstandingReport() {
                 Report Summary
               </CardTitle>
               <div className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => printReport('summary')}>
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Summary
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => printReport('statements')}>
                   <Download className="h-4 w-4 mr-2" />
                   Print Customer Statements
                 </Button>
-                <Button size="sm" onClick={() => printReport('complete')}>
+                <Button variant="outline" size="sm" onClick={() => printReport('complete')}>
                   <FileText className="h-4 w-4 mr-2" />
                   Print Complete Report
+                </Button>
+                <Button size="sm" onClick={printOutstandingInvoices} disabled={selectedCustomers.size === 0}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Outstanding Invoices Report
                 </Button>
               </div>
             </div>
@@ -474,15 +454,14 @@ export function OutstandingReport() {
                     >
                       Payments
                     </SortableTableHead>
-                    <SortableTableHead 
-                      sortKey="total_outstanding" 
-                      sortConfig={sortConfig} 
+                    <SortableTableHead
+                      sortKey="total_outstanding"
+                      sortConfig={sortConfig}
                       onSort={handleSort}
                       className="text-right"
                     >
-                      Gross Outstanding
+                      Total Outstanding
                     </SortableTableHead>
-                    <TableHead className="text-right">Net Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -543,24 +522,12 @@ export function OutstandingReport() {
                             {formatCurrency(customerData.total_outstanding)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {(() => {
-                            const netBalance = customerData.total_outstanding - (customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0);
-                            if (netBalance > 0) {
-                              return <span className="text-red-600">{formatCurrency(netBalance)}</span>;
-                            } else if (netBalance < 0) {
-                              return <span className="text-green-600">Cr. {formatCurrency(Math.abs(netBalance))}</span>;
-                            } else {
-                              return <span className="text-gray-600">₹0.00</span>;
-                            }
-                          })()}
-                        </TableCell>
                       </TableRow>
 
                       {/* Level 2: Expanded Customer Details */}
                       {expandedCustomers.has(customerData.customer.id) && (
                         <TableRow key={`${customerData.customer.id}-expanded`}>
-                          <TableCell colSpan={10} className="p-0">
+                          <TableCell colSpan={9} className="p-0">
                             <div className="bg-gray-50 p-4 space-y-4">
                               {/* Opening Balance */}
                               <div className="bg-white p-3 rounded border">
@@ -754,10 +721,10 @@ export function OutstandingReport() {
                                 </div>
                               )}
 
-                              {/* Current Outstanding Total */}
+                              {/* Total Outstanding */}
                               <div className="bg-white p-3 rounded border border-l-4 border-l-red-500">
                                 <div className="flex justify-between items-center">
-                                  <span className="font-bold text-gray-700">Current Outstanding:</span>
+                                  <span className="font-bold text-gray-700">Total Outstanding:</span>
                                   <span className="font-bold text-xl text-red-600">
                                     {formatCurrency(customerData.total_outstanding)}
                                   </span>

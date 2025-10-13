@@ -71,6 +71,42 @@
     --input: #1e293b;
     --ring: #f8fafc;
   }
+
+  .rdp-root {
+    --rdp-accent-color: var(--primary);
+    --rdp-accent-background-color: rgba(248, 250, 252, 0.16);
+    --rdp-accent-background-color: color-mix(in srgb, var(--primary) 20%, transparent);
+    --rdp-day_button-border: none;
+    --rdp-selected-border: none;
+    --rdp-range_middle-background-color: var(--rdp-accent-background-color);
+    --rdp-range_start-date-background-color: var(--primary);
+    --rdp-range_end-date-background-color: var(--primary);
+    --rdp-today-color: var(--primary);
+  }
+}
+
+.rdp-root {
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: rgba(15, 23, 42, 0.12);
+  --rdp-accent-background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  --rdp-day_button-border: none;
+  --rdp-selected-border: none;
+  --rdp-range_middle-background-color: var(--rdp-accent-background-color);
+  --rdp-range_start-date-background-color: var(--primary);
+  --rdp-range_end-date-background-color: var(--primary);
+  --rdp-today-color: var(--primary);
+}
+
+.rdp-root .rdp-day_button[aria-selected="true"] {
+  border: none;
+  box-shadow: none;
+}
+
+.rdp-root .rdp-day_button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--ring),
+    0 0 0 3px color-mix(in srgb, var(--ring) 20%, transparent);
 }
 
 body {

@@ -8,6 +8,8 @@ import { formatCurrency } from '@/lib/utils'
 import { calculateGSTFromInclusive } from '@/lib/gst-utils'
 import { formatDateIST } from '@/lib/date-utils'
 import type { Sale } from '@/lib/types'
+import { SaleBillingDetails } from '@/components/sales/sale-billing-details'
+import { SaleCompletionDetails } from '@/components/sales/sale-completion-details'
 
 interface ViewSaleDetailsProps {
   sale: Sale & {
@@ -22,9 +24,31 @@ interface ViewSaleDetailsProps {
       gst_rate: number
     }
   }
+  billingDetails?: {
+    invoice_number: string
+    invoice_date: string
+    total_amount: number
+    status: string
+    invoice_status: string
+    amount_paid: number
+    amount_outstanding: number
+    due_date?: string
+    last_payment_date?: string
+  } | null
+  completionDetails?: {
+    type: 'direct_payment' | 'invoice_payment'
+    amount_allocated: number
+    payment_date: string
+    payment_method: string
+    total_payment_amount?: number
+    payment_notes?: string
+    allocation_status?: string
+    payment_id: string
+    invoice_number?: string
+  } | null
 }
 
-export function ViewSaleDetails({ sale }: ViewSaleDetailsProps) {
+export function ViewSaleDetails({ sale, billingDetails, completionDetails }: ViewSaleDetailsProps) {
   // Calculate GST breakdown
   const totalAmount = sale.total_amount
   const gstCalculation = calculateGSTFromInclusive(totalAmount, sale.product.gst_rate || 0)
@@ -220,5 +244,46 @@ export function ViewSaleDetails({ sale }: ViewSaleDetailsProps) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+export function EnhancedViewSaleDetails({ sale, billingDetails, completionDetails }: ViewSaleDetailsProps) {
+  return (
+    <div className="space-y-6">
+      {/* Original Sale Information */}
+      <ViewSaleDetails sale={sale} billingDetails={billingDetails} completionDetails={completionDetails} />
+
+      {/* Billing Details for 'Billed' Status */}
+      {sale.payment_status === 'Billed' && (
+        <SaleBillingDetails
+          saleId={sale.id}
+          saleAmount={sale.total_amount}
+          invoiceDetails={billingDetails ?? null}
+        />
+      )}
+      {sale.payment_status === 'Completed' && (
+        <SaleCompletionDetails
+          saleType={sale.sale_type}
+          saleAmount={sale.total_amount}
+          saleDate={sale.sale_date}
+          directPayment={completionDetails?.type === 'direct_payment' ? {
+            amount_allocated: completionDetails.amount_allocated,
+            payment_date: completionDetails.payment_date,
+            payment_method: completionDetails.payment_method,
+            total_payment_amount: completionDetails.total_payment_amount || 0,
+            payment_notes: completionDetails.payment_notes,
+            allocation_status: completionDetails.allocation_status || 'unknown',
+            payment_id: completionDetails.payment_id
+          } : undefined}
+          invoicePayment={completionDetails?.type === 'invoice_payment' ? {
+            invoice_number: completionDetails.invoice_number || '',
+            amount_allocated: completionDetails.amount_allocated,
+            payment_date: completionDetails.payment_date,
+            payment_method: completionDetails.payment_method,
+            payment_id: completionDetails.payment_id
+          } : undefined}
+        />
+      )}
+    </div>
   )
 }

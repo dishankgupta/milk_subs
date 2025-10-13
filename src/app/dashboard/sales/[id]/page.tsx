@@ -3,16 +3,16 @@ import { ArrowLeft, Edit, Trash2 } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
-import { getSale } from '@/lib/actions/sales'
-import { ViewSaleDetails } from './view-sale-details'
+import { getSaleWithBillingDetails } from '@/lib/actions/sales'
+import { EnhancedViewSaleDetails } from './view-sale-details'
 
 export default async function ViewSalePage(props: {
   params: Promise<{ id: string }>
 }) {
   const params = await props.params
-  
+
   try {
-    const sale = await getSale(params.id)
+    const { sale, billingDetails, completionDetails } = await getSaleWithBillingDetails(params.id)
 
     // Check if sale is editable
     const isEditable = sale.sale_type !== 'Credit' || sale.payment_status === 'Pending'
@@ -30,10 +30,10 @@ export default async function ViewSalePage(props: {
           <div className="flex-1">
             <h1 className="text-3xl font-bold tracking-tight">Sale Details</h1>
             <p className="text-muted-foreground">
-              View the complete sale information
+              View the complete sale information with billing and payment details
             </p>
           </div>
-          
+
           {/* Action Buttons */}
           <div className="flex gap-2">
             {isEditable && (
@@ -51,8 +51,12 @@ export default async function ViewSalePage(props: {
           </div>
         </div>
 
-        {/* Sale Details */}
-        <ViewSaleDetails sale={sale} />
+        {/* Enhanced Sale Details with Billing and Completion Information */}
+        <EnhancedViewSaleDetails
+          sale={sale}
+          billingDetails={billingDetails}
+          completionDetails={completionDetails}
+        />
       </div>
     )
   } catch (error) {

@@ -1275,6 +1275,384 @@ To customize the theme, modify the CSS custom properties in `globals.css`:
 
 ---
 
+## Invoice System
+
+### Invoice Template Design
+
+The invoice system features a professional PureDairy-branded template optimized for A4 printing with responsive content scaling.
+
+#### Layout Structure
+
+```css
+/* A4 Page Setup */
+@page {
+  size: A4;
+  margin: 15mm 15mm 15mm 10mm; /* 15mm all sides, 10mm right */
+}
+
+/* Main Layout Grid */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 15px 0;
+}
+
+.main-content {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.left-section {
+  flex: 1;
+  max-width: 35%;
+}
+
+.right-section {
+  flex: 2;
+}
+```
+
+#### Invoice Color Scheme
+
+| Color | Hex Code | Usage |
+|-------|----------|-------|
+| Primary Green | `#025e24` | Table headers, borders |
+| Table Background | `#fdfbf9` | Items table, totals table |
+| Body Background | `#ffffff` | Page background |
+| Text Primary | `#333333` | Main content text |
+| Text Secondary | `#666666` | Labels, metadata |
+| Border | `#dddddd` | Table cell borders |
+
+#### Typography System
+
+```css
+/* Font Stack */
+font-family: "Open Sans", sans-serif;
+
+/* Font Weights */
+font-weight: 400; /* Regular - body text */
+font-weight: 500; /* Medium - labels, content */
+font-weight: 800; /* Extra Bold - headers, titles */
+
+/* Responsive Font Sizes */
+.responsive-base {
+  font-size: clamp(9px, 12px, 12px); /* Scales based on content volume */
+}
+
+.invoice-title {
+  font-size: 30px; /* Scales to 22.5px for high-density content */
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.section-header {
+  font-size: 18px; /* Scales to 13.5px for high-density content */
+  font-weight: 800;
+}
+```
+
+#### Header Layout
+
+```css
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.invoice-title {
+  flex: 1;
+  text-align: left;
+  font-size: 30px;
+  font-weight: 800;
+  color: #000000;
+  letter-spacing: 2px;
+}
+
+.logo-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.logo-img {
+  width: 120px;
+  height: auto;
+}
+
+.company-address {
+  flex: 1;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 400;
+  color: #666;
+  line-height: 1.3;
+}
+```
+
+#### Customer Information Section
+
+```css
+.customer-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: black;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.customer-info {
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.customer-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.invoice-meta {
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.invoice-number {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+```
+
+#### Items Table Design
+
+```css
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fdfbf9;
+  border: 1px solid #025e24;
+}
+
+.items-table th {
+  background: #025e24;
+  color: white;
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 11px;
+  border: 1px solid #025e24;
+}
+
+.items-table th:first-child {
+  text-align: left;
+}
+
+.items-table th:last-child {
+  text-align: right;
+}
+
+.items-table td {
+  padding: 8px;
+  border: 1px solid #ddd;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.items-table td:last-child {
+  text-align: right;
+  font-weight: 500;
+}
+```
+
+#### Totals Section
+
+```css
+.totals-section {
+  margin: 15px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.totals-table {
+  border-collapse: collapse;
+  background: #fdfbf9;
+}
+
+.totals-table td {
+  padding: 6px 15px;
+  border: 1px solid #ddd;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.totals-table .label {
+  text-align: right;
+  font-weight: 500;
+}
+
+.totals-table .amount {
+  text-align: right;
+}
+
+.grand-total {
+  font-weight: 800;
+  font-size: 12px;
+}
+```
+
+#### QR Code Section
+
+```css
+.qr-section {
+  margin: 20px 0;
+  text-align: center;
+}
+
+.qr-code-img {
+  max-width: 105px;
+  height: auto;
+  border: 1px solid #ddd;
+}
+```
+
+#### Daily Summary Section
+
+```css
+.daily-summary {
+  margin: 20px 0;
+  border: 1px solid #666;
+  background: white;
+}
+
+.daily-summary-title {
+  padding: 8px 15px;
+  font-size: 12px;
+  font-weight: 800;
+  color: black;
+  border-bottom: 1px solid #666;
+}
+
+.daily-summary-content {
+  padding: 15px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.daily-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.daily-entry {
+  margin-bottom: 8px;
+}
+
+.daily-date {
+  font-weight: 500;
+  color: black;
+  margin-bottom: 3px;
+}
+
+.daily-product {
+  font-size: 10px;
+  color: #666;
+  margin-left: 8px;
+  line-height: 1.2;
+}
+```
+
+#### Footer Design
+
+```css
+.footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  font-size: 10px;
+  color: black;
+  background: white;
+  padding: 10px;
+}
+
+.footer-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.footer-icon {
+  width: 16px;
+  height: 16px;
+}
+```
+
+#### Print Optimizations
+
+```css
+@media print {
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .items-table, .daily-summary {
+    break-inside: avoid;
+  }
+
+  .daily-summary-content {
+    break-inside: avoid;
+  }
+}
+```
+
+#### Responsive Font Scaling
+
+The invoice system includes intelligent font scaling based on content volume:
+
+```typescript
+// Font size calculation based on content density
+const contentDensity = Math.min(
+  (dailySummaryDays / 31) * 0.4 +
+  (productCount / 7) * 0.3 +
+  (totalLineItems / 15) * 0.3,
+  1.0
+)
+
+// Base font size: 12px normal, scales down to 9px for high content
+const baseSize = Math.max(12 - (contentDensity * 3), 9)
+```
+
+#### Invoice Assets
+
+- **Logo**: `PureDairy_Logo-removebg-preview.png` (120px width)
+- **QR Code**: `QR_code.png` (105px max-width)
+- **Footer Icons**: SVG assets converted to base64
+  - Website: `1www.svg`
+  - Phone: `2phone.svg`
+  - Email: `3email.svg`
+
+#### Business Rules
+
+1. **A4 Constraint**: All content must fit on a single A4 page
+2. **Maximum Content**: Supports up to 31 days of daily summary and 7 products
+3. **Font Scaling**: Automatically reduces font sizes for high-density content
+4. **GST Compliance**: Includes proper GST breakdown and totals
+5. **Professional Branding**: Consistent PureDairy branding throughout
+
+---
+
 ## Currency & Localization
 
 ### Indian Rupee Formatting

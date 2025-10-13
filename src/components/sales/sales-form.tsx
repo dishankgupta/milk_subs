@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarIcon } from "lucide-react"
-import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,11 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
 import { saleSchema, type SaleFormData } from "@/lib/validations"
 import { createSale } from "@/lib/actions/sales"
 import { getProducts } from "@/lib/actions/products"
@@ -35,7 +31,6 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [showCalendar, setShowCalendar] = useState(false)
 
   const form = useForm<SaleFormData>({
     resolver: zodResolver(saleSchema),
@@ -287,36 +282,12 @@ export function SalesForm({ onSuccess }: SalesFormProps) {
               {/* Sale Date */}
               <div className="space-y-2">
                 <Label>Sale Date *</Label>
-                <Popover open={showCalendar} onOpenChange={setShowCalendar}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.watch("sale_date") && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {form.watch("sale_date") ? (
-                        format(form.watch("sale_date"), "PPP")
-                      ) : (
-                        "Pick a date"
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={form.watch("sale_date")}
-                      onSelect={(date) => {
-                        form.setValue("sale_date", date || new Date())
-                        setShowCalendar(false)
-                      }}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <UnifiedDatePicker
+                  value={form.watch("sale_date")}
+                  onChange={(date) => form.setValue("sale_date", date || new Date())}
+                  placeholder="DD-MM-YYYY"
+                  className="w-full"
+                />
               </div>
             </div>
 

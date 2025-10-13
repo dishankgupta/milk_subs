@@ -7,10 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { AlertTriangle, Calculator, DollarSign, Clock } from 'lucide-react'
+import { AlertTriangle, Calculator, DollarSign, Clock, ShoppingCart } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
-import { getCustomerUnpaidInvoices, getCustomerOutstanding } from '@/lib/actions/outstanding'
+import {
+  getCustomerUnpaidInvoices,
+  getCustomerOutstanding,
+  getCustomerPendingCreditSales,
+  type PendingCreditSale
+} from '@/lib/actions/outstanding'
 
 interface UnpaidInvoice {
   id: string
@@ -25,7 +30,7 @@ interface UnpaidInvoice {
 
 interface AllocationItem {
   id: string
-  type: 'invoice' | 'opening_balance'
+  type: 'invoice' | 'opening_balance' | 'sales'
   title: string
   maxAmount: number
   allocatedAmount: number
@@ -35,15 +40,23 @@ interface AllocationItem {
   invoiceDate?: string
   dueDate?: string
   status?: string
+  // Sales-specific fields
+  productName?: string
+  productCode?: string
+  quantity?: number
+  unitPrice?: number
+  gstAmount?: number
+  saleDate?: string
+  unitOfMeasure?: string
 }
 
 interface InvoiceAllocationSectionProps {
   customerId: string
   paymentAmount: number
-  onAllocationChange: (allocations: { 
-    id: string; 
-    type: 'invoice' | 'opening_balance'; 
-    amount: number 
+  onAllocationChange: (allocations: {
+    id: string;
+    type: 'invoice' | 'opening_balance' | 'sales';
+    amount: number
   }[]) => void
 }
 
@@ -53,22 +66,26 @@ export function InvoiceAllocationSection({
   onAllocationChange 
 }: InvoiceAllocationSectionProps) {
   const [unpaidInvoices, setUnpaidInvoices] = useState<UnpaidInvoice[]>([])
+  const [pendingCreditSales, setPendingCreditSales] = useState<PendingCreditSale[]>([])
   const [, setOpeningBalance] = useState<number>(0)
   const [allocations, setAllocations] = useState<AllocationItem[]>([])
   const [loading, setLoading] = useState(false)
   const [autoAllocateMode, setAutoAllocateMode] = useState<'oldest' | 'largest' | 'opening_first' | 'manual'>('opening_first')
 
-  const loadUnpaidInvoicesAndOpeningBalance = useCallback(async () => {
+  const loadAllocationData = useCallback(async () => {
     try {
       setLoading(true)
-      
-      // Load unpaid invoices
-      const invoices = await getCustomerUnpaidInvoices(customerId)
+
+      // Load unpaid invoices, pending credit sales, and opening balance in parallel
+      const [invoices, pendingSales, customerData] = await Promise.all([
+        getCustomerUnpaidInvoices(customerId),
+        getCustomerPendingCreditSales(customerId),
+        getCustomerOutstanding(customerId)
+      ])
+
       setUnpaidInvoices(invoices)
-      
-      // Load customer outstanding data to get opening balance
-      const customerData = await getCustomerOutstanding(customerId)
-      const customerOpeningBalance = customerData.openingBalance || 0
+      setPendingCreditSales(pendingSales)
+      const customerOpeningBalance = customerData.effectiveOpeningBalance || 0
       setOpeningBalance(customerOpeningBalance)
       
       // Initialize allocations - opening balance first, then invoices
@@ -101,7 +118,26 @@ export function InvoiceAllocationSection({
           status: invoice.invoice_status
         })
       })
-      
+
+      // Add pending credit sales
+      pendingSales.forEach(sale => {
+        initialAllocations.push({
+          id: sale.id,
+          type: 'sales',
+          title: `${sale.product_name} (${sale.quantity} ${sale.unit_of_measure})`,
+          maxAmount: sale.total_amount,
+          allocatedAmount: 0,
+          isSelected: false,
+          productName: sale.product_name,
+          productCode: sale.product_code,
+          quantity: sale.quantity,
+          unitPrice: sale.unit_price,
+          gstAmount: sale.gst_amount,
+          saleDate: sale.sale_date,
+          unitOfMeasure: sale.unit_of_measure
+        })
+      })
+
       setAllocations(initialAllocations)
       
     } catch (error) {
@@ -113,9 +149,9 @@ export function InvoiceAllocationSection({
 
   useEffect(() => {
     if (customerId) {
-      loadUnpaidInvoicesAndOpeningBalance()
+      loadAllocationData()
     }
-  }, [customerId, loadUnpaidInvoicesAndOpeningBalance])
+  }, [customerId, loadAllocationData])
 
 
   const totalAllocated = useMemo(() => {
@@ -143,7 +179,7 @@ export function InvoiceAllocationSection({
     
     switch (autoAllocateMode) {
       case 'opening_first':
-        // Opening balance first, then oldest invoices
+        // Opening balance first, then oldest invoices, then oldest sales
         sortedAllocations.sort((a, b) => {
           if (a.type === 'opening_balance' && b.type !== 'opening_balance') return -1
           if (a.type !== 'opening_balance' && b.type === 'opening_balance') return 1
@@ -154,21 +190,48 @@ export function InvoiceAllocationSection({
               return new Date(invoiceA.invoice_date).getTime() - new Date(invoiceB.invoice_date).getTime()
             }
           }
+          if (a.type === 'sales' && b.type === 'sales') {
+            const saleA = pendingCreditSales.find(sale => sale.id === a.id)
+            const saleB = pendingCreditSales.find(sale => sale.id === b.id)
+            if (saleA && saleB) {
+              return new Date(saleA.sale_date).getTime() - new Date(saleB.sale_date).getTime()
+            }
+          }
+          // Mix priority: invoices before sales (both after opening balance)
+          if (a.type === 'invoice' && b.type === 'sales') return -1
+          if (a.type === 'sales' && b.type === 'invoice') return 1
           return 0
         })
         break
       case 'oldest':
-        // Oldest invoices first, then opening balance
+        // Oldest invoices and sales first, then opening balance
         sortedAllocations.sort((a, b) => {
-          if (a.type === 'invoice' && b.type === 'invoice') {
-            const invoiceA = unpaidInvoices.find(inv => inv.id === a.id)
-            const invoiceB = unpaidInvoices.find(inv => inv.id === b.id)
-            if (invoiceA && invoiceB) {
-              return new Date(invoiceA.invoice_date).getTime() - new Date(invoiceB.invoice_date).getTime()
-            }
-          }
           if (a.type === 'opening_balance') return 1
           if (b.type === 'opening_balance') return -1
+
+          // Compare dates between invoices and sales
+          let dateA: Date | null = null
+          let dateB: Date | null = null
+
+          if (a.type === 'invoice') {
+            const invoice = unpaidInvoices.find(inv => inv.id === a.id)
+            dateA = invoice ? new Date(invoice.invoice_date) : null
+          } else if (a.type === 'sales') {
+            const sale = pendingCreditSales.find(sale => sale.id === a.id)
+            dateA = sale ? new Date(sale.sale_date) : null
+          }
+
+          if (b.type === 'invoice') {
+            const invoice = unpaidInvoices.find(inv => inv.id === b.id)
+            dateB = invoice ? new Date(invoice.invoice_date) : null
+          } else if (b.type === 'sales') {
+            const sale = pendingCreditSales.find(sale => sale.id === b.id)
+            dateB = sale ? new Date(sale.sale_date) : null
+          }
+
+          if (dateA && dateB) {
+            return dateA.getTime() - dateB.getTime()
+          }
           return 0
         })
         break
@@ -394,7 +457,7 @@ export function InvoiceAllocationSection({
                   </div>
                 </div>
               )
-            } else {
+            } else if (allocation.type === 'invoice') {
               // Invoice allocation item
               const invoice = unpaidInvoices.find(inv => inv.id === allocation.id)
               if (!invoice) return null
@@ -448,6 +511,66 @@ export function InvoiceAllocationSection({
                       />
                       <div className="text-xs text-gray-500 mt-1">
                         Max: {formatCurrency(allocation.maxAmount)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            } else if (allocation.type === 'sales') {
+              // Sales allocation item
+              const sale = pendingCreditSales.find(s => s.id === allocation.id)
+              if (!sale) return null
+
+              return (
+                <div
+                  key={allocation.id}
+                  className={`border rounded-lg p-4 ${allocation.isSelected ? 'border-green-300 bg-green-50' : 'border-gray-200'}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        checked={allocation.isSelected}
+                        onCheckedChange={(checked) => handleToggleItem(allocation.id, checked as boolean)}
+                        className="mt-1"
+                      />
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <ShoppingCart className="h-4 w-4 text-green-600" />
+                          <span className="font-medium">{sale.product_name}</span>
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                            Direct Sale
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          <div>Product: {sale.product_code} | Qty: {sale.quantity} {sale.unit_of_measure}</div>
+                          <div>Unit Price: {formatCurrency(sale.unit_price)} | GST: {formatCurrency(sale.gst_amount)}</div>
+                          <div>Sale Date: {formatDateIST(new Date(sale.sale_date))}</div>
+                          <div>Total: {formatCurrency(sale.total_amount)}</div>
+                          {sale.notes && <div className="text-xs text-gray-500 mt-1">Note: {sale.notes}</div>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <Label htmlFor={`allocation-${allocation.id}`} className="text-sm">
+                        Allocate Amount
+                      </Label>
+                      <Input
+                        id={`allocation-${allocation.id}`}
+                        type="number"
+                        min="0"
+                        max={allocation.maxAmount}
+                        step="0.01"
+                        value={allocation.allocatedAmount || ''}
+                        onChange={(e) => handleAllocationChange(allocation.id, parseFloat(e.target.value) || 0)}
+                        className="w-32 mt-1"
+                        placeholder="0.00"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        Max: {formatCurrency(allocation.maxAmount)}
+                      </div>
+                      <div className="text-xs text-green-600 mt-1">
+                        Full payment required
                       </div>
                     </div>
                   </div>

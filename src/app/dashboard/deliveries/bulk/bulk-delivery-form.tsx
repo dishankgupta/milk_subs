@@ -1,17 +1,16 @@
 "use client"
 
-import React, { useState, useTransition, useMemo, useCallback, useRef, useEffect } from "react"
+import React, { useState, useTransition, useMemo, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { format } from "date-fns"
 import { toast } from "sonner"
 
 import { bulkDeliverySchema, type BulkDeliveryFormData } from "@/lib/validations"
 import { createBulkDeliveries } from "@/lib/actions/deliveries"
 import type { DailyOrder, Customer, Product, Route } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { getCurrentISTDate, formatDateTimeIST } from "@/lib/date-utils"
+import { getCurrentISTDate } from "@/lib/date-utils"
 import { useSorting } from "@/hooks/useSorting"
 
 import { Button } from "@/components/ui/button"
@@ -23,10 +22,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SortableTableHead } from "@/components/ui/sortable-table-head"
-import { CalendarIcon, Package, CheckCircle2, ArrowLeft, Search } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { cn } from "@/lib/utils"
+import { UnifiedDatePicker } from "@/components/ui/unified-date-picker"
+import { Package, CheckCircle2, ArrowLeft, Search } from "lucide-react"
 import Link from "next/link"
 
 
@@ -36,10 +33,9 @@ interface BulkDeliveryFormProps {
     product: Product
     route: Route
   })[]
-  products: Product[]
 }
 
-export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, products }: BulkDeliveryFormProps) {
+export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders }: BulkDeliveryFormProps) {
   const [isPending, startTransition] = useTransition()
   const [deliveredAt, setDeliveredAt] = useState<Date | undefined>(undefined)
   const [searchTerm, setSearchTerm] = useState("")
@@ -388,66 +384,23 @@ export const BulkDeliveryForm = React.memo(function BulkDeliveryForm({ orders, p
 
               {/* Delivery Time */}
               <div className="space-y-2">
-                <Label>Delivery Time</Label>
+                <Label>Delivery Date & Time</Label>
                 {isClientMounted ? (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !deliveredAt && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {deliveredAt ? (
-                          format(deliveredAt, "PPP 'at' p")
-                        ) : (
-                          <span>Pick delivery time</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={deliveredAt}
-                        onSelect={(date) => {
-                          if (date) {
-                            const currentTime = deliveredAt || getCurrentISTDate()
-                            date.setHours(currentTime.getHours(), currentTime.getMinutes())
-                            setDeliveredAt(date)
-                            setValue("delivered_at", date)
-                          }
-                        }}
-                        initialFocus
-                      />
-                      <div className="p-3 border-t">
-                        <input
-                          type="time"
-                          className="w-full px-3 py-1 border rounded"
-                          value={deliveredAt ? format(deliveredAt, "HH:mm") : ""}
-                          onChange={(e) => {
-                            if (deliveredAt && e.target.value) {
-                              const [hours, minutes] = e.target.value.split(':').map(Number)
-                              const newDate = new Date(deliveredAt.getTime()) // Create copy to avoid mutation
-                              newDate.setHours(hours, minutes)
-                              setDeliveredAt(newDate)
-                              setValue("delivered_at", newDate)
-                            }
-                          }}
-                        />
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <UnifiedDatePicker
+                    value={deliveredAt}
+                    onChange={(date) => {
+                      if (date) {
+                        setDeliveredAt(date)
+                        setValue("delivered_at", date)
+                      }
+                    }}
+                    withTime={true}
+                    placeholder="DD-MM-YYYY HH:mm"
+                  />
                 ) : (
-                  <Button
-                    variant={"outline"}
-                    className="w-full justify-start text-left font-normal text-muted-foreground"
-                    disabled
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    <span>Loading...</span>
-                  </Button>
+                  <div className="w-full px-3 py-2 border rounded text-muted-foreground bg-muted">
+                    Loading...
+                  </div>
                 )}
               </div>
             </div>

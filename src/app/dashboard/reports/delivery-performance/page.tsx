@@ -62,7 +62,7 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
         ]}
       />
       
-      {/* Date Range Filter */}
+      {/* Date Range Filter - Note: Server component using native inputs for form submission */}
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle>Date Range</CardTitle>
@@ -71,28 +71,30 @@ async function DeliveryPerformanceContent({ searchParams }: DeliveryPerformanceP
         <CardContent>
           <form action="/dashboard/reports/delivery-performance" method="GET" className="flex flex-col md:flex-row gap-4 items-end">
             <div className="flex-1">
-              <label htmlFor="startDate" className="text-sm font-medium mb-1 block">Start Date</label>
+              <label htmlFor="startDate" className="text-sm font-medium mb-1 block">Start Date (YYYY-MM-DD)</label>
               <Input
                 id="startDate"
                 name="startDate"
                 type="date"
                 defaultValue={startDate}
                 required
+                className="w-full"
               />
             </div>
             <div className="flex-1">
-              <label htmlFor="endDate" className="text-sm font-medium mb-1 block">End Date</label>
+              <label htmlFor="endDate" className="text-sm font-medium mb-1 block">End Date (YYYY-MM-DD)</label>
               <Input
                 id="endDate"
                 name="endDate"
                 type="date"
                 defaultValue={endDate}
                 required
+                className="w-full"
               />
             </div>
             <div className="flex gap-2">
               <Button type="submit">Generate Report</Button>
-              <PrintButton 
+              <PrintButton
                 printUrl={`/api/print/delivery-performance?start_date=${startDate}&end_date=${endDate}`}
                 variant="outline"
               >

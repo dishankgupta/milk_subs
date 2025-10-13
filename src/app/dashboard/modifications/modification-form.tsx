@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { CalendarIcon } from 'lucide-react'
 import { format } from 'date-fns'
 
 import { Button } from '@/components/ui/button'
@@ -14,9 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 
 import { modificationSchema, type ModificationFormData } from '@/lib/validations'
 import { createModification, updateModification } from '@/lib/actions/modifications'
@@ -345,7 +342,7 @@ export function ModificationForm({
         <Label htmlFor="modification_type">Modification Type</Label>
         <Select
           value={watch('modification_type') || ''}
-          onValueChange={(value) => setValue('modification_type', value as 'Skip' | 'Increase' | 'Decrease')}
+          onValueChange={(value) => setValue('modification_type', value as 'Skip' | 'Increase' | 'Decrease' | 'Add Note')}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select modification type" />
@@ -354,6 +351,7 @@ export function ModificationForm({
             <SelectItem value="Skip">Skip Delivery</SelectItem>
             <SelectItem value="Increase">Increase Quantity</SelectItem>
             <SelectItem value="Decrease">Decrease Quantity</SelectItem>
+            <SelectItem value="Add Note">Add Note</SelectItem>
           </SelectContent>
         </Select>
         {errors.modification_type && (
@@ -364,28 +362,12 @@ export function ModificationForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label>Start Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !startDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={startDate}
-                onSelect={(date) => date && setValue('start_date', date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <UnifiedDatePicker
+            value={startDate}
+            onChange={(date) => date && setValue('start_date', date)}
+            placeholder="DD-MM-YYYY"
+            className="w-full"
+          />
           {errors.start_date && (
             <p className="text-sm text-red-600">{errors.start_date.message}</p>
           )}
@@ -393,28 +375,12 @@ export function ModificationForm({
 
         <div className="space-y-2">
           <Label>End Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !endDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={endDate}
-                onSelect={(date) => date && setValue('end_date', date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <UnifiedDatePicker
+            value={endDate}
+            onChange={(date) => date && setValue('end_date', date)}
+            placeholder="DD-MM-YYYY"
+            className="w-full"
+          />
           {errors.end_date && (
             <p className="text-sm text-red-600">{errors.end_date.message}</p>
           )}
@@ -449,10 +415,16 @@ export function ModificationForm({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="reason">Reason (Optional)</Label>
+        <Label htmlFor="reason">
+          {modificationType === 'Add Note' ? 'Note (Required)' : 'Reason (Optional)'}
+        </Label>
         <Textarea
           id="reason"
-          placeholder="Reason for modification..."
+          placeholder={
+            modificationType === 'Add Note'
+              ? "Enter your note here..."
+              : "Reason for modification..."
+          }
           rows={3}
           {...register('reason')}
         />

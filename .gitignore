@@ -1,6 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
+tests/payment-system/node_modules/
 /node_modules
 /.pnp
 .pnp.*
@@ -45,5 +46,3 @@ next-env.d.ts
 csv-templates/customers-data.csv
 csv-templates/subscriptions-data.csv
 
-# public folder
-public/

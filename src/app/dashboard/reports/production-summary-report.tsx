@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
-import { CalendarIcon, Download, RefreshCw } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
 import { cn, formatCurrency } from '@/lib/utils'
 import { formatDateTimeIST } from '@/lib/date-utils'
 
@@ -86,32 +85,17 @@ export function ProductionSummaryReport() {
       
       <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center gap-4">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDateSelect}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <div className="w-64">
+            <UnifiedDatePicker
+              value={selectedDate}
+              onChange={(date) => date && handleDateSelect(date)}
+              placeholder="DD-MM-YYYY"
+            />
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
             disabled={loading}
           >

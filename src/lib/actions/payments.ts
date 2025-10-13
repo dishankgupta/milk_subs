@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { PaymentFormData, paymentSchema } from "@/lib/validations"
 import type { Payment } from "@/lib/types"
-import { allocatePayment, allocatePaymentToOpeningBalance } from "@/lib/actions/outstanding"
+import {
+  allocatePayment,
+  allocatePaymentToOpeningBalance,
+  allocatePaymentToSales
+} from "@/lib/actions/outstanding"
 import { 
   formatDateForDatabase, 
   formatTimestampForDatabase, 
@@ -14,7 +18,7 @@ import {
 
 interface PaymentAllocation {
   id: string
-  type: 'invoice' | 'opening_balance'
+  type: 'invoice' | 'opening_balance' | 'sales'
   amount: number
 }
 
@@ -71,27 +75,36 @@ export async function createPayment(data: PaymentFormData, paymentAllocations?: 
   return payment
 }
 
-// Helper function to process both invoice and opening balance allocations
+// Helper function to process invoice, opening balance, and sales allocations
 async function processPaymentAllocations(
-  paymentId: string, 
+  paymentId: string,
   allocations: PaymentAllocation[]
 ) {
-  // Separate invoice and opening balance allocations
+  // Separate different types of allocations
   const invoiceAllocations = allocations
     .filter(alloc => alloc.type === 'invoice')
     .map(alloc => ({ invoiceId: alloc.id, amount: alloc.amount }))
-  
+
   const openingBalanceAllocations = allocations
     .filter(alloc => alloc.type === 'opening_balance')
-  
+
+  const salesAllocations = allocations
+    .filter(alloc => alloc.type === 'sales')
+    .map(alloc => ({ salesId: alloc.id, amount: alloc.amount }))
+
   // Process invoice allocations
   if (invoiceAllocations.length > 0) {
     await allocatePayment(paymentId, invoiceAllocations)
   }
-  
+
   // Process opening balance allocations
   for (const allocation of openingBalanceAllocations) {
     await allocatePaymentToOpeningBalance(paymentId, allocation.amount)
+  }
+
+  // Process sales allocations
+  if (salesAllocations.length > 0) {
+    await allocatePaymentToSales(paymentId, salesAllocations)
   }
 }
 
@@ -103,7 +116,7 @@ export async function getPayments(searchParams?: {
   limit?: number
 }) {
   const supabase = await createClient()
-  
+
   let query = supabase
     .from("payments")
     .select(`
@@ -114,11 +127,7 @@ export async function getPayments(searchParams?: {
     `)
     .order("payment_date", { ascending: false })
 
-  // Apply filters
-  if (searchParams?.search) {
-    query = query.or(`customer.billing_name.ilike.%${searchParams.search}%,customer.contact_person.ilike.%${searchParams.search}%,payment_method.ilike.%${searchParams.search}%`)
-  }
-
+  // Apply non-search filters first
   if (searchParams?.customer_id) {
     query = query.eq("customer_id", searchParams.customer_id)
   }
@@ -141,8 +150,20 @@ export async function getPayments(searchParams?: {
     throw new Error(`Failed to fetch payments: ${error.message}`)
   }
 
-  return { 
-    payments: payments as Payment[], 
+  let filteredPayments = payments as Payment[]
+
+  // Apply search filter client-side after fetching data (same pattern as UnappliedPaymentsSection)
+  if (searchParams?.search) {
+    const search = searchParams.search.trim().toLowerCase()
+    filteredPayments = filteredPayments.filter(payment =>
+      (payment.customer?.billing_name || '').toLowerCase().includes(search) ||
+      (payment.customer?.contact_person || '').toLowerCase().includes(search) ||
+      (payment.payment_method || '').toLowerCase().includes(search)
+    )
+  }
+
+  return {
+    payments: filteredPayments,
     total: count || 0,
     page,
     limit

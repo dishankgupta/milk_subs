@@ -46,7 +46,7 @@ export const subscriptionSchema = z.object({
 export const modificationSchema = z.object({
   customer_id: z.string().uuid("Please select a valid customer"),
   product_id: z.string().uuid("Please select a valid product"),
-  modification_type: z.enum(["Skip", "Increase", "Decrease"], { message: "Please select modification type" }),
+  modification_type: z.enum(["Skip", "Increase", "Decrease", "Add Note"], { message: "Please select modification type" }),
   start_date: z.date({ message: "Start date is required" }),
   end_date: z.date({ message: "End date is required" }),
   quantity_change: z.number().optional(),
@@ -64,6 +64,14 @@ export const modificationSchema = z.object({
 }, {
   message: "Quantity change is required for increase/decrease modifications",
   path: ["quantity_change"]
+}).refine((data) => {
+  if (data.modification_type === "Add Note") {
+    return data.reason !== undefined && data.reason.trim().length > 0
+  }
+  return true
+}, {
+  message: "Note is required when adding a note modification",
+  path: ["reason"]
 })
 
 export type CustomerFormData = z.infer<typeof customerSchema>
@@ -80,6 +88,45 @@ export type SubscriptionFormData = {
 }
 
 export type ModificationFormData = z.infer<typeof modificationSchema>
+
+export const bulkModificationRowSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  product_id: z.string().uuid("Please select a valid product"),
+  modification_type: z.enum(["Skip", "Increase", "Decrease", "Add Note"], { message: "Please select modification type" }),
+  start_date: z.date({ message: "Start date is required" }),
+  end_date: z.date({ message: "End date is required" }),
+  quantity_change: z.number().optional(),
+  reason: z.string().max(500, "Reason must be less than 500 characters").optional(),
+}).refine((data) => {
+  return data.end_date >= data.start_date
+}, {
+  message: "End date must be after or equal to start date",
+  path: ["end_date"]
+}).refine((data) => {
+  if (data.modification_type === "Increase" || data.modification_type === "Decrease") {
+    return data.quantity_change !== undefined && data.quantity_change > 0
+  }
+  return true
+}, {
+  message: "Quantity change is required for increase/decrease modifications",
+  path: ["quantity_change"]
+}).refine((data) => {
+  if (data.modification_type === "Add Note") {
+    return data.reason !== undefined && data.reason.trim().length > 0
+  }
+  return true
+}, {
+  message: "Note is required when adding a note modification",
+  path: ["reason"]
+})
+
+export type BulkModificationRow = z.infer<typeof bulkModificationRowSchema>
+
+export const bulkModificationSchema = z.object({
+  modifications: z.array(bulkModificationRowSchema).min(1, "At least one modification is required")
+})
+
+export type BulkModificationFormData = z.infer<typeof bulkModificationSchema>
 
 export const paymentSchema = z.object({
   customer_id: z.string().uuid("Please select a valid customer"),
@@ -101,6 +148,230 @@ export const paymentSchema = z.object({
 
 export type PaymentFormData = z.infer<typeof paymentSchema>
 
+// GAP-009: Payment Method Validation Enhancement
+export const STANDARD_PAYMENT_METHODS = [
+  'Cash',
+  'UPI',
+  'Bank Transfer',
+  'Cheque',
+  'Online',
+  'Card'
+] as const
+
+export type PaymentMethod = typeof STANDARD_PAYMENT_METHODS[number]
+
+export function getStandardPaymentMethods(): readonly PaymentMethod[] {
+  return STANDARD_PAYMENT_METHODS
+}
+
+export function normalizePaymentMethod(method: string): PaymentMethod | null {
+  if (!method) return null
+
+  const normalized = method.toLowerCase().trim()
+
+  const mappings: Record<string, PaymentMethod> = {
+    'cash': 'Cash',
+    'upi': 'UPI',
+    'bank transfer': 'Bank Transfer',
+    'banktransfer': 'Bank Transfer',
+    'cheque': 'Cheque',
+    'check': 'Cheque',
+    'online': 'Online',
+    'card': 'Card',
+    'credit card': 'Card',
+    'debit card': 'Card'
+  }
+
+  return mappings[normalized] || null
+}
+
+export function validatePaymentMethod(method: string | undefined): { isValid: boolean; error: string | null; normalizedMethod?: PaymentMethod } {
+  if (!method || typeof method !== 'string') {
+    return { isValid: false, error: 'Payment method is required' }
+  }
+
+  if (method.length > 50) {
+    return { isValid: false, error: 'Payment method must be less than 50 characters' }
+  }
+
+  const normalizedMethod = normalizePaymentMethod(method)
+  if (!normalizedMethod) {
+    return {
+      isValid: false,
+      error: `Invalid payment method. Allowed: ${STANDARD_PAYMENT_METHODS.join(', ')}`
+    }
+  }
+
+  return { isValid: true, error: null, normalizedMethod }
+}
+
+export function validatePaymentMethodBusinessRules(method: PaymentMethod, amount: number): { isValid: boolean; error: string | null } {
+  const rules: Record<PaymentMethod, { min: number; max: number }> = {
+    'Cash': { min: 0, max: 50000 },
+    'UPI': { min: 1, max: 100000 },
+    'Cheque': { min: 1000, max: 1000000 },
+    'Bank Transfer': { min: 1, max: 1000000 },
+    'Online': { min: 1, max: 100000 },
+    'Card': { min: 1, max: 100000 }
+  }
+
+  const rule = rules[method]
+  if (amount < rule.min || amount > rule.max) {
+    return {
+      isValid: false,
+      error: `Amount for ${method} must be between ₹${rule.min.toLocaleString()} and ₹${rule.max.toLocaleString()}`
+    }
+  }
+
+  return { isValid: true, error: null }
+}
+
+// Enhanced payment schema with enum validation
+export const enhancedPaymentSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  amount: z.number().positive("Payment amount must be positive"),
+  payment_date: z.date({ message: "Payment date is required" }),
+  payment_method: z.string()
+    .max(50, "Payment method must be less than 50 characters")
+    .refine((method) => {
+      if (!method) return true // Optional field
+      const validation = validatePaymentMethod(method)
+      return validation.isValid
+    }, {
+      message: `Invalid payment method. Allowed: ${STANDARD_PAYMENT_METHODS.join(', ')}`
+    })
+    .optional(),
+  period_start: z.date({ message: "Period start date is required" }).optional(),
+  period_end: z.date({ message: "Period end date is required" }).optional(),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional(),
+}).refine((data) => {
+  if (data.period_start && data.period_end) {
+    return data.period_end >= data.period_start
+  }
+  return true
+}, {
+  message: "Period end date must be after or equal to period start date",
+  path: ["period_end"]
+}).refine((data) => {
+  // Business rules validation for payment method and amount
+  if (data.payment_method && data.amount) {
+    const validation = validatePaymentMethod(data.payment_method)
+    if (validation.isValid && validation.normalizedMethod) {
+      const businessValidation = validatePaymentMethodBusinessRules(validation.normalizedMethod, data.amount)
+      return businessValidation.isValid
+    }
+  }
+  return true
+}, {
+  message: "Payment amount exceeds limits for selected payment method",
+  path: ["amount"]
+})
+
+export type EnhancedPaymentFormData = z.infer<typeof enhancedPaymentSchema>
+
+// GAP-003: Enhanced payment allocation validation functions
+interface PaymentAllocationValidationInput {
+  payment: {
+    id: string
+    amount: number
+    existingAllocations?: number
+  }
+  allocations: Array<{
+    invoiceId: string
+    amount: number
+  }>
+}
+
+interface PaymentUpdateValidationInput {
+  oldPayment: {
+    id: string
+    amount: number
+    allocation_status: string
+  }
+  newPaymentData: {
+    amount: number
+    payment_method?: string
+  }
+  newAllocations?: Array<{
+    invoiceId: string
+    amount: number
+  }>
+}
+
+export function validatePaymentAllocation({ payment, allocations }: PaymentAllocationValidationInput) {
+  const totalAllocations = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+  const existingAllocations = payment.existingAllocations || 0
+  const maxAllowable = payment.amount - existingAllocations
+
+  // Validate individual allocation amounts
+  const invalidAllocations = allocations.filter(alloc =>
+    alloc.amount <= 0 || !Number.isFinite(alloc.amount)
+  )
+
+  if (invalidAllocations.length > 0) {
+    return {
+      isValid: false,
+      error: `Invalid allocation amounts detected. All amounts must be positive numbers.`,
+      totalAllocations,
+      maxAllowable,
+      excess: 0
+    }
+  }
+
+  // Validate total doesn't exceed available amount
+  const excess = Math.max(0, totalAllocations - maxAllowable)
+  const isValid = totalAllocations <= maxAllowable && totalAllocations >= 0
+
+  return {
+    isValid,
+    totalAllocations,
+    maxAllowable,
+    excess,
+    error: isValid ? null : `Allocation amount (₹${totalAllocations}) exceeds available balance (₹${maxAllowable})`
+  }
+}
+
+export function validatePaymentUpdate({ oldPayment, newPaymentData, newAllocations }: PaymentUpdateValidationInput) {
+  // No validation needed if amount hasn't changed
+  if (oldPayment.amount === newPaymentData.amount) {
+    return { isValid: true, error: null }
+  }
+
+  // If payment has existing allocations and amount changed, require new allocation breakdown
+  if (oldPayment.allocation_status !== 'unapplied' && !newAllocations) {
+    return {
+      isValid: false,
+      error: 'Payment amount changed but no new allocations provided. Please provide allocation breakdown for the updated amount.'
+    }
+  }
+
+  // If new allocations provided, validate they don't exceed new payment amount
+  if (newAllocations) {
+    const totalNewAllocations = newAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+
+    // Check for invalid allocation amounts
+    const invalidAllocations = newAllocations.filter(alloc =>
+      alloc.amount <= 0 || !Number.isFinite(alloc.amount)
+    )
+
+    if (invalidAllocations.length > 0) {
+      return {
+        isValid: false,
+        error: 'Invalid allocation amounts in new allocations. All amounts must be positive numbers.'
+      }
+    }
+
+    if (totalNewAllocations > newPaymentData.amount) {
+      return {
+        isValid: false,
+        error: `New allocations (₹${totalNewAllocations}) exceed updated payment amount (₹${newPaymentData.amount})`
+      }
+    }
+  }
+
+  return { isValid: true, error: null }
+}
+
 export const deliverySchema = z.object({
   // MODIFIED: Now optional for additional items
   daily_order_id: z.string().uuid("Please select a valid order").optional(),
@@ -114,8 +385,8 @@ export const deliverySchema = z.object({
   
   // NEW: Pricing fields
   unit_price: z.number().positive("Unit price must be positive"),
-  total_amount: z.number().positive("Total amount must be positive"),
-  
+  // total_amount is now a computed column in database (actual_quantity * unit_price) - removed from validation
+
   // MODIFIED: Now optional for additional items
   planned_quantity: z.number().min(0, "Planned quantity cannot be negative").optional(),
   
@@ -256,7 +527,7 @@ export type ProductFormData = z.infer<typeof productSchema>
 export const outstandingReportSchema = z.object({
   start_date: z.date(),
   end_date: z.date(),
-  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'with_credit', 'selected']),
+  customer_selection: z.enum(['all', 'with_outstanding', 'with_subscription_and_outstanding', 'with_credit', 'with_any_balance', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional()
 }).refine((data) => {
   // End date must be after start date
@@ -287,7 +558,9 @@ export const bulkInvoiceSchema = z.object({
   period_end: z.date(),
   customer_selection: z.enum(['all', 'with_unbilled_deliveries', 'with_unbilled_credit_sales', 'with_unbilled_transactions', 'selected']),
   selected_customer_ids: z.array(z.string().uuid()).optional(),
-  output_folder: z.string().min(1, "Output folder is required")
+  output_folder: z.string().min(1, "Output folder is required"),
+  invoice_date_override: z.date().optional(),
+  invoice_number_override: z.string().regex(/^\d{11}$/, "Invoice number must be 11 digits (e.g., 20242500001)").optional()
 }).refine((data) => {
   // End date must be after start date
   if (data.period_end <= data.period_start) {
@@ -295,7 +568,7 @@ export const bulkInvoiceSchema = z.object({
   }
   return true
 }, {
-  message: "End date must be after start date", 
+  message: "End date must be after start date",
   path: ["period_end"]
 }).refine((data) => {
   // Selected customers must be provided if selection is 'selected'
@@ -316,7 +589,9 @@ export const singleInvoiceSchema = z.object({
   period_end: z.date(),
   include_subscriptions: z.boolean(),
   include_credit_sales: z.boolean(),
-  output_folder: z.string().optional()
+  output_folder: z.string().optional(),
+  invoice_date_override: z.date().optional(),
+  invoice_number_override: z.string().regex(/^\d{11}$/, "Invoice number must be 11 digits (e.g., 20242500001)").optional()
 }).refine((data) => {
   // End date must be after start date
   if (data.period_end <= data.period_start) {
@@ -338,3 +613,40 @@ export const singleInvoiceSchema = z.object({
 })
 
 export type SingleInvoiceFormData = z.infer<typeof singleInvoiceSchema>
+
+// Bulk Payment Validation Schemas
+
+export const paymentAllocationItemSchema = z.object({
+  type: z.enum(['invoice', 'opening_balance', 'sales'], { message: "Invalid allocation type" }),
+  id: z.string().min(1, "Allocation item ID is required"),
+  amount: z.number().positive("Allocation amount must be positive")
+})
+
+export type PaymentAllocationItem = z.infer<typeof paymentAllocationItemSchema>
+
+export const bulkPaymentRowSchema = z.object({
+  customer_id: z.string().uuid("Please select a valid customer"),
+  amount: z.number().positive("Payment amount must be positive"),
+  payment_date: z.date({ message: "Payment date is required" }),
+  payment_method: z.string().max(50, "Payment method must be less than 50 characters").optional(),
+  notes: z.string().max(500, "Notes must be less than 500 characters").optional(),
+  allocations: z.array(paymentAllocationItemSchema).optional()
+}).refine((data) => {
+  // Validate that total allocations don't exceed payment amount
+  if (data.allocations && data.allocations.length > 0) {
+    const totalAllocated = data.allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+    return totalAllocated <= data.amount
+  }
+  return true
+}, {
+  message: "Total allocations cannot exceed payment amount",
+  path: ["allocations"]
+})
+
+export type BulkPaymentRow = z.infer<typeof bulkPaymentRowSchema>
+
+export const bulkPaymentSchema = z.object({
+  payments: z.array(bulkPaymentRowSchema).min(1, "At least one payment is required")
+})
+
+export type BulkPaymentFormData = z.infer<typeof bulkPaymentSchema>

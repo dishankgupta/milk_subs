@@ -5,14 +5,72 @@ import { formatCurrency, parseLocalDate } from '@/lib/utils'
 import { getCurrentISTDate, formatDateIST, formatDateTimeIST } from '@/lib/date-utils'
 import type { OutstandingCustomerData, OutstandingReportSummary } from '@/lib/types/outstanding-reports'
 
+// Helper function to sort customers based on sort key and direction
+function sortCustomers(
+  customers: OutstandingCustomerData[],
+  sortKey: string,
+  sortDirection: 'asc' | 'desc'
+): OutstandingCustomerData[] {
+  const sorted = [...customers].sort((a, b) => {
+    let aValue: number | string = 0
+    let bValue: number | string = 0
+
+    // Extract the value based on the sort key (matching dashboard logic)
+    switch (sortKey) {
+      case 'customer.billing_name':
+        aValue = a.customer.billing_name
+        bValue = b.customer.billing_name
+        break
+      case 'opening_balance':
+        aValue = a.opening_balance
+        bValue = b.opening_balance
+        break
+      case 'subscription_amount':
+        aValue = a.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+        bValue = b.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+        break
+      case 'manual_sales_amount':
+        aValue = a.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+        bValue = b.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+        break
+      case 'payments_amount':
+        aValue = a.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+        bValue = b.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+        break
+      case 'total_outstanding':
+        aValue = a.total_outstanding
+        bValue = b.total_outstanding
+        break
+      default:
+        aValue = a.customer.billing_name
+        bValue = b.customer.billing_name
+    }
+
+    // Compare values
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sortDirection === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue)
+    } else {
+      return sortDirection === 'asc'
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    }
+  })
+
+  return sorted
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const printType = searchParams.get('type') || 'summary' // 'summary', 'statements', 'complete'
+    const printType = searchParams.get('type') || 'complete' // 'statements', 'complete'
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     const customerSelection = searchParams.get('customer_selection') || 'with_outstanding'
     const selectedCustomerIds = searchParams.get('selected_customer_ids')?.split(',')
+    const sortKey = searchParams.get('sort_key') || 'customer.billing_name'
+    const sortDirection = searchParams.get('sort_direction') || 'asc'
 
     if (!startDate || !endDate) {
       return new Response('Missing required date parameters', { status: 400 })
@@ -25,11 +83,11 @@ export async function GET(request: NextRequest) {
       selected_customer_ids: selectedCustomerIds
     })
 
+    // Apply sorting based on the sort configuration from the dashboard
+    reportData.customers = sortCustomers(reportData.customers, sortKey, sortDirection as 'asc' | 'desc')
+
     let html: string
     switch (printType) {
-      case 'summary':
-        html = generateSummaryHTML(reportData, startDate, endDate)
-        break
       case 'statements':
         html = generateCustomerStatementsHTML(reportData, startDate, endDate, selectedCustomerIds)
         break
@@ -50,175 +108,6 @@ export async function GET(request: NextRequest) {
     console.error('Outstanding report print error:', error)
     return new Response('Failed to generate print layout', { status: 500 })
   }
-}
-
-function generateSummaryHTML(
-  reportData: { customers: OutstandingCustomerData[], summary: OutstandingReportSummary },
-  startDate: string,
-  endDate: string
-): string {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Outstanding Amounts Summary - ${format(parseLocalDate(startDate), 'dd/MM/yyyy')} to ${format(parseLocalDate(endDate), 'dd/MM/yyyy')}</title>
-  <style>
-    ${getCommonPrintStyles()}
-    
-    .summary-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin: 30px 0;
-    }
-    
-    .stat-card {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 8px;
-      border-left: 4px solid #2D5F2D;
-    }
-    
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: #2D5F2D;
-      margin-bottom: 5px;
-    }
-    
-    .stat-label {
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    
-    .summary-table {
-      margin-top: 30px;
-    }
-    
-    .outstanding-amount {
-      font-weight: bold;
-      color: #dc2626;
-    }
-    
-    .no-outstanding {
-      color: #16a34a;
-    }
-  </style>
-</head>
-<body>
-  ${getPrintHeader('Outstanding Amounts Summary Report')}
-  
-  <div class="report-period">
-    <strong>Report Period:</strong> ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}<br>
-    <strong>Generated On:</strong> ${formatDateTimeIST(getCurrentISTDate())}
-  </div>
-
-  <!-- Summary Statistics -->
-  <div class="summary-stats">
-    <div class="stat-card">
-      <div class="stat-value">${reportData.summary.total_customers}</div>
-      <div class="stat-label">Total Customers</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${reportData.summary.customers_with_outstanding}</div>
-      <div class="stat-label">With Outstanding</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${formatCurrency(reportData.summary.total_opening_balance)}</div>
-      <div class="stat-label">Total Opening Balance</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${formatCurrency(reportData.summary.total_outstanding_amount)}</div>
-      <div class="stat-label">Gross Outstanding</div>
-    </div>
-    <div class="stat-card" style="background: #f0fdf4; border-color: #86efac;">
-      <div class="stat-value" style="color: #15803d;">${formatCurrency(reportData.summary.total_unapplied_payments_amount)}</div>
-      <div class="stat-label">Total Credits Available</div>
-    </div>
-    <div class="stat-card" style="background: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#fef3c7' : '#f0fdf4'}; border-color: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#fcd34d' : '#86efac'};">
-      <div class="stat-value" style="color: ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? '#92400e' : '#15803d'};">
-        ${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 
-          ? formatCurrency(reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount)
-          : formatCurrency(Math.abs(reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount))
-        }
-      </div>
-      <div class="stat-label">${reportData.summary.total_outstanding_amount - reportData.summary.total_unapplied_payments_amount >= 0 ? 'Net Outstanding' : 'Net Credit Balance'}</div>
-    </div>
-  </div>
-
-  <!-- Customer Summary Table -->
-  <div class="summary-table">
-    <h3>Customer Outstanding Summary</h3>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Customer Name</th>
-          <th>Route</th>
-          <th>Opening Balance</th>
-          <th>Subscription</th>
-          <th>Manual Sales</th>
-          <th>Payments</th>
-          <th>Credits Available</th>
-          <th>Gross Outstanding</th>
-          <th>Net Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${reportData.customers
-          .sort((a, b) => b.total_outstanding - a.total_outstanding) // Sort by outstanding desc
-          .map(customer => `
-            <tr>
-              <td>
-                <strong>${customer.customer.billing_name}</strong><br>
-                <small>${customer.customer.contact_person}</small>
-              </td>
-              <td>${customer.customer.route?.name || 'N/A'}</td>
-              <td>${formatCurrency(customer.opening_balance)}</td>
-              <td>${formatCurrency(
-                customer.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
-              )}</td>
-              <td>${formatCurrency(
-                customer.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
-              )}</td>
-              <td class="payment-amount">-${formatCurrency(
-                customer.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
-              )}</td>
-              <td style="color: #15803d; font-weight: bold;">
-                ${formatCurrency(customer.unapplied_payments_breakdown ? customer.unapplied_payments_breakdown.total_amount : 0)}
-              </td>
-              <td class="${customer.total_outstanding > 0 ? 'outstanding-amount' : 'no-outstanding'}">
-                ${formatCurrency(customer.total_outstanding)}
-              </td>
-              <td style="font-weight: bold;">
-                ${(() => {
-                  const netBalance = customer.total_outstanding - (customer.unapplied_payments_breakdown ? customer.unapplied_payments_breakdown.total_amount : 0);
-                  if (netBalance > 0) {
-                    return `<span style="color: #dc2626;">${formatCurrency(netBalance)}</span>`;
-                  } else if (netBalance < 0) {
-                    return `<span style="color: #15803d;">Cr. ${formatCurrency(Math.abs(netBalance))}</span>`;
-                  } else {
-                    return `<span style="color: #6b7280;">₹0.00</span>`;
-                  }
-                })()}
-              </td>
-            </tr>
-          `).join('')}
-      </tbody>
-    </table>
-  </div>
-
-  ${getPrintFooter()}
-  
-  <script>
-    setTimeout(function() { window.print(); }, 1000);
-  </script>
-</body>
-</html>
-`
 }
 
 function generateCustomerStatementsHTML(
@@ -264,18 +153,18 @@ function generateCustomerStatementsHTML(
             <tr>
               <th>Period</th>
               <th>Product</th>
-              <th>Quantity</th>
-              <th>Amount</th>
+              <th style="text-align: right;">Quantity</th>
+              <th style="text-align: right;">Amount</th>
             </tr>
           </thead>
           <tbody>
-            ${customerData.subscription_breakdown.map(month => 
+            ${customerData.subscription_breakdown.map(month =>
               month.product_details.map(product => `
                 <tr>
                   <td>${month.month_display}</td>
                   <td>${product.product_name}</td>
-                  <td>${product.quantity} ${product.unit_of_measure}</td>
-                  <td>${formatCurrency(product.total_amount)}</td>
+                  <td style="text-align: right;">${product.quantity} ${product.unit_of_measure}</td>
+                  <td style="text-align: right;">${formatCurrency(product.total_amount)}</td>
                 </tr>
               `).join('')
             ).join('')}
@@ -293,8 +182,8 @@ function generateCustomerStatementsHTML(
             <tr>
               <th>Date</th>
               <th>Product</th>
-              <th>Quantity</th>
-              <th>Amount</th>
+              <th style="text-align: right;">Quantity</th>
+              <th style="text-align: right;">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -303,8 +192,8 @@ function generateCustomerStatementsHTML(
                 <tr>
                   <td>${formatDateIST(new Date(sale.sale_date))}</td>
                   <td>${sale.product_name}</td>
-                  <td>${sale.quantity} ${sale.unit_of_measure}</td>
-                  <td>${formatCurrency(sale.total_amount)}</td>
+                  <td style="text-align: right;">${sale.quantity} ${sale.unit_of_measure}</td>
+                  <td style="text-align: right;">${formatCurrency(sale.total_amount)}</td>
                 </tr>
               `).join('')
             ).join('')}
@@ -322,7 +211,7 @@ function generateCustomerStatementsHTML(
             <tr>
               <th>Date</th>
               <th>Payment Method</th>
-              <th>Amount</th>
+              <th style="text-align: right;">Amount</th>
               <th>Notes</th>
             </tr>
           </thead>
@@ -332,7 +221,7 @@ function generateCustomerStatementsHTML(
                 <tr>
                   <td>${payment.payment_date && !isNaN(new Date(payment.payment_date).getTime()) ? formatDateIST(new Date(payment.payment_date)) : 'N/A'}</td>
                   <td>${payment.payment_method}</td>
-                  <td class="payment-amount">-${formatCurrency(payment.amount)}</td>
+                  <td class="payment-amount" style="text-align: right;">-${formatCurrency(payment.amount)}</td>
                   <td>${payment.notes || ''}</td>
                 </tr>
               `).join('')
@@ -342,98 +231,74 @@ function generateCustomerStatementsHTML(
       </div>
       ` : ''}
 
-      <!-- Available Credit Section -->
-      ${customerData.unapplied_payments_breakdown && customerData.unapplied_payments_breakdown.unapplied_payment_details.length > 0 ? `
+      <!-- Invoices Section -->
+      ${customerData.invoice_breakdown.length > 0 ? `
       <div class="transaction-section">
-        <h4>Available Credit (${customerData.unapplied_payments_breakdown.unapplied_payment_details.length} Unapplied Payments)</h4>
+        <h4>Invoices</h4>
         <table class="transaction-table">
           <thead>
             <tr>
-              <th>Payment Date</th>
-              <th>Original Amount</th>
-              <th>Available Credit</th>
-              <th>Payment Method</th>
-              <th>Notes</th>
+              <th>Invoice Number</th>
+              <th>Invoice Date</th>
+              <th style="text-align: right;">Amount</th>
+              <th>Status</th>
+              <th>Payment Date(s)</th>
             </tr>
           </thead>
           <tbody>
-            ${customerData.unapplied_payments_breakdown.unapplied_payment_details.map(payment => `
-              <tr>
-                <td>${payment.payment_date && !isNaN(new Date(payment.payment_date).getTime()) ? formatDateIST(new Date(payment.payment_date)) : 'N/A'}</td>
-                <td>${formatCurrency(payment.payment_amount)}</td>
-                <td style="color: #15803d; font-weight: bold;">${formatCurrency(payment.amount_unapplied)}</td>
-                <td>${payment.payment_method}</td>
-                <td>${payment.notes || '-'}</td>
-              </tr>
-            `).join('')}
+            ${customerData.invoice_breakdown.map(invoiceGroup =>
+              invoiceGroup.invoice_details.map(invoice => `
+                <tr>
+                  <td>${invoice.invoice_number}</td>
+                  <td>${formatDateIST(new Date(invoice.invoice_date))}</td>
+                  <td style="text-align: right;">${formatCurrency(invoice.total_amount)}</td>
+                  <td>
+                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; background: ${
+                      invoice.invoice_status === 'paid' || invoice.invoice_status === 'completed' ? '#dcfce7' :
+                      invoice.invoice_status === 'partially_paid' ? '#fef3c7' :
+                      invoice.invoice_status === 'overdue' ? '#fee2e2' : '#e0e7ff'
+                    }; color: ${
+                      invoice.invoice_status === 'paid' || invoice.invoice_status === 'completed' ? '#166534' :
+                      invoice.invoice_status === 'partially_paid' ? '#92400e' :
+                      invoice.invoice_status === 'overdue' ? '#991b1b' : '#3730a3'
+                    };">
+                      ${invoice.invoice_status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>${invoice.payment_dates.length > 0 ? invoice.payment_dates.map(date => formatDateIST(new Date(date))).join(', ') : '-'}</td>
+                </tr>
+              `).join('')
+            ).join('')}
           </tbody>
         </table>
-        <div style="margin-top: 15px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #15803d;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <strong style="color: #15803d; font-size: 14px;">Total Credit Available</strong>
-              <div style="color: #6b7280; font-size: 11px; margin-top: 2px;">
-                Can be applied to outstanding invoices or opening balance
-              </div>
-            </div>
-            <div style="color: #15803d; font-size: 18px; font-weight: bold;">
-              ${formatCurrency(customerData.unapplied_payments_breakdown.total_amount)}
-            </div>
-          </div>
-        </div>
       </div>
       ` : ''}
 
       <!-- Final Balance -->
       <div class="balance-summary final-balance">
-        <div class="balance-row">
-          <span><strong>Gross Outstanding Balance:</strong></span>
-          <span class="amount outstanding">${formatCurrency(customerData.total_outstanding)}</span>
-        </div>
-        ${customerData.unapplied_payments_breakdown ? `
-        <div class="balance-row">
-          <span><strong>Less: Available Credit:</strong></span>
-          <span class="amount" style="color: #15803d;">-${formatCurrency(customerData.unapplied_payments_breakdown.total_amount)}</span>
-        </div>
         <div class="balance-row total-row">
-          ${(() => {
-            const netBalance = customerData.total_outstanding - customerData.unapplied_payments_breakdown.total_amount;
-            if (netBalance > 0) {
-              return `<span><strong>Net Outstanding Balance:</strong></span>
-                      <span class="amount" style="color: #dc2626;">${formatCurrency(netBalance)}</span>`;
-            } else if (netBalance < 0) {
-              return `<span><strong>Net Credit Balance:</strong></span>
-                      <span class="amount" style="color: #15803d;">${formatCurrency(Math.abs(netBalance))}</span>`;
-            } else {
-              return `<span><strong>Net Balance:</strong></span>
-                      <span class="amount" style="color: #6b7280;">₹0.00</span>`;
-            }
-          })()}
+          <span><strong>Total Outstanding Balance:</strong></span>
+          <span class="amount ${customerData.total_outstanding > 0 ? 'outstanding' : ''}" style="color: ${customerData.total_outstanding > 0 ? '#dc2626' : customerData.total_outstanding < 0 ? '#15803d' : '#6b7280'};">
+            ${customerData.total_outstanding >= 0 ? formatCurrency(customerData.total_outstanding) : 'Cr. ' + formatCurrency(Math.abs(customerData.total_outstanding))}
+          </span>
         </div>
-        ` : `
-        <div class="balance-row total-row">
-          <span><strong>Net Outstanding Balance:</strong></span>
-          <span class="amount outstanding">${formatCurrency(customerData.total_outstanding)}</span>
-        </div>
-        `}
       </div>
 
       ${(() => {
-        const netBalance = customerData.total_outstanding - (customerData.unapplied_payments_breakdown ? customerData.unapplied_payments_breakdown.total_amount : 0);
-        if (netBalance > 0) {
+        if (customerData.total_outstanding > 0) {
           return `<div class="payment-notice">
-            <p><strong>Payment Due:</strong> ${formatCurrency(netBalance)}</p>
+            <p><strong>Payment Due:</strong> ${formatCurrency(customerData.total_outstanding)}</p>
             <p>Please remit payment at your earliest convenience.</p>
           </div>`;
-        } else if (netBalance < 0) {
+        } else if (customerData.total_outstanding < 0) {
           return `<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 15px; margin-top: 30px;">
             <p style="color: #15803d; font-weight: bold; margin: 5px 0;">✓ Account in Credit</p>
-            <p style="color: #15803d; margin: 5px 0;">Excess credit of ${formatCurrency(Math.abs(netBalance))} available.</p>
+            <p style="color: #15803d; margin: 5px 0;">Excess credit of ${formatCurrency(Math.abs(customerData.total_outstanding))} available.</p>
           </div>`;
         } else {
           return `<div style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin-top: 30px;">
             <p style="color: #6b7280; font-weight: bold; margin: 5px 0;">✓ Account Balanced</p>
-            <p style="color: #6b7280; margin: 5px 0;">No outstanding amount or excess credit.</p>
+            <p style="color: #6b7280; margin: 5px 0;">No outstanding amount.</p>
           </div>`;
         }
       })()}
@@ -461,12 +326,12 @@ function generateCustomerStatementsHTML(
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 30px;
-      border-bottom: 2px solid #2D5F2D;
+      border-bottom: 2px solid #22c55e;
       padding-bottom: 20px;
     }
-    
+
     .customer-details h3 {
-      color: #2D5F2D;
+      color: #333;
       margin-bottom: 10px;
       font-size: 18px;
     }
@@ -507,29 +372,30 @@ function generateCustomerStatementsHTML(
     }
     
     .transaction-section h4 {
-      color: #2D5F2D;
-      border-bottom: 1px solid #ddd;
+      color: #333;
+      border-bottom: 1px solid #e9ecef;
       padding-bottom: 5px;
       margin-bottom: 15px;
     }
-    
+
     .transaction-table {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 20px;
+      border: 1px solid #e9ecef;
     }
-    
+
     .transaction-table th,
     .transaction-table td {
       padding: 8px 12px;
       text-align: left;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #e9ecef;
     }
-    
+
     .transaction-table th {
-      background: #f8f9fa;
+      background: #FFD580;
       font-weight: bold;
-      color: #2D5F2D;
+      color: #333;
     }
     
     .payment-amount {
@@ -538,26 +404,22 @@ function generateCustomerStatementsHTML(
     }
     
     .payment-notice {
-      background: #fef3c7;
-      border: 1px solid #f59e0b;
-      border-radius: 8px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
       padding: 15px;
       margin-top: 30px;
     }
-    
+
     .payment-notice p {
       margin: 5px 0;
     }
   </style>
 </head>
-<body>
-  ${getPrintHeader('Customer Outstanding Statements')}
-  
+<body onload="window.print()">
+  ${getPrintHeader('Customer Outstanding Statements', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
+
   ${statements}
-  
-  <script>
-    setTimeout(function() { window.print(); }, 1000);
-  </script>
 </body>
 </html>
 `
@@ -568,23 +430,136 @@ function generateCompleteReportHTML(
   startDate: string,
   endDate: string
 ): string {
-  // Combination of summary + detailed customer breakdowns
-  const summaryHtml = generateSummaryHTML(reportData, startDate, endDate)
-  const detailedHtml = generateCustomerStatementsHTML(reportData, startDate, endDate)
-  
-  // Combine both with page breaks
-  const statementsContent = detailedHtml.match(/<div class="customer-statement"[\s\S]*?<\/div>/g)?.join('') || ''
-  
-  return summaryHtml.replace(
-    '<script>setTimeout(function() { window.print(); }, 1000);</script>',
-    `
-    <div style="page-break-before: always;">
-      <h2 style="color: #2D5F2D; text-align: center; margin: 30px 0;">Detailed Customer Statements</h2>
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Outstanding Report - ${format(parseLocalDate(startDate), 'dd/MM/yyyy')} to ${format(parseLocalDate(endDate), 'dd/MM/yyyy')}</title>
+  <style>
+    ${getCommonPrintStyles()}
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin: 30px 0;
+    }
+
+    .stat-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-table {
+      margin-top: 30px;
+    }
+
+    .outstanding-amount {
+      font-weight: bold;
+      color: #dc2626;
+    }
+
+    .no-outstanding {
+      color: #16a34a;
+    }
+  </style>
+</head>
+<body onload="window.print()">
+  ${getPrintHeader('Complete Outstanding Report', `Report Period: ${format(parseLocalDate(startDate), 'dd MMMM yyyy')} to ${format(parseLocalDate(endDate), 'dd MMMM yyyy')}`)}
+
+  ${reportData.customers.length > 0 ? `
+  <div class="report-period">
+    <strong>Customers:</strong> ${reportData.customers.length} •
+    <strong>With Outstanding:</strong> ${reportData.summary.customers_with_outstanding}
+  </div>
+  ` : ''}
+
+  <!-- Summary Statistics -->
+  <div class="summary-stats">
+    <div class="stat-card">
+      <div class="stat-value">${reportData.summary.total_customers}</div>
+      <div class="stat-label">Total Customers</div>
     </div>
-    ${statementsContent}
-    <script>setTimeout(function() { window.print(); }, 1000);</script>
-    `
-  )
+    <div class="stat-card">
+      <div class="stat-value">${reportData.summary.customers_with_outstanding}</div>
+      <div class="stat-label">With Outstanding</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${formatCurrency(reportData.summary.total_opening_balance)}</div>
+      <div class="stat-label">Total Opening Balance</div>
+    </div>
+    <div class="stat-card" style="background: #fef3c7; border-color: #fcd34d;">
+      <div class="stat-value" style="color: #92400e;">${formatCurrency(reportData.summary.total_outstanding_amount)}</div>
+      <div class="stat-label">Total Outstanding</div>
+    </div>
+  </div>
+
+  <!-- Customer Summary Table -->
+  <div class="summary-table">
+    <h3>Customer Outstanding Summary</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 20%;">Customer Name</th>
+          <th style="width: 13.33%;">Route</th>
+          <th style="width: 13.33%; text-align: right;">Opening Balance</th>
+          <th style="width: 13.33%; text-align: right;">Subscription</th>
+          <th style="width: 13.33%; text-align: right;">Manual Sales</th>
+          <th style="width: 13.33%; text-align: right;">Payments</th>
+          <th style="width: 13.34%; text-align: right;">Total Outstanding</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${reportData.customers
+          .map(customer => `
+            <tr>
+              <td>
+                <strong>${customer.customer.billing_name}</strong><br>
+                <small>${customer.customer.contact_person}</small>
+              </td>
+              <td>${customer.customer.route?.name || 'N/A'}</td>
+              <td style="text-align: right;">${formatCurrency(customer.opening_balance)}</td>
+              <td style="text-align: right;">${formatCurrency(
+                customer.subscription_breakdown.reduce((sum, month) => sum + month.total_amount, 0)
+              )}</td>
+              <td style="text-align: right;">${formatCurrency(
+                customer.manual_sales_breakdown.reduce((sum, sales) => sum + sales.total_amount, 0)
+              )}</td>
+              <td class="payment-amount" style="text-align: right;">-${formatCurrency(
+                customer.payment_breakdown.reduce((sum, payments) => sum + payments.total_amount, 0)
+              )}</td>
+              <td class="${customer.total_outstanding > 0 ? 'outstanding-amount' : 'no-outstanding'}" style="font-weight: bold; text-align: right;">
+                ${formatCurrency(customer.total_outstanding)}
+              </td>
+            </tr>
+          `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPrintFooter()}
+</body>
+</html>
+`
 }
 
 // Common print styles
@@ -592,15 +567,15 @@ function getCommonPrintStyles(): string {
   return `
     @page {
       size: A4;
-      margin: 20mm;
+      margin: 15mm;
     }
-    
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       font-size: 11px;
@@ -608,43 +583,94 @@ function getCommonPrintStyles(): string {
       color: #333;
       background: white;
     }
-    
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #22c55e;
+    }
+
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .logo {
+      width: 80px;
+      height: auto;
+    }
+
+    .company-info h1 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 2px;
+    }
+
+    .company-info p {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .report-info {
+      text-align: right;
+    }
+
+    .report-info h2 {
+      font-size: 16px;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .report-info p {
+      font-size: 10px;
+      color: #666;
+      margin-bottom: 2px;
+    }
+
     .data-table {
       width: 100%;
       border-collapse: collapse;
       margin: 20px 0;
-      border: 1px solid #ddd;
+      border: 1px solid #e9ecef;
+      table-layout: fixed;
     }
-    
+
     .data-table th,
     .data-table td {
       padding: 8px 10px;
       text-align: left;
-      border-bottom: 1px solid #eee;
-      border-right: 1px solid #eee;
+      border-bottom: 1px solid #e9ecef;
+      border-right: 1px solid #e9ecef;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
-    
+
     .data-table th {
-      background: #2D5F2D;
-      color: white;
+      background: #FFD580;
+      color: #333;
       font-weight: bold;
       text-transform: uppercase;
       font-size: 10px;
       letter-spacing: 0.5px;
     }
-    
+
     .data-table tbody tr:nth-child(even) {
       background: #f8f9fa;
     }
-    
+
     .report-period {
-      background: #f0f8f0;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-      font-size: 12px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 20px;
+      font-size: 10px;
     }
-    
+
     @media print {
       body {
         print-color-adjust: exact;
@@ -654,32 +680,32 @@ function getCommonPrintStyles(): string {
   `
 }
 
-function getPrintHeader(title: string): string {
+function getPrintHeader(title: string, subtitle?: string): string {
   return `
-  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #2D5F2D;">
-    <div style="display: flex; align-items: center;">
-      <div style="width: 50px; height: 50px; background: #2D5F2D; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: bold; margin-right: 15px;">👑</div>
-      <div>
-        <div style="font-size: 24px; font-weight: bold; color: #2D5F2D; margin-bottom: 2px;">PureDairy</div>
-        <div style="font-size: 10px; color: #666; font-style: italic;">Premium Quality Dairy Products</div>
+  <div class="header">
+    <div class="logo-section">
+      <img src="/PureDairy_Logo-removebg-preview.png" alt="PureDairy" class="logo">
+      <div class="company-info">
+        <h1>PureDairy</h1>
+        <p>Surety of Purity</p>
       </div>
     </div>
-    <div style="text-align: right; font-size: 10px; color: #666;">
-      Plot No. G-2/8, MIDC,<br>
-      Jalgaon - 3, MS, India.
+    <div class="report-info">
+      <h2>${title}</h2>
+      ${subtitle ? `<p>${subtitle}</p>` : ''}
+      <p>Generated on: ${formatDateTimeIST(getCurrentISTDate())}</p>
     </div>
   </div>
-  <h1 style="text-align: center; font-size: 28px; font-weight: bold; color: #2D5F2D; margin: 20px 0; letter-spacing: 2px;">${title.toUpperCase()}</h1>
   `
 }
 
 function getPrintFooter(): string {
   return `
-  <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #2D5F2D; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666;">
+  <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #22c55e; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666;">
     <div style="display: flex; align-items: center; gap: 30px;">
       <div style="display: flex; align-items: center; gap: 5px;">
         <span>🌐</span>
-        <span style="font-weight: bold; color: #2D5F2D;">puredairy.net</span>
+        <span style="font-weight: bold; color: #22c55e;">puredairy.net</span>
       </div>
       <div style="display: flex; align-items: center; gap: 5px;">
         <span>📞</span>

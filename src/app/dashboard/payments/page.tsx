@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, CreditCard, AlertCircle, TrendingUp, Users, DollarSign } from "lucide-react"
+import { Plus, CreditCard, AlertCircle, TrendingUp, Users, DollarSign, FileStack, BarChart3 } from "lucide-react"
 import { getPayments, getPaymentStats } from "@/lib/actions/payments"
 import { getUnappliedPaymentStats } from "@/lib/actions/outstanding"
 import { formatCurrency } from "@/lib/utils"
@@ -38,12 +38,26 @@ export default async function PaymentsPage(props: {
             Track customer payments and outstanding amounts
           </p>
         </div>
-        <Link href="/dashboard/payments/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Payment
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/reports/payments">
+            <Button variant="outline">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Reports
+            </Button>
+          </Link>
+          <Link href="/dashboard/payments/bulk">
+            <Button variant="outline">
+              <FileStack className="mr-2 h-4 w-4" />
+              Bulk Add
+            </Button>
+          </Link>
+          <Link href="/dashboard/payments/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Payment
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}

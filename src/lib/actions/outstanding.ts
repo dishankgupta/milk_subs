@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { validatePaymentAllocation, validatePaymentUpdate } from "@/lib/validations"
 import { getCurrentISTDate, formatDateForDatabase } from "@/lib/date-utils"
 
 export interface CustomerOutstanding {
@@ -206,128 +207,103 @@ export async function allocatePayment(
   allocations: PaymentAllocation[]
 ) {
   const supabase = await createClient()
-  
+
   try {
-    // Get payment details
-    const { data: payment, error: paymentError } = await supabase
+    // GAP-003: Validate allocations before processing
+    const { data: paymentData, error: paymentError } = await supabase
       .from("payments")
-      .select("amount, customer_id")
+      .select("amount, allocation_status")
       .eq("id", paymentId)
       .single()
 
-    if (paymentError || !payment) {
-      throw new Error("Payment not found")
+    if (paymentError || !paymentData) {
+      throw new Error("Payment not found for validation")
     }
-    
-    const totalAllocation = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
-    
-    if (totalAllocation > payment.amount) {
-      throw new Error("Allocation exceeds payment amount")
-    }
-    
-    // Insert allocations
-    for (const allocation of allocations) {
-      const { error: insertError } = await supabase
-        .from("invoice_payments")
-        .insert({
-          invoice_id: allocation.invoiceId,
-          payment_id: paymentId,
-          amount_allocated: allocation.amount
-        })
-      
-      if (insertError) {
-        throw new Error(`Failed to allocate payment to invoice: ${insertError.message}`)
-      }
-      
-      // Update invoice status with enhanced sales completion
-      const { data: result, error: functionError } = await supabase.rpc('update_invoice_status_with_sales_completion', {
-        p_invoice_id: allocation.invoiceId
-      })
-      
-      if (functionError) {
-        console.error('Enhanced invoice status update failed:', functionError)
-        // Fallback to standard update
-        const { error: fallbackError } = await supabase.rpc('update_invoice_status', {
-          invoice_uuid: allocation.invoiceId
-        })
-        if (fallbackError) {
-          throw new Error(`Failed to update invoice status: ${fallbackError.message}`)
-        }
-      } else if (result?.updated_sales_count > 0) {
-        console.log(`Invoice ${allocation.invoiceId}: ${result.updated_sales_count} credit sales completed`)
-      }
-    }
-    
-    // Update payment allocation status
-    const amountApplied = totalAllocation
-    const amountUnapplied = payment.amount - totalAllocation
-    
-    const { error: updateError } = await supabase
-      .from("payments")
-      .update({
-        amount_applied: amountApplied,
-        amount_unapplied: amountUnapplied,
-        allocation_status: amountUnapplied > 0 ? 'partially_applied' : 'fully_applied'
-      })
-      .eq("id", paymentId)
 
-    if (updateError) {
-      throw new Error("Failed to update payment allocation status")
+    // Get existing allocations for validation
+    const { data: existingAllocations } = await supabase
+      .from("invoice_payments")
+      .select("amount_allocated")
+      .eq("payment_id", paymentId)
+
+    const totalExisting = existingAllocations?.reduce((sum, alloc) =>
+      sum + parseFloat(alloc.amount_allocated.toString()), 0
+    ) || 0
+
+    const validationResult = validatePaymentAllocation({
+      payment: {
+        id: paymentId,
+        amount: parseFloat(paymentData.amount.toString()),
+        existingAllocations: totalExisting
+      },
+      allocations: allocations.map(alloc => ({
+        invoiceId: alloc.invoiceId,
+        amount: alloc.amount
+      }))
+    })
+
+    if (!validationResult.isValid) {
+      throw new Error(`Validation failed: ${validationResult.error}`)
     }
-    
-    // Handle unapplied payments table updates
-    if (amountUnapplied === 0) {
-      // Payment fully allocated - remove from unapplied payments
-      await supabase
-        .from("unapplied_payments")
-        .delete()
-        .eq("payment_id", paymentId)
-    } else {
-      // Payment partially allocated - update or insert unapplied payment record
-      const { data: existingUnapplied } = await supabase
-        .from("unapplied_payments")
-        .select("id")
-        .eq("payment_id", paymentId)
-        .single()
-      
-      if (existingUnapplied) {
-        // Update existing record
-        const { error: updateError } = await supabase
-          .from("unapplied_payments")
-          .update({ 
-            amount_unapplied: amountUnapplied,
-            reason: "Awaiting invoice allocation"
-          })
-          .eq("payment_id", paymentId)
-        
-        if (updateError) {
-          console.warn("Failed to update unapplied payment:", updateError.message)
-        }
-      } else {
-        // Insert new record
-        const { error: insertError } = await supabase
-          .from("unapplied_payments")
-          .insert({
-            customer_id: payment.customer_id,
-            payment_id: paymentId,
-            amount_unapplied: amountUnapplied,
-            reason: "Awaiting invoice allocation"
-          })
-        
-        if (insertError) {
-          console.warn("Failed to record unapplied payment:", insertError.message)
-        }
-      }
+
+    console.log(`Payment ${paymentId}: Validation passed - allocating ₹${validationResult.totalAllocations}`)
+
+    // Use atomic RPC function to prevent race conditions (GAP-001 fix)
+    const { data: result, error } = await supabase.rpc('allocate_payment_atomic', {
+      p_payment_id: paymentId,
+      p_allocations: allocations.map(alloc => ({
+        invoiceId: alloc.invoiceId,
+        amount: alloc.amount
+      })),
+      p_validate_amounts: true
+    })
+
+    if (error) {
+      throw new Error(`Database error during payment allocation: ${error.message}`)
     }
-    
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Payment allocation failed')
+    }
+
+    console.log(`Payment ${paymentId}: Successfully allocated ₹${result.allocated_amount} to ${allocations.length} invoice(s)`)
+    return {
+      success: true,
+      allocated_amount: result.allocated_amount,
+      total_allocated: result.total_allocated,
+      payment_amount: result.payment_amount,
+      unapplied_amount: result.unapplied_amount || 0
+    }
+
     // Revalidate relevant pages
     revalidatePath("/dashboard/outstanding")
     revalidatePath("/dashboard/payments")
     revalidatePath("/dashboard/customers")
-    
-    return { success: true }
+
+    return result
   } catch (error) {
     console.error("Payment allocation error:", error)
+
+    // If allocation partially succeeded but then failed, attempt rollback (GAP-002 fix)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('Failed to update invoice status') ||
+        errorMessage.includes('Database error during payment allocation')) {
+      try {
+        console.log(`Attempting to rollback partial allocation for payment ${paymentId}`)
+        const { data: rollbackResult, error: rollbackError } = await supabase.rpc('rollback_partial_allocation', {
+          p_payment_id: paymentId
+        })
+
+        if (!rollbackError && rollbackResult?.success) {
+          console.log(`Successfully rolled back payment ${paymentId}:`, rollbackResult)
+        } else {
+          console.error(`Rollback failed for payment ${paymentId}:`, rollbackError?.message || rollbackResult?.error)
+        }
+      } catch (rollbackErr) {
+        console.error("Rollback error:", rollbackErr)
+      }
+    }
+
     throw error
   }
 }
@@ -389,18 +365,118 @@ export async function getEffectiveOpeningBalance(customerId: string): Promise<nu
   return Math.max(0, effectiveBalance) // Ensure non-negative
 }
 
+// GAP-008: Enhanced Outstanding Calculation with Validation and Fallback
 export async function calculateCustomerOutstandingAmount(customerId: string): Promise<number> {
   const supabase = await createClient()
-  
-  const { data, error } = await supabase.rpc('calculate_customer_outstanding', {
-    customer_uuid: customerId
-  })
 
-  if (error) {
-    throw new Error("Failed to calculate outstanding amount")
+  try {
+    // Primary calculation using database function
+    const { data, error } = await supabase.rpc('calculate_customer_outstanding', {
+      customer_uuid: customerId
+    })
+
+    if (error) {
+      console.warn('Database outstanding calculation failed, using fallback:', error.message)
+      return await calculateOutstandingFallback(customerId)
+    }
+
+    const calculatedAmount = data || 0
+
+    // Validation: Outstanding amount should never be negative
+    if (calculatedAmount < 0) {
+      console.warn(`Negative outstanding amount detected for customer ${customerId}: ${calculatedAmount}. Correcting to 0.`)
+      return 0
+    }
+
+    // Validation: Check for suspiciously large amounts (potential data corruption)
+    const MAX_REASONABLE_OUTSTANDING = 1000000 // ₹10 lakh
+    if (calculatedAmount > MAX_REASONABLE_OUTSTANDING) {
+      console.warn(`Unusually large outstanding amount for customer ${customerId}: ₹${calculatedAmount}. Manual review required.`)
+    }
+
+    return calculatedAmount
+
+  } catch (error) {
+    console.error('Exception in outstanding calculation:', error)
+    return await calculateOutstandingFallback(customerId)
   }
-  
-  return data || 0
+}
+
+// GAP-008: Fallback calculation using client-side logic
+async function calculateOutstandingFallback(customerId: string): Promise<number> {
+  const supabase = await createClient()
+
+  try {
+    // Get customer opening balance
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('opening_balance')
+      .eq('id', customerId)
+      .single()
+
+    const openingBalance = customer?.opening_balance || 0
+
+    // Get unpaid invoices total
+    const { data: unpaidInvoices } = await supabase
+      .from('invoice_metadata')
+      .select('net_total')
+      .eq('customer_id', customerId)
+      .eq('payment_status', 'unpaid')
+
+    const unpaidInvoicesTotal = unpaidInvoices?.reduce((sum, invoice) => sum + (invoice.net_total || 0), 0) || 0
+
+    // Get total payments allocated to opening balance
+    const { data: openingBalancePayments } = await supabase
+      .from('opening_balance_payments')
+      .select('amount_allocated')
+      .eq('customer_id', customerId)
+
+    const openingBalancePaymentsTotal = openingBalancePayments?.reduce((sum, payment) => sum + (payment.amount_allocated || 0), 0) || 0
+
+    // Calculate final outstanding
+    const totalOutstanding = Math.max(0, openingBalance + unpaidInvoicesTotal - openingBalancePaymentsTotal)
+
+    console.info(`Fallback calculation for customer ${customerId}: Opening(₹${openingBalance}) + Unpaid(₹${unpaidInvoicesTotal}) - Payments(₹${openingBalancePaymentsTotal}) = ₹${totalOutstanding}`)
+
+    return totalOutstanding
+
+  } catch (error) {
+    console.error('Fallback outstanding calculation failed:', error)
+    return 0 // Safe fallback
+  }
+}
+
+
+// GAP-008: Validation function for outstanding amount anomaly detection
+export async function validateOutstandingCalculation(customerId: string): Promise<{
+  isValid: boolean
+  amount: number
+  warnings: string[]
+  requiresReview: boolean
+}> {
+  const amount = await calculateCustomerOutstandingAmount(customerId)
+  const warnings: string[] = []
+  let requiresReview = false
+
+  // Check for negative amounts
+  if (amount < 0) {
+    warnings.push('Outstanding amount is negative')
+    requiresReview = true
+  }
+
+  // Check for suspiciously large amounts
+  const MAX_REASONABLE = 1000000
+  if (amount > MAX_REASONABLE) {
+    warnings.push(`Outstanding amount (₹${amount.toLocaleString()}) exceeds reasonable limit (₹${MAX_REASONABLE.toLocaleString()})`)
+    requiresReview = true
+  }
+
+  return {
+    isValid: warnings.length === 0,
+    amount,
+    warnings,
+    requiresReview
+  }
 }
 
 export interface UnappliedPayment {
@@ -637,6 +713,204 @@ export async function getUnappliedPaymentStats(): Promise<UnappliedPaymentStats>
     }
   } catch (error) {
     console.error("Failed to get unapplied payment stats:", error)
+    throw error
+  }
+}
+
+// Direct Sales Payment Allocation (bypassing invoices)
+export interface PendingCreditSale {
+  id: string
+  product_name: string
+  product_code: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  gst_amount: number
+  sale_date: string
+  sale_type: string
+  payment_status: string
+  notes?: string
+  unit_of_measure: string
+}
+
+export async function getCustomerPendingCreditSales(customerId: string): Promise<PendingCreditSale[]> {
+  const supabase = await createClient()
+
+  try {
+    const { data: salesRaw, error } = await supabase
+      .from("sales")
+      .select(`
+        id,
+        quantity,
+        unit_price,
+        total_amount,
+        gst_amount,
+        sale_date,
+        sale_type,
+        payment_status,
+        notes,
+        product:products(
+          name,
+          code,
+          unit_of_measure
+        )
+      `)
+      .eq("customer_id", customerId)
+      .eq("sale_type", "Credit")
+      .eq("payment_status", "Pending")
+      .order("sale_date", { ascending: false })
+
+    if (error) {
+      throw new Error("Failed to fetch pending credit sales")
+    }
+
+    const sales = salesRaw || []
+
+    return sales.map((sale) => {
+      // Handle the case where product might be an array or single object
+      const product = Array.isArray(sale.product) ? sale.product[0] : sale.product
+
+      return {
+        id: sale.id,
+        product_name: product?.name || 'Unknown Product',
+        product_code: product?.code || 'N/A',
+        quantity: sale.quantity,
+        unit_price: sale.unit_price,
+        total_amount: sale.total_amount,
+        gst_amount: sale.gst_amount,
+        sale_date: sale.sale_date,
+        sale_type: sale.sale_type,
+        payment_status: sale.payment_status,
+        notes: sale.notes,
+        unit_of_measure: product?.unit_of_measure || 'Unit'
+      }
+    })
+  } catch (error) {
+    console.error("Failed to get customer pending credit sales:", error)
+    throw error
+  }
+}
+
+// Function to allocate payment directly to sales (bypassing invoice)
+export async function allocatePaymentToSales(
+  paymentId: string,
+  salesAllocations: { salesId: string; amount: number }[]
+) {
+  const supabase = await createClient()
+
+  try {
+    // Validate payment exists and get details
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("id, amount, customer_id, amount_applied, amount_unapplied")
+      .eq("id", paymentId)
+      .single()
+
+    if (paymentError || !payment) {
+      throw new Error("Payment not found")
+    }
+
+    // Validate all sales belong to the same customer and are pending credit sales
+    for (const allocation of salesAllocations) {
+      const { data: sale, error: saleError } = await supabase
+        .from("sales")
+        .select("customer_id, sale_type, payment_status, total_amount")
+        .eq("id", allocation.salesId)
+        .single()
+
+      if (saleError || !sale) {
+        throw new Error(`Sales record not found: ${allocation.salesId}`)
+      }
+
+      if (sale.customer_id !== payment.customer_id) {
+        throw new Error("Sales record does not belong to payment customer")
+      }
+
+      if (sale.sale_type !== "Credit" || sale.payment_status !== "Pending") {
+        throw new Error(`Sales record ${allocation.salesId} is not eligible for direct payment allocation`)
+      }
+
+      if (allocation.amount > sale.total_amount) {
+        throw new Error(`Allocation amount exceeds sales amount for ${allocation.salesId}`)
+      }
+
+      // Check if allocation amount equals total amount (we only support full payment for now)
+      if (allocation.amount !== sale.total_amount) {
+        throw new Error(`Partial payment not supported. Must pay full amount: ${sale.total_amount}`)
+      }
+    }
+
+    // Calculate total allocation
+    const totalAllocation = salesAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+    const newAmountApplied = payment.amount_applied + totalAllocation
+    const newAmountUnapplied = payment.amount - newAmountApplied
+
+    if (newAmountApplied > payment.amount) {
+      throw new Error("Total allocation exceeds payment amount")
+    }
+
+    // Begin transaction-like operations
+    // 1. Insert sales payment records
+    const salesPaymentInserts = salesAllocations.map(allocation => ({
+      sales_id: allocation.salesId,
+      payment_id: paymentId,
+      amount_allocated: allocation.amount
+    }))
+
+    const { error: insertError } = await supabase
+      .from("sales_payments")
+      .insert(salesPaymentInserts)
+
+    if (insertError) {
+      throw new Error(`Failed to create sales payment records: ${insertError.message}`)
+    }
+
+    // 2. Update sales status to Completed
+    for (const allocation of salesAllocations) {
+      const { error: salesUpdateError } = await supabase
+        .from("sales")
+        .update({ payment_status: "Completed" })
+        .eq("id", allocation.salesId)
+
+      if (salesUpdateError) {
+        throw new Error(`Failed to update sales status: ${salesUpdateError.message}`)
+      }
+    }
+
+    // 3. Update payment allocation status
+    const allocationStatus = newAmountUnapplied > 0 ? 'partially_applied' : 'fully_applied'
+    const { error: paymentUpdateError } = await supabase
+      .from("payments")
+      .update({
+        amount_applied: newAmountApplied,
+        amount_unapplied: newAmountUnapplied,
+        allocation_status: allocationStatus
+      })
+      .eq("id", paymentId)
+
+    if (paymentUpdateError) {
+      throw new Error(`Failed to update payment status: ${paymentUpdateError.message}`)
+    }
+
+    // Revalidate relevant pages
+    revalidatePath("/dashboard/payments")
+    revalidatePath("/dashboard/sales")
+    revalidatePath("/dashboard/customers")
+    if (payment.customer_id) {
+      revalidatePath(`/dashboard/customers/${payment.customer_id}`)
+    }
+
+    return {
+      success: true,
+      allocated_amount: totalAllocation,
+      total_allocated: newAmountApplied,
+      payment_amount: payment.amount,
+      unapplied_amount: newAmountUnapplied,
+      sales_count: salesAllocations.length
+    }
+
+  } catch (error) {
+    console.error("Sales payment allocation error:", error)
     throw error
   }
 }
