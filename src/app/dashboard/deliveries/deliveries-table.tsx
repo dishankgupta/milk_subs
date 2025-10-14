@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { formatDateToIST, formatDateTimeToIST } from "@/lib/utils"
 import { MoreHorizontal, Eye, Edit, Trash2, Package, User, Clock, ArrowUp, ArrowDown, Search } from "lucide-react"
@@ -60,6 +60,8 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   const [routeFilter, setRouteFilter] = useState<string>("all")
   const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const hasInitialized = useRef(false)
+  const isApplyingPreset = useRef(false)
 
   // Helper function to check if a date is within the selected range
   const isDateInRange = (dateStr: string): boolean => {
@@ -124,11 +126,17 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
   // Get unique routes for filters
   const uniqueRoutes = Array.from(new Set(initialDeliveries.map(d => d.route?.name).filter(Boolean)))
 
-  // Get unique dates for setting default (most recent date)
-  const uniqueDates = Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse()
+  // Get unique dates for setting default (most recent date) - memoized to prevent recalculation
+  const uniqueDates = useMemo(() =>
+    Array.from(new Set(initialDeliveries.map(d => d.order_date))).sort().reverse(),
+    [initialDeliveries]
+  )
 
   // Handle preset changes
   const handlePresetChange = (preset: string) => {
+    // Mark that we're applying a preset to prevent date picker onChange from interfering
+    isApplyingPreset.current = true
+
     setDatePreset(preset)
     const today = getCurrentISTDate()
 
@@ -174,19 +182,40 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
         // User will set dates manually
         break
     }
+
+    // Reset the flag after state updates complete
+    setTimeout(() => {
+      isApplyingPreset.current = false
+    }, 0)
   }
 
   // Set default date filter to most recent date on first load
   useEffect(() => {
-    if (uniqueDates.length > 0 && !startDate && !endDate) {
+    if (uniqueDates.length > 0 && !hasInitialized.current) {
+      // Mark that we're applying a preset (initialization is a preset application)
+      isApplyingPreset.current = true
+
       const mostRecentDate = parseLocalDateIST(uniqueDates[0])
-      setStartDate(startOfDay(mostRecentDate))
-      setEndDate(endOfDay(mostRecentDate))
+      const start = startOfDay(mostRecentDate)
+      const end = endOfDay(mostRecentDate)
+
+      // Batch all state updates together first
+      setStartDate(start)
+      setEndDate(end)
+      // Preset is already "mostRecent" from initial state, no need to set again
+
+      // Mark as initialized AFTER state updates
+      // Use setTimeout to ensure this runs after the state updates have propagated
+      setTimeout(() => {
+        hasInitialized.current = true
+        isApplyingPreset.current = false
+      }, 0)
     }
-  }, [uniqueDates, startDate, endDate])
+  }, [uniqueDates])
 
   // Notify parent component when filters change
   useEffect(() => {
+    // Always notify parent of current filter state (including during and after initialization)
     if (onFiltersChange) {
       const currentFilters = {
         searchQuery,
@@ -197,7 +226,7 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
       }
       onFiltersChange(filteredDeliveries, currentFilters)
     }
-  }, [searchQuery, startDate, endDate, datePreset, routeFilter]) // Remove onFiltersChange from deps
+  }, [searchQuery, startDate, endDate, datePreset, routeFilter])
 
   // Notify parent component when sort changes
   useEffect(() => {
@@ -317,7 +346,13 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               value={startDate}
               onChange={(date) => {
                 setStartDate(date)
-                if (datePreset !== "custom") setDatePreset("custom")
+                // Only change to custom if:
+                // 1. Component is initialized
+                // 2. We're not applying a preset programmatically
+                // 3. Current preset is not already custom
+                if (hasInitialized.current && !isApplyingPreset.current && datePreset !== "custom") {
+                  setDatePreset("custom")
+                }
               }}
               placeholder="Start Date"
               className="w-[140px]"
@@ -328,7 +363,13 @@ export function DeliveriesTable({ initialDeliveries, onDataChange, onFiltersChan
               value={endDate}
               onChange={(date) => {
                 setEndDate(date)
-                if (datePreset !== "custom") setDatePreset("custom")
+                // Only change to custom if:
+                // 1. Component is initialized
+                // 2. We're not applying a preset programmatically
+                // 3. Current preset is not already custom
+                if (hasInitialized.current && !isApplyingPreset.current && datePreset !== "custom") {
+                  setDatePreset("custom")
+                }
               }}
               placeholder="End Date"
               className="w-[140px]"

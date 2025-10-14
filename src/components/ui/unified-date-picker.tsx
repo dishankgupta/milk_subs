@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { getCurrentISTDate } from "@/lib/date-utils"
+import { getCurrentISTDate, parseLocalDateIST } from "@/lib/date-utils"
 import { toast } from "sonner"
 
 export interface UnifiedDatePickerProps {
@@ -69,36 +69,65 @@ export function UnifiedDatePicker({
   }
 
   // Parse multiple date formats: DDMMYYYY, DD/MM/YYYY, DD-MM-YYYY
+  // Converts to YYYY-MM-DD format and uses IST date utilities
   const parseDateInput = (input: string): Date | null => {
     if (!input) return null
 
-    // Remove all spaces
+    // Remove all spaces for date part extraction
     input = input.trim()
 
     try {
-      // Try DD-MM-YYYY HH:mm format (with time)
+      let dateStr = input
+      let timeStr = ""
+
+      // Extract date and time parts if withTime is enabled
       if (withTime && input.includes(" ")) {
-        const formats = ["dd-MM-yyyy HH:mm", "dd/MM/yyyy HH:mm", "ddMMyyyy HH:mm"]
-        for (const fmt of formats) {
-          const parsed = parse(input, fmt, new Date())
-          if (isValid(parsed)) return parsed
+        const parts = input.split(" ")
+        dateStr = parts[0]
+        timeStr = parts[1] || ""
+      }
+
+      // Extract digits from date string
+      const dateDigits = dateStr.replace(/\D/g, "")
+
+      // Parse date based on digit count
+      let day: string, month: string, year: string
+
+      if (dateDigits.length === 8) {
+        // DDMMYYYY format
+        day = dateDigits.substring(0, 2)
+        month = dateDigits.substring(2, 4)
+        year = dateDigits.substring(4, 8)
+      } else {
+        return null
+      }
+
+      // Validate year range
+      const yearNum = parseInt(year, 10)
+      if (yearNum < 2000 || yearNum > 2099) {
+        return null
+      }
+
+      // Convert DD-MM-YYYY to YYYY-MM-DD and use IST utility
+      const dbFormat = `${year}-${month}-${day}`
+      const parsed = parseLocalDateIST(dbFormat)
+
+      // Parse and add time if present
+      if (withTime && timeStr) {
+        const timeDigits = timeStr.replace(/\D/g, "")
+        if (timeDigits.length === 4) {
+          const hours = parseInt(timeDigits.substring(0, 2), 10)
+          const minutes = parseInt(timeDigits.substring(2, 4), 10)
+
+          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            parsed.setHours(hours, minutes, 0, 0)
+          }
         }
       }
 
-      // Try date-only formats
-      const formats = [
-        "dd-MM-yyyy",   // DD-MM-YYYY
-        "dd/MM/yyyy",   // DD/MM/YYYY
-        "ddMMyyyy",     // DDMMYYYY
-      ]
-
-      for (const fmt of formats) {
-        const parsed = parse(input, fmt, new Date())
-        if (isValid(parsed)) return parsed
-      }
-
-      return null
+      return isValid(parsed) ? parsed : null
     } catch (error) {
+      // parseLocalDateIST throws errors for invalid dates
       return null
     }
   }

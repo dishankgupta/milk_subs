@@ -7,6 +7,7 @@ import { categorizeDeliveries } from "@/components/deliveries/delivery-type-togg
 
 import { getDeliveries } from "@/lib/actions/deliveries"
 import { DeliveriesTable } from "./deliveries-table"
+import { formatDateForDatabase } from "@/lib/date-utils"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -129,10 +130,10 @@ function DeliveriesContent() {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
 
-    // Handle date filter for print
+    // Handle date filter for print - use IST utilities to prevent timezone issues
     if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
-      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
-      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
+      params.append('date_from', formatDateForDatabase(currentFilters.startDate))
+      params.append('date_to', formatDateForDatabase(currentFilters.endDate))
     } else {
       params.append('datePreset', currentFilters.datePreset)
     }
@@ -151,10 +152,10 @@ function DeliveriesContent() {
     const params = new URLSearchParams()
     if (currentFilters.searchQuery) params.append('search', currentFilters.searchQuery)
 
-    // Handle date filter for print
+    // Handle date filter for print - use IST utilities to prevent timezone issues
     if (currentFilters.datePreset === 'custom' && currentFilters.startDate && currentFilters.endDate) {
-      params.append('date_from', currentFilters.startDate.toISOString().split('T')[0])
-      params.append('date_to', currentFilters.endDate.toISOString().split('T')[0])
+      params.append('date_from', formatDateForDatabase(currentFilters.startDate))
+      params.append('date_to', formatDateForDatabase(currentFilters.endDate))
     } else {
       params.append('datePreset', currentFilters.datePreset)
     }
