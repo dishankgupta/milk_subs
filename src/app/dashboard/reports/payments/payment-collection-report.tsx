@@ -210,10 +210,10 @@ export function PaymentCollectionReport() {
     const params = new URLSearchParams()
     if (search) params.append('search', search)
 
-    // Handle date filter for print
+    // Handle date filter for print - use IST utilities to prevent timezone issues
     if (datePreset === 'custom' && startDate && endDate) {
-      params.append('date_from', startDate.toISOString().split('T')[0])
-      params.append('date_to', endDate.toISOString().split('T')[0])
+      params.append('date_from', formatDateForDatabase(startDate))
+      params.append('date_to', formatDateForDatabase(endDate))
     } else {
       params.append('datePreset', datePreset)
     }
@@ -237,7 +237,7 @@ export function PaymentCollectionReport() {
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
     link.setAttribute("href", url)
-    link.setAttribute("download", `payment-report-${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute("download", `payment-report-${formatDateForDatabase(getCurrentISTDate())}.csv`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()

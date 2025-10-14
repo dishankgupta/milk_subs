@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCurrentISTDate } from "@/lib/date-utils"
+import { getCurrentISTDate, formatDateForDatabase, addDaysIST } from "@/lib/date-utils"
 
 export interface DashboardStats {
   todayOperations: {
@@ -68,11 +68,11 @@ export async function getDashboardData(): Promise<DashboardStats> {
     supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'Active')
   ])
 
-  // Today's operations - get current date for queries
-  const today = getCurrentISTDate().toISOString().split('T')[0]
-  const yesterday = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  // Today's operations - get current date for queries (use IST utilities)
+  const today = formatDateForDatabase(getCurrentISTDate())
+  const yesterday = formatDateForDatabase(addDaysIST(getCurrentISTDate(), -1))
+  const sevenDaysAgo = formatDateForDatabase(addDaysIST(getCurrentISTDate(), -7))
+  const fourteenDaysAgo = formatDateForDatabase(addDaysIST(getCurrentISTDate(), -14))
 
   // Get today's operations data
   const [
@@ -151,7 +151,7 @@ export async function getDashboardData(): Promise<DashboardStats> {
     .slice(0, 5)
 
   // Top 5 valuable customers (by last 30 days revenue - deliveries + manual sales)
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const thirtyDaysAgo = formatDateForDatabase(addDaysIST(getCurrentISTDate(), -30))
 
   const [
     { data: topValueDeliveries },
@@ -248,7 +248,7 @@ export async function getDashboardData(): Promise<DashboardStats> {
         .from('deliveries')
         .select('customer_id, total_amount')
         .eq('route_id', route.id)
-        .gte('order_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+        .gte('order_date', sevenDaysAgo) // Use the already calculated sevenDaysAgo variable
 
       const uniqueCustomers = new Set(deliveries?.map(d => d.customer_id) || [])
       const totalRevenue = deliveries?.reduce((sum, d) => sum + Number(d.total_amount || 0), 0) || 0

@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CreditCard } from 'lucide-react'
 import { UnifiedDatePicker } from '@/components/ui/unified-date-picker'
-import { formatDateIST, getCurrentISTDate } from '@/lib/date-utils'
+import { formatDateIST, getCurrentISTDate, formatDateForDatabase } from '@/lib/date-utils'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -64,7 +64,7 @@ export function QuickPayModal({ sale, isOpen, onClose, onSuccess }: QuickPayModa
       // Call the server action via a form action approach
       const formData = new FormData()
       formData.set('saleId', sale.id)
-      formData.set('paymentDate', data.payment_date.toISOString().split('T')[0])
+      formData.set('paymentDate', formatDateForDatabase(data.payment_date))
       formData.set('paymentMethod', data.payment_method)
 
       const response = await fetch('/api/sales/quick-pay', {
