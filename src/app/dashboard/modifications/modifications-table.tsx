@@ -22,67 +22,70 @@ import type { Modification } from '@/lib/types'
 export const ModificationsTable = memo(function ModificationsTable() {
   const [modifications, setModifications] = useState<Modification[]>([])
   const [loading, setLoading] = useState(true)
-  const [isSearching, setIsSearching] = useState(false)
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [includeExpired, setIncludeExpired] = useState(false)
-  const [resultCount, setResultCount] = useState(0)
-  const [expiredCount, setExpiredCount] = useState(0)
+  const [includeArchived, setIncludeArchived] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
-  const loadModifications = useCallback(async (isInitialLoad = false) => {
-    if (isInitialLoad) {
-      setLoading(true)
-    } else {
-      setIsSearching(true)
-    }
+  // Load all modifications once (client-side filtering)
+  const loadModifications = useCallback(async () => {
+    setLoading(true)
 
     const result = await getModifications({
-      search,
-      status: statusFilter,
-      type: typeFilter,
-      includeExpired
+      includeExpired: true // Load all modifications including expired
     })
 
     if (result.success) {
       setModifications(result.data)
-      setResultCount(result.data.length)
-      // Count expired modifications for display
-      const expired = result.data.filter(mod => mod.isExpired && mod.is_active).length
-      setExpiredCount(expired)
     } else {
       toast.error(result.error)
       setModifications([])
-      setResultCount(0)
     }
 
     setLoading(false)
-    setIsSearching(false)
-  }, [search, statusFilter, typeFilter, includeExpired])
-
-  // Apply sorting to modifications with default sort by end date ascending
-  const { sortedData: sortedModifications, sortConfig, handleSort } = useSorting(
-    modifications,
-    'end_date',
-    'asc'
-  )
-
-  useEffect(() => {
-    // Initial load
-    loadModifications(true)
   }, [])
 
   useEffect(() => {
-    // Debounced search/filter updates (skip initial render)
-    const timeoutId = setTimeout(() => {
-      if (!loading) {
-        loadModifications(false)
-      }
-    }, 300)
-    return () => clearTimeout(timeoutId)
-  }, [search, statusFilter, typeFilter, includeExpired])
+    // Initial load - load all modifications once
+    loadModifications()
+  }, [loadModifications])
+
+  // Client-side filtering (instant, no API calls)
+  const filteredModifications = modifications.filter(modification => {
+    // Search filter
+    const matchesSearch = !search ||
+      modification.customer?.billing_name.toLowerCase().includes(search.toLowerCase()) ||
+      modification.customer?.contact_person.toLowerCase().includes(search.toLowerCase()) ||
+      modification.product?.name.toLowerCase().includes(search.toLowerCase()) ||
+      modification.product?.code?.toLowerCase().includes(search.toLowerCase()) ||
+      modification.reason?.toLowerCase().includes(search.toLowerCase())
+
+    // Type filter
+    const matchesType = typeFilter === 'all' ||
+      modification.modification_type === typeFilter
+
+    // Active/Archived filter
+    const matchesActive = modification.is_active || includeArchived
+
+    // Expired filter (only applies to active modifications)
+    const matchesExpired = !modification.isExpired || includeExpired || !modification.is_active
+
+    return matchesSearch && matchesType && matchesActive && matchesExpired
+  })
+
+  // Calculate counts from all modifications
+  const resultCount = filteredModifications.length
+  const expiredCount = modifications.filter(mod => mod.isExpired && mod.is_active).length
+  const archivedCount = modifications.filter(mod => !mod.is_active).length
+
+  // Apply sorting to filtered modifications with default sort by end date ascending
+  const { sortedData: sortedModifications, sortConfig, handleSort } = useSorting(
+    filteredModifications,
+    'end_date',
+    'asc'
+  )
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this modification?')) {
@@ -92,7 +95,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await deleteModification(id)
     if (result.success) {
       toast.success('Modification deleted successfully')
-      loadModifications(false)
+      loadModifications()
     } else {
       toast.error(result.error)
     }
@@ -102,7 +105,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await toggleModificationStatus(id)
     if (result.success) {
       toast.success('Modification status updated')
-      loadModifications(false)
+      loadModifications()
     } else {
       toast.error(result.error)
     }
@@ -117,7 +120,7 @@ export const ModificationsTable = memo(function ModificationsTable() {
     const result = await bulkArchiveExpiredModifications()
     if (result.success) {
       toast.success(result.message)
-      loadModifications(false)
+      loadModifications()
     } else {
       toast.error(result.error)
     }
@@ -211,21 +214,9 @@ export const ModificationsTable = memo(function ModificationsTable() {
                   className="pl-10"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  disabled={isSearching}
                 />
               </div>
             </div>
-            
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
 
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-full md:w-40">
@@ -247,7 +238,15 @@ export const ModificationsTable = memo(function ModificationsTable() {
               {includeExpired ? 'Hide Expired' : 'Show Expired'}
             </Button>
 
-            {expiredCount > 0 && (
+            <Button
+              variant={includeArchived ? 'default' : 'outline'}
+              onClick={() => setIncludeArchived(!includeArchived)}
+              className="w-full md:w-auto"
+            >
+              {includeArchived ? 'Hide Archived' : 'Show Archived'}
+            </Button>
+
+            {expiredCount > 0 && !includeArchived && (
               <Button
                 variant="destructive"
                 onClick={handleBulkArchive}
@@ -267,6 +266,9 @@ export const ModificationsTable = memo(function ModificationsTable() {
           Showing {resultCount} modification{resultCount !== 1 ? 's' : ''}
           {expiredCount > 0 && !includeExpired && (
             <span className="ml-2 text-orange-600">({expiredCount} expired hidden)</span>
+          )}
+          {archivedCount > 0 && !includeArchived && (
+            <span className="ml-2 text-gray-500">({archivedCount} archived hidden)</span>
           )}
         </div>
         
