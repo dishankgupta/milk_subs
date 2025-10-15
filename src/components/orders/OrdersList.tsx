@@ -23,11 +23,13 @@ export function OrdersList() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [routeFilter, setRouteFilter] = useState<string>("all")
 
+  // Use string representation for stable comparison
+  const dateKey = useMemo(() => formatDateForDatabase(selectedDate), [selectedDate])
+
   const loadOrders = useCallback(async () => {
     setIsLoading(true)
     try {
-      const formattedDate = formatDateForDatabase(selectedDate)
-      const result = await getDailyOrders(formattedDate)
+      const result = await getDailyOrders(dateKey)
       if (result.success) {
         setOrders(result.data || [])
       } else {
@@ -40,7 +42,7 @@ export function OrdersList() {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedDate])
+  }, [dateKey])
 
   useEffect(() => {
     loadOrders()
