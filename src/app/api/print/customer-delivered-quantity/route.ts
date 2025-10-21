@@ -171,8 +171,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get('search') || undefined
     const datePreset = searchParams.get('datePreset') || undefined
-    const dateFrom = searchParams.get('dateFrom') || undefined
-    const dateTo = searchParams.get('dateTo') || undefined
+    const dateFrom = searchParams.get('date_from') || searchParams.get('dateFrom') || undefined
+    const dateTo = searchParams.get('date_to') || searchParams.get('dateTo') || undefined
     const routeFilter = searchParams.get('route') || undefined
 
     // Fetch all deliveries
