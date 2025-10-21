@@ -15,7 +15,8 @@ export async function GET(
     }
 
     // Calculate current Financial Year (April 1 to Today)
-    const today = getCurrentISTDate()
+    // Use new Date() instead of getCurrentISTDate() to avoid double timezone conversion
+    const today = new Date()
     const currentYear = today.getFullYear()
     const currentMonth = today.getMonth() // 0-indexed (0 = January, 3 = April)
 

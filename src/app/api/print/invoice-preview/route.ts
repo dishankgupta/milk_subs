@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice Preview Report${filterDescription} - ${formatDateIST(getCurrentISTDate())}</title>
+  <title>Invoice Preview Report${filterDescription} - ${formatDateIST(new Date())}</title>
   <style>
     @page {
       size: A4;
@@ -359,7 +359,7 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="report-info">
       <h2>Invoice Preview Report</h2>
-      <p>Generated on: ${formatDateIST(getCurrentISTDate())}</p>
+      <p>Generated on: ${formatDateIST(new Date())}</p>
       <p>Total Records: ${sortedData.length}</p>
     </div>
   </div>

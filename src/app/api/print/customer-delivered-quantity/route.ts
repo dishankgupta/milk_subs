@@ -6,7 +6,9 @@ import type { DeliveryExtended } from '@/lib/types'
 
 // Function to convert date presets to date ranges
 function getDateRangeFromPreset(preset: string, mostRecentDate?: string): { fromDate: Date, toDate: Date } | null {
-  const today = getCurrentISTDate()
+  // Use new Date() instead of getCurrentISTDate() to avoid double timezone conversion
+  // formatDateIST() will handle the IST conversion when displaying
+  const today = new Date()
 
   switch (preset) {
     case "mostRecent":
@@ -255,7 +257,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Delivered Quantity Report${filterDescription} - ${formatDateIST(getCurrentISTDate())}</title>
+  <title>Customer Delivered Quantity Report${filterDescription} - ${formatDateIST(new Date())}</title>
   <style>
     @page {
       size: A4;
@@ -450,7 +452,7 @@ export async function GET(request: NextRequest) {
     </div>
     <div class="report-info">
       <h2>Customer Delivered Quantity Report</h2>
-      <p>Generated on: ${formatDateIST(getCurrentISTDate())}</p>
+      <p>Generated on: ${formatDateIST(new Date())}</p>
       <p>Total Customers: ${summary.totalCustomers}</p>
       <p>Total Deliveries: ${summary.totalDeliveries}</p>
     </div>

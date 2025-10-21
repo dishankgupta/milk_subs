@@ -312,7 +312,7 @@ function generateCustomerStatementsHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Statements - ${formatDateIST(getCurrentISTDate())}</title>
+  <title>Customer Statements - ${formatDateIST(new Date())}</title>
   <style>
     ${getCommonPrintStyles()}
     
