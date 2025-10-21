@@ -170,19 +170,91 @@ Complete database recreation available through migration files in `supabase/migr
 ## Critical Development Guidelines
 
 ### IST Date Handling (MANDATORY)
+
+**⚠️ CRITICAL: Timezone Double Conversion Bug Prevention**
+
+Using `getCurrentISTDate()` with `formatDateIST()` causes dates to show as next day after 6:30 PM IST due to double timezone conversion. See `TIMEZONE_FIX_SUMMARY.md` for details.
+
+#### IST Date Utilities Use Case Matrix
+
+| Use Case | Function to Use | Example | Notes |
+|----------|----------------|---------|-------|
+| **Current date for database storage** | `formatDateForDatabase(getCurrentISTDate())` | `order_date: formatDateForDatabase(getCurrentISTDate())` | ✅ Stores as YYYY-MM-DD in IST |
+| **Current timestamp for database** | `formatTimestampForDatabase(getCurrentISTDate())` | `created_at: formatTimestampForDatabase(getCurrentISTDate())` | ✅ Stores as ISO timestamp |
+| **Display current date in reports** | `formatDateIST(new Date())` | `Generated on: ${formatDateIST(new Date())}` | ✅ Use `new Date()` NOT `getCurrentISTDate()` |
+| **Display database date** | `formatDateIST(new Date(dbDate))` | `formatDateIST(new Date(order.order_date))` | ✅ Parse database string first |
+| **Date preset calculations** | `new Date()` with date-fns | `const today = new Date(); endOfMonth(today)` | ✅ Use plain `new Date()` for presets |
+| **Parse user input** | `parseLocalDateIST(dateString)` | `parseLocalDateIST('2025-10-21')` | ✅ Parses YYYY-MM-DD format |
+| **Date arithmetic** | `addDaysIST(date, days)` | `addDaysIST(getCurrentISTDate(), 1)` | ✅ Add/subtract days |
+| **Compare dates** | `isSameDayIST(date1, date2)` | `isSameDayIST(orderDate, deliveryDate)` | ✅ IST-aware comparison |
+
+#### ❌ NEVER DO THIS (Causes Double Conversion Bug)
 ```typescript
-// ❌ NEVER use these patterns
-new Date()
-Date.now()
-toISOString().split('T')[0]
-
-// ✅ ALWAYS use IST utilities from /src/lib/date-utils.ts
-import { getCurrentISTDate, formatDateIST, parseLocalDateIST } from '@/lib/date-utils'
-
+// ❌ WRONG - Double timezone conversion!
 const today = getCurrentISTDate()
-const formatted = formatDateIST(date)
-const parsed = parseLocalDateIST(dateString)
+const display = formatDateIST(today)  // Shifts date by +5:30 hours TWICE!
+
+// ❌ WRONG - In print routes
+const today = getCurrentISTDate()
+const monthEnd = endOfMonth(today)
+formatDateIST(monthEnd)  // October 31 shows as November 1!
+
+// ❌ WRONG - For current date display
+formatDateIST(getCurrentISTDate())  // Shows next day after 6:30 PM IST!
 ```
+
+#### ✅ CORRECT PATTERNS
+```typescript
+// ✅ For database storage
+import { getCurrentISTDate, formatDateForDatabase } from '@/lib/date-utils'
+const payment = {
+  payment_date: formatDateForDatabase(getCurrentISTDate()),
+  amount: 1000
+}
+
+// ✅ For report generation (print routes)
+import { formatDateIST } from '@/lib/date-utils'
+const today = new Date()  // Use plain Date, NOT getCurrentISTDate()
+const formatted = formatDateIST(today)
+console.log(`Generated on: ${formatted}`)
+
+// ✅ For date presets
+import { startOfMonth, endOfMonth } from 'date-fns'
+const today = new Date()  // Use plain Date
+const monthStart = startOfMonth(today)
+const monthEnd = endOfMonth(today)
+const displayStart = formatDateIST(monthStart)
+const displayEnd = formatDateIST(monthEnd)  // October 31, not November 1!
+
+// ✅ For displaying database dates
+const dbDate = order.order_date  // "2025-10-21"
+const display = formatDateIST(new Date(dbDate))
+
+// ✅ For parsing user input
+import { parseLocalDateIST, formatDateForDatabase } from '@/lib/date-utils'
+const userDate = parseLocalDateIST('2025-10-21')
+const dbFormat = formatDateForDatabase(userDate)
+```
+
+#### Quick Reference
+
+**When to use `getCurrentISTDate()`:**
+- ✅ Database storage: `formatDateForDatabase(getCurrentISTDate())`
+- ✅ Date calculations: `addDaysIST(getCurrentISTDate(), 1)`
+- ✅ Timestamp storage: `formatTimestampForDatabase(getCurrentISTDate())`
+- ❌ NEVER with `formatDateIST()` or any display formatting function!
+
+**When to use `new Date()`:**
+- ✅ Report generation and print routes
+- ✅ Date preset calculations (Today, This Month, etc.)
+- ✅ Display current date/time in UI
+- ✅ Any operation where result will be formatted with `formatDateIST()`
+
+**ESLint Protection:**
+The custom rule `custom/no-double-ist-conversion` will catch and prevent double conversion patterns. It will show errors if you try to use:
+- `formatDateIST(getCurrentISTDate())`
+- `formatDateTimeIST(getCurrentISTDate())`
+- `const today = getCurrentISTDate()` in print routes
 
 ### Date Picker Usage (MANDATORY)
 ```typescript
